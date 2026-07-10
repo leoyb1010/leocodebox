@@ -64,35 +64,6 @@ async function copyNodeModule(packageName) {
   return true;
 }
 
-/**
- * When LEOCODEBOX_SIGN_IDENTITY is set (a "Developer ID Application: … (TEAMID)"
- * string), turn on real code signing + hardened runtime + entitlements so the
- * build can be notarized. Notarization itself is done separately via notarytool
- * (see scripts/release/notarize-mac.sh) so credentials stay in the keychain and
- * never enter the build config. With no env var set, the mac config is returned
- * unchanged and the existing adhoc DMG path is used.
- */
-function resolveMacBuildConfig() {
-  const mac = packageJson.build.mac;
-  const rawIdentity = process.env.LEOCODEBOX_SIGN_IDENTITY;
-  if (!rawIdentity) {
-    return mac;
-  }
-  // electron-builder wants the certificate common name WITHOUT the
-  // "Developer ID Application: " prefix, so accept either form.
-  const identity = rawIdentity.replace(/^Developer ID Application:\s*/i, '').trim();
-  return {
-    ...mac,
-    identity,
-    hardenedRuntime: true,
-    gatekeeperAssess: false,
-    entitlements: 'build/entitlements.mac.plist',
-    entitlementsInherit: 'build/entitlements.mac.plist',
-    notarize: false,
-    target: ['dmg'],
-  };
-}
-
 function buildDesktopPackageJson(copiedOptionalDependencies) {
   return {
     name: `${packageJson.name}-desktop`,
@@ -131,7 +102,7 @@ function buildDesktopPackageJson(copiedOptionalDependencies) {
       ],
       afterPack: packageJson.build.afterPack,
       protocols: packageJson.build.protocols,
-      mac: resolveMacBuildConfig(),
+      mac: packageJson.build.mac,
       win: packageJson.build.win,
       nsis: packageJson.build.nsis,
     },

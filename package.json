@@ -40,7 +40,7 @@
     "desktop:stage": "node scripts/release/prepare-desktop-app.js",
     "desktop:pack": "npm run build && npm run desktop:stage && electron-builder --projectDir .desktop-build/desktop-app --dir",
     "desktop:dist:mac": "npm run build && npm run desktop:stage && electron-builder --projectDir .desktop-build/desktop-app --mac dir && node scripts/release/build-signed-mac-dmg.js",
-    "desktop:dist:mac:signed": "npm run build && npm run desktop:stage && electron-builder --projectDir .desktop-build/desktop-app --mac dmg",
+    "desktop:dist:mac:signed": "npm run build && npm run desktop:stage && electron-builder --projectDir .desktop-build/desktop-app --mac dir && node scripts/release/build-signed-mac-dmg.js",
     "desktop:notarize:mac": "bash scripts/release/notarize-mac.sh",
     "desktop:dist:win": "npm run build && npm run desktop:stage && electron-builder --projectDir .desktop-build/desktop-app --win nsis",
     "server:bundle": "npm run build && node scripts/release/build-server-bundle.js",
