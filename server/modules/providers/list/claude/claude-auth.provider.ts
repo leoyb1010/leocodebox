@@ -1,13 +1,16 @@
 import { readFile } from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
-
-import spawn from 'cross-spawn';
 
 import { resolveClaudeCodeExecutablePath } from '@/shared/claude-cli-path.js';
 import type { IProviderAuth } from '@/shared/interfaces.js';
 import type { ProviderAuthStatus } from '@/shared/types.js';
-import { parseCliVersion } from '@/modules/providers/services/cli-version.util.js';
+import {
+  readCliInstallProbe,
+  runProviderCliCommand,
+  type CliCommandRunner,
+  type CliInstallProbe,
+} from '@/modules/providers/services/cli-version.util.js';
+import { getClaudeConfigDir } from '@/shared/provider-runtime-paths.js';
 import { readObjectRecord, readOptionalString } from '@/shared/utils.js';
 
 type ClaudeCredentialsStatus = {
@@ -43,23 +46,18 @@ const hasErrorCode = (error: unknown, code: string): boolean => (
 );
 
 export class ClaudeProviderAuth implements IProviderAuth {
-  constructor(private readonly spawnSync: typeof spawn.sync = spawn.sync) {}
+  constructor(private readonly runCommand: CliCommandRunner = runProviderCliCommand) {}
 
   /**
    * Checks whether the Claude Code CLI is available on this host and reads its version.
    */
-  private probeInstall(): { installed: boolean; version: string | null } {
+  private async probeInstall(): Promise<CliInstallProbe> {
     const cliPath = resolveClaudeCodeExecutablePath(process.env.CLAUDE_CLI_PATH);
     try {
-      const result = this.spawnSync(cliPath, ['--version'], {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'pipe'],
-        timeout: 5000,
-      });
-      const installed = !result.error && result.status === 0;
-      return { installed, version: installed ? parseCliVersion(result.stdout || result.stderr) : null };
-    } catch {
-      return { installed: false, version: null };
+      const result = await this.runCommand(cliPath, ['--version'], 5000);
+      return readCliInstallProbe(result, 'claude');
+    } catch (error) {
+      return readCliInstallProbe({ error, status: null }, 'claude');
     }
   }
 
@@ -67,7 +65,8 @@ export class ClaudeProviderAuth implements IProviderAuth {
    * Returns Claude installation and credential status using Claude Code's auth priority.
    */
   async getStatus(): Promise<ProviderAuthStatus> {
-    const { installed, version } = this.probeInstall();
+    const install = await this.probeInstall();
+    const { installed, version } = install;
 
     if (!installed) {
       return {
@@ -78,6 +77,18 @@ export class ClaudeProviderAuth implements IProviderAuth {
         method: null,
         version: null,
         error: 'Claude Code CLI is not installed',
+      };
+    }
+
+    if (!install.runnable) {
+      return {
+        installed: true,
+        provider: 'claude',
+        authenticated: false,
+        email: null,
+        method: null,
+        version: null,
+        error: `Claude Code CLI was found but could not run: ${install.error}`,
       };
     }
 
@@ -99,7 +110,7 @@ export class ClaudeProviderAuth implements IProviderAuth {
    */
   private async loadSettingsEnv(): Promise<Record<string, unknown>> {
     try {
-      const settingsPath = path.join(os.homedir(), '.claude', 'settings.json');
+      const settingsPath = path.join(getClaudeConfigDir(), 'settings.json');
       const content = await readFile(settingsPath, 'utf8');
       const settings = readObjectRecord(JSON.parse(content));
       return readObjectRecord(settings?.env) ?? {};
@@ -131,7 +142,7 @@ export class ClaudeProviderAuth implements IProviderAuth {
       return { authenticated: true, email: 'Configured via settings.json', method: 'api_key' };
     }
 
-    const cliStatus = this.checkCliAuthStatus();
+    const cliStatus = await this.checkCliAuthStatus();
     if (cliStatus) {
       return {
         ...cliStatus,
@@ -140,7 +151,7 @@ export class ClaudeProviderAuth implements IProviderAuth {
     }
 
     try {
-      const credPath = path.join(os.homedir(), '.claude', '.credentials.json');
+      const credPath = path.join(getClaudeConfigDir(), '.credentials.json');
       const content = await readFile(credPath, 'utf8');
       const creds = readObjectRecord(JSON.parse(content)) ?? {};
       const oauth = readObjectRecord(creds.claudeAiOauth);
@@ -189,18 +200,14 @@ export class ClaudeProviderAuth implements IProviderAuth {
     }
   }
 
-  private checkCliAuthStatus(): ClaudeCliAuthStatus | null {
+  private async checkCliAuthStatus(): Promise<ClaudeCliAuthStatus | null> {
     const cliPath = resolveClaudeCodeExecutablePath(process.env.CLAUDE_CLI_PATH);
     try {
-      const result = this.spawnSync(cliPath, ['auth', 'status'], {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'pipe'],
-        timeout: 5000,
-      });
+      const result = await this.runCommand(cliPath, ['auth', 'status'], 5000);
       if (result.error) return null;
 
-      const stdout = result.stdout ?? '';
-      const stderr = result.stderr ?? '';
+      const stdout = String(result.stdout ?? '');
+      const stderr = String(result.stderr ?? '');
       return parseClaudeCliAuthStatus(stdout.trim() || stderr.trim());
     } catch {
       return null;

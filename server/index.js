@@ -267,7 +267,7 @@ app.post('/api/system/update', authenticateToken, async (req, res) => {
         return res.json({
             success: true,
             localOnly: IS_LOCAL_ONLY_AUTH,
-            message: 'Automatic self-update is disabled in this desktop build. Use /api/leocodebox/updates/check to detect leocodebox, the reference upstream npm package, and cc-switch reference updates.',
+            message: '桌面版更新由应用内更新器管理；可使用 /api/leocodebox/updates/check 检查 leocodebox 最新版本。',
         });
     } catch (error) {
         console.error('System update error:', error);

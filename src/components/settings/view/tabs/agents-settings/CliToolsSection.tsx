@@ -9,6 +9,8 @@ type CliToolStatus = {
   label: string;
   command: string;
   installed: boolean;
+  runnable: boolean;
+  error: string | null;
   currentVersion: string | null;
   latestVersion: string | null;
   updateAvailable: boolean;
@@ -30,9 +32,11 @@ export default function CliToolsSection() {
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
+    setLoadError(null);
     try {
       const response = await authenticatedFetch('/api/leocodebox/cli/status');
       const data = (await response.json()) as CliStatusResponse;
@@ -41,6 +45,7 @@ export default function CliToolsSection() {
       }
     } catch (error) {
       console.error('Failed to load CLI status:', error);
+      setLoadError(error instanceof Error ? error.message : '无法读取本机智能体状态');
     } finally {
       setLoading(false);
     }
@@ -78,7 +83,7 @@ export default function CliToolsSection() {
   return (
     <div className="border-b border-border/60 bg-muted/20 px-4 py-3 md:px-6">
       <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-sm font-medium text-foreground">CLI 工具版本</h3>
+        <h3 className="text-sm font-medium text-foreground">本机智能体</h3>
         <button
           onClick={() => void load()}
           className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
@@ -98,7 +103,7 @@ export default function CliToolsSection() {
             <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <span className="truncate text-sm font-medium text-foreground">{tool.label}</span>
-                {tool.installed ? (
+                {tool.installed && tool.runnable ? (
                   tool.updateAvailable ? (
                     <span className="inline-flex items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
                       <ArrowUpCircle className="h-3 w-3" />
@@ -110,23 +115,27 @@ export default function CliToolsSection() {
                       最新
                     </span>
                   )
+                ) : tool.installed ? (
+                  <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] text-red-700 dark:text-red-300">不可运行</span>
                 ) : (
                   <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">未安装</span>
                 )}
               </div>
               <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                {tool.installed ? (
+                {tool.installed && tool.runnable ? (
                   <>
                     当前 {tool.currentVersion ?? '未知'}
                     {tool.updateAvailable && tool.latestVersion ? ` → 最新 ${tool.latestVersion}` : ''}
                   </>
+                ) : tool.installed ? (
+                  <span title={tool.error ?? undefined}>{tool.error || '已检测到命令，但版本检查失败'}</span>
                 ) : (
-                  <span>命令 {tool.command} 未找到</span>
+                  <span>未找到本机命令 {tool.command}</span>
                 )}
               </div>
             </div>
 
-            {tool.installed && tool.updateAvailable && tool.canSelfUpdate && (
+            {tool.installed && tool.runnable && tool.updateAvailable && tool.canSelfUpdate && (
               <button
                 onClick={() => void runUpdate(tool)}
                 disabled={updating !== null}
@@ -136,10 +145,21 @@ export default function CliToolsSection() {
                 更新
               </button>
             )}
+            {!tool.installed && tool.docsUrl && (
+              <a
+                href={tool.docsUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex-shrink-0 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-accent"
+              >
+                安装说明
+              </a>
+            )}
           </div>
         ))}
       </div>
 
+      {loadError && <p role="alert" className="mt-2 text-xs text-destructive">无法读取本机智能体状态：{loadError}</p>}
       {message && <p className="mt-2 text-xs text-muted-foreground">{message}</p>}
     </div>
   );

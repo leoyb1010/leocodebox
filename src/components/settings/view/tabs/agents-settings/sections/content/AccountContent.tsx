@@ -1,5 +1,6 @@
 import { LogIn } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+
 import { Badge, Button } from '../../../../../../../shared/view/ui';
 import SessionProviderLogo from '../../../../../../llm-logo-provider/SessionProviderLogo';
 import type { AgentProvider, AuthStatus } from '../../../../../types/types';
@@ -56,6 +57,22 @@ const agentConfig: Record<AgentProvider, AgentVisualConfig> = {
   },
 };
 
+function authErrorKey(error: string): string {
+  const normalized = error.toLowerCase();
+  if (normalized.includes('not installed')) return 'agents.authErrors.notInstalled';
+  if (normalized.includes('expired')) return 'agents.authErrors.expired';
+  if (normalized.includes('unusable')) return 'agents.authErrors.unusable';
+  if (
+    normalized.includes('not authenticated')
+    || normalized.includes('not logged in')
+    || normalized.includes('not configured')
+    || normalized.includes('no valid tokens')
+  ) {
+    return 'agents.authErrors.notAuthenticated';
+  }
+  return 'agents.authErrors.checkFailed';
+}
+
 export default function AccountContent({ agent, authStatus, onLogin }: AccountContentProps) {
   const { t } = useTranslation('settings');
   const config = agentConfig[agent];
@@ -84,6 +101,8 @@ export default function AccountContent({ agent, authStatus, onLogin }: AccountCo
               <div className={`text-sm ${config.subtextClass}`}>
                 {authStatus.loading ? (
                   t('agents.authStatus.checkingAuth')
+                ) : authStatus.installed === false ? (
+                  t('agents.authStatus.notInstalled', { agent: config.name })
                 ) : authStatus.authenticated ? (
                   t('agents.authStatus.loggedInAs', {
                     email: authStatus.email || t('agents.authStatus.authenticatedUser'),
@@ -102,6 +121,10 @@ export default function AccountContent({ agent, authStatus, onLogin }: AccountCo
                 <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
                   {t('agents.authStatus.connected')}
                 </Badge>
+              ) : authStatus.installed === false ? (
+                <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                  {t('agents.authStatus.missing')}
+                </Badge>
               ) : (
                 <Badge variant="secondary" className="bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300">
                   {t('agents.authStatus.disconnected')}
@@ -110,7 +133,7 @@ export default function AccountContent({ agent, authStatus, onLogin }: AccountCo
             </div>
           </div>
 
-          {authStatus.method !== 'api_key' && (
+          {authStatus.installed !== false && authStatus.method !== 'api_key' && (
             <div className="border-t border-border/50 pt-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -138,8 +161,20 @@ export default function AccountContent({ agent, authStatus, onLogin }: AccountCo
           {authStatus.error && (
             <div className="border-t border-border/50 pt-4">
               <div className="text-sm text-red-600 dark:text-red-400">
-                {t('agents.error', { error: authStatus.error })}
+                {t('agents.error', { error: t(authErrorKey(authStatus.error)) })}
               </div>
+              <details className="mt-2 text-xs text-muted-foreground">
+                <summary className="cursor-pointer select-none">{t('agents.authErrors.details')}</summary>
+                <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap break-words rounded border border-border/60 bg-background/70 p-2 font-mono text-[11px]">
+                  {authStatus.error}
+                </pre>
+              </details>
+            </div>
+          )}
+
+          {authStatus.installed === false && (
+            <div className="border-t border-border/50 pt-4 text-sm text-muted-foreground">
+              {t('agents.installHint', { agent: config.name })}
             </div>
           )}
         </div>

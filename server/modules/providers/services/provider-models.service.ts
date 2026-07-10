@@ -152,9 +152,8 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
    * gate is skipped entirely for providers that never opted in.
    */
   const resolveFingerprint = async (
-    provider: LLMProvider,
+    models: IProvider['models'],
   ): Promise<{ supported: boolean; value: string | null }> => {
-    const models = resolveProvider(provider).models;
     if (typeof models.getCacheFingerprint !== 'function') {
       return { supported: false, value: null };
     }
@@ -245,10 +244,11 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
 
   const loadAndCacheModels = (
     provider: LLMProvider,
+    modelsAdapter: IProvider['models'] = resolveProvider(provider).models,
   ): Promise<ProviderModelsResult> => {
-    const request = resolveProvider(provider).models.getSupportedModels()
+    const request = modelsAdapter.getSupportedModels()
       .then(async (models) => {
-        const fingerprint = (await resolveFingerprint(provider)).value;
+        const fingerprint = (await resolveFingerprint(modelsAdapter)).value;
         const entry = await setCacheEntry(provider, models, fingerprint);
         return {
           models,
@@ -308,7 +308,8 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
       return loadAndCacheModels(provider);
     }
 
-    const currentFingerprint = await resolveFingerprint(provider);
+    const modelsAdapter = resolveProvider(provider).models;
+    const currentFingerprint = await resolveFingerprint(modelsAdapter);
 
     const cachedModels = pruneExpiredMemoryEntry(provider, now(), 'memory', currentFingerprint);
     if (cachedModels) {
@@ -332,7 +333,7 @@ export const createProviderModelsService = (dependencies: ProviderModelsServiceD
       return postLoadPendingRequest;
     }
 
-    return loadAndCacheModels(provider);
+    return loadAndCacheModels(provider, modelsAdapter);
   };
 
   const getCurrentActiveModel = async (

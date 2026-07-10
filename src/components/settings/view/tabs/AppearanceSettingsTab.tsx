@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { DarkModeToggle } from '../../../../shared/view/ui';
+import { Monitor, Moon, Sun } from 'lucide-react';
 import type { CodeEditorSettingsState, ProjectSortOrder } from '../../types/types';
 import LanguageSelector from '../../../../shared/view/ui/LanguageSelector';
 import SettingsCard from '../SettingsCard';
@@ -7,6 +7,7 @@ import SettingsRow from '../SettingsRow';
 import SettingsSection from '../SettingsSection';
 import SettingsToggle from '../SettingsToggle';
 import { useAppPreferences } from '../../../../contexts/PreferencesContext';
+import { useTheme } from '../../../../contexts/ThemeContext';
 
 type AppearanceSettingsTabProps = {
   projectSortOrder: ProjectSortOrder;
@@ -29,12 +30,13 @@ export default function AppearanceSettingsTab({
 }: AppearanceSettingsTabProps) {
   const { t } = useTranslation('settings');
   const { preferences, saving, updatePreferences } = useAppPreferences();
+  const { themeMode, setThemeMode } = useTheme();
 
   return (
     <div className="space-y-8">
-      <SettingsSection title="本地 Agent 默认值">
+      <SettingsSection title="本机智能体默认值">
         <SettingsCard divided>
-          <SettingsRow label="默认 Agent" description="新会话默认使用的本地 Agent CLI">
+          <SettingsRow label="默认智能体" description="新会话默认使用的本机智能体">
             <select
               value={preferences.defaultProvider}
               disabled={saving}
@@ -44,15 +46,15 @@ export default function AppearanceSettingsTab({
               <option value="codex">Codex</option>
               <option value="opencode">OpenCode</option>
               <option value="claude">Claude Code</option>
-              <option value="cursor">Cursor Agent</option>
+              <option value="cursor">Cursor</option>
             </select>
           </SettingsRow>
-          <SettingsRow label="默认模型" description="留空时使用 Agent CLI 自身默认模型">
+          <SettingsRow label="默认模型" description="留空时使用所选智能体自身的默认模型">
             <input
               key={`${preferences.defaultProvider}:${preferences.defaultModel}`}
               defaultValue={preferences.defaultModel}
               disabled={saving}
-              placeholder="CLI 默认"
+              placeholder="使用默认模型"
               onBlur={(event) => void updatePreferences({ defaultModel: event.target.value })}
               className="w-full rounded-lg border border-input bg-card p-2.5 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary sm:w-52"
             />
@@ -108,13 +110,32 @@ export default function AppearanceSettingsTab({
         </SettingsCard>
       </SettingsSection>
 
-      <SettingsSection title={t('appearanceSettings.darkMode.label')}>
+      <SettingsSection title="外观主题">
         <SettingsCard>
           <SettingsRow
-            label={t('appearanceSettings.darkMode.label')}
-            description={t('appearanceSettings.darkMode.description')}
+            label="外观主题"
+            description="可固定浅色或深色，也可随电脑外观自动切换"
           >
-            <DarkModeToggle ariaLabel={t('appearanceSettings.darkMode.label')} />
+            <div className="inline-flex rounded-lg border border-border bg-muted/60 p-1" role="group" aria-label="外观主题">
+              {([
+                ['system', '跟随系统', Monitor],
+                ['light', '浅色', Sun],
+                ['dark', '深色', Moon],
+              ] as const).map(([mode, label, Icon]) => (
+                <button
+                  key={mode}
+                  type="button"
+                  onClick={() => setThemeMode(mode)}
+                  aria-pressed={themeMode === mode}
+                  className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors ${
+                    themeMode === mode ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                  {label}
+                </button>
+              ))}
+            </div>
           </SettingsRow>
         </SettingsCard>
       </SettingsSection>

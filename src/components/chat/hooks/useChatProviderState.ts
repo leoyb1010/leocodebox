@@ -463,7 +463,8 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
     // mode chosen beforehand would snap back to the default as soon as the
     // session id appears.
     const providerSavedMode = localStorage.getItem(`permissionMode-last-${provider}`) as PermissionMode | null;
-    const savedMode = [sessionSavedMode, providerSavedMode].find(
+    const globalDefaultMode = localStorage.getItem('permission-mode') as PermissionMode | null;
+    const savedMode = [sessionSavedMode, providerSavedMode, globalDefaultMode].find(
       (mode): mode is PermissionMode => Boolean(mode && validModes.includes(mode)),
     );
     setPermissionMode(savedMode ?? getDefaultPermissionModeForProvider(provider));

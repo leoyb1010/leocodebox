@@ -20,6 +20,7 @@ import path from 'path';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 
 import { buildClaudeUserContent, normalizeImageDescriptors } from './shared/image-attachments.js';
+import { isMissingCliExecutableError } from './shared/provider-errors.js';
 import { CLAUDE_FALLBACK_MODELS } from './modules/providers/list/claude/claude-models.provider.js';
 import { providerModelsService } from './modules/providers/services/provider-models.service.js';
 import { resolveClaudeCodeExecutablePath } from './shared/claude-cli-path.js';
@@ -30,7 +31,6 @@ import {
   notifyUserIfEnabled
 } from './services/notification-orchestrator.js';
 import { sessionsService } from './modules/providers/services/sessions.service.js';
-import { providerAuthService } from './modules/providers/services/provider-auth.service.js';
 import { createCompleteMessage, createNormalizedMessage } from './shared/utils.js';
 
 const activeSessions = new Map();
@@ -166,9 +166,11 @@ function mapCliOptionsToSDK(options = {}) {
   // Since SDK 0.2.113, options.env replaces process.env instead of overlaying it.
   sdkOptions.env = { ...process.env };
 
-  // Resolve the executable eagerly on Windows because the SDK uses raw child_process.spawn,
-  // which does not reliably follow npm's shell wrappers like cross-spawn does.
-  sdkOptions.pathToClaudeCodeExecutable = resolveClaudeCodeExecutablePath(process.env.CLAUDE_CLI_PATH);
+  // Desktop startup resolves the actual device-local CLI into CLAUDE_CLI_PATH,
+  // keeping the status probe and the session runtime on the same executable.
+  if (process.env.CLAUDE_CLI_PATH || process.platform === 'win32') {
+    sdkOptions.pathToClaudeCodeExecutable = resolveClaudeCodeExecutablePath(process.env.CLAUDE_CLI_PATH);
+  }
 
   if (cwd) {
     sdkOptions.cwd = cwd;
@@ -744,14 +746,19 @@ async function queryClaudeSDK(command, options = {}, ws) {
       return;
     }
 
-    // Check if Claude CLI is installed for a clearer error message
-    const installed = await providerAuthService.isProviderInstalled('claude');
-    const errorContent = !installed
-      ? 'Claude Code is not installed. Please install it first: https://docs.anthropic.com/en/docs/claude-code'
+    const missingExecutable = isMissingCliExecutableError(error, 'claude');
+    const errorContent = missingExecutable
+      ? '未检测到可运行的 Claude Code。请在终端执行 claude --version，并在设置中检查 Agent CLI 路径。'
       : error.message;
 
     // Send error to WebSocket, then the terminal complete
-    ws.send(createNormalizedMessage({ kind: 'error', content: errorContent, sessionId: capturedSessionId || sessionId || null, provider: 'claude' }));
+    ws.send(createNormalizedMessage({
+      kind: 'error',
+      content: errorContent,
+      errorCode: missingExecutable ? 'PROVIDER_CLI_NOT_FOUND' : 'PROVIDER_RUN_FAILED',
+      sessionId: capturedSessionId || sessionId || null,
+      provider: 'claude',
+    }));
     ws.send(createCompleteMessage({ provider: 'claude', sessionId: capturedSessionId || sessionId || null, exitCode: 1 }));
     notifyRunFailed({
       userId: ws?.userId || null,

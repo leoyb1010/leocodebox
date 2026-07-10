@@ -3,8 +3,40 @@ export {};
 declare global {
   interface Window {
     __ROUTER_BASENAME__?: string;
-    leocodeboxLocal?: { enabled: boolean };
+    leocodeboxLocal?: { enabled: boolean; authReady?: boolean };
+    leocodeboxDesktopUpdater?: {
+      getState: () => Promise<DesktopUpdateState>;
+      setGithubToken: (token: string) => Promise<DesktopUpdateState>;
+      checkForUpdates: () => Promise<DesktopUpdateState>;
+      downloadUpdate: () => Promise<DesktopUpdateState>;
+      installUpdate: () => Promise<DesktopUpdateState>;
+      onStateChanged: (callback: (state: DesktopUpdateState) => void) => () => void;
+    };
   }
+
+  type DesktopUpdateStatus =
+    | 'idle'
+    | 'authentication-required'
+    | 'checking'
+    | 'available'
+    | 'downloading'
+    | 'downloaded'
+    | 'installing'
+    | 'up-to-date'
+    | 'development-build'
+    | 'error';
+
+  type DesktopUpdateState = {
+    status: DesktopUpdateStatus;
+    currentVersion: string;
+    latestVersion: string | null;
+    configured: boolean;
+    credentialRequired: boolean;
+    progress: number | null;
+    releaseName: string | null;
+    releaseNotes: string | null;
+    error: string | null;
+  };
 
   interface EventSourceEventMap {
     result: MessageEvent;

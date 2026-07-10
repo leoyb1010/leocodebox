@@ -58,6 +58,12 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
     () => formatUsageLimitText(String(message.content || '')),
     [message.content]
   );
+  const localizedMessageContent = message.type === 'error' && typeof message.errorCode === 'string'
+    ? String(t(`providerErrors.${message.errorCode}`, {
+        provider: provider === 'claude' ? 'Claude Code' : provider === 'cursor' ? 'Cursor' : provider === 'opencode' ? 'OpenCode' : 'Codex',
+        defaultValue: formattedMessageContent,
+      }))
+    : formattedMessageContent;
   const assistantCopyContent = message.isToolUse
     ? String(message.displayText || message.content || '')
     : formattedMessageContent;
@@ -336,7 +342,7 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
                 )}
 
                 {(() => {
-                  const content = formattedMessageContent;
+                  const content = localizedMessageContent;
 
                   // Detect if content is pure JSON (starts with { or [)
                   const trimmedContent = content.trim();
@@ -379,6 +385,13 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
                     </div>
                   );
                 })()}
+
+                {message.type === 'error' && message.rawError && message.rawError !== localizedMessageContent && (
+                  <details className="mt-2 text-xs text-muted-foreground">
+                    <summary className="cursor-pointer select-none">{t('providerErrors.details')}</summary>
+                    <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-words font-mono">{String(message.rawError)}</pre>
+                  </details>
+                )}
               </div>
             )}
 
@@ -401,4 +414,3 @@ const MessageComponent = memo(({ message, prevMessage, createDiff, onFileOpen, s
 });
 
 export default MessageComponent;
-

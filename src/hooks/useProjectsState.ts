@@ -12,6 +12,7 @@ import type {
 } from '../types/app';
 
 import type { SessionActivityMap } from './useSessionProtection';
+import { incrementProjectProviderCount } from './projectProviderCounts';
 
 type UseProjectsStateArgs = {
   sessionId?: string;
@@ -293,6 +294,7 @@ const upsertSessionIntoProject = (project: Project, event: SessionUpsertedEvent)
       total,
       hasMore: countLoadedProjectSessions(next) < total,
     };
+    next.providerCounts = incrementProjectProviderCount(project.providerCounts, event.provider);
   }
 
   return next;
@@ -357,6 +359,7 @@ export function useProjectsState({
   activeSessions,
 }: UseProjectsStateArgs) {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [projectsError, setProjectsError] = useState<string | null>(null);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [selectedSession, setSelectedSession] = useState<ProjectSession | null>(null);
   const [attentionSessionIds, setAttentionSessionIds] = useState<Set<string>>(new Set());
@@ -456,7 +459,14 @@ export function useProjectsState({
         setIsLoadingProjects(true);
       }
       const response = await api.projects();
+      if (!response.ok) {
+        throw new Error(`项目列表请求失败 (${response.status})`);
+      }
       const projectData = (await response.json()) as Project[];
+      if (!Array.isArray(projectData)) {
+        throw new Error('项目列表响应格式无效');
+      }
+      setProjectsError(null);
 
       setProjects((prevProjects) => {
         const projectsWithTaskMaster = mergeTaskMasterCache(projectData, prevProjects);
@@ -472,6 +482,7 @@ export function useProjectsState({
       });
     } catch (error) {
       console.error('Error fetching projects:', error);
+      setProjectsError(error instanceof Error ? error.message : '项目列表加载失败');
     } finally {
       if (showLoadingState) {
         setIsLoadingProjects(false);
@@ -1061,6 +1072,7 @@ export function useProjectsState({
 
   return {
     projects,
+    projectsError,
     selectedProject,
     selectedSession,
     activeTab,

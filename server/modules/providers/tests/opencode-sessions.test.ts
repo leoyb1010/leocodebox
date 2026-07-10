@@ -298,6 +298,44 @@ test('OpenCode session synchronizer returns the app session id once provider map
   }
 });
 
+test('OpenCode watcher synchronization indexes every active session in the shared database', { concurrency: false }, async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'opencode-session-sync-all-'));
+  const workspacePath = path.join(tempRoot, 'workspace');
+  await mkdir(workspacePath, { recursive: true });
+  const restoreHomeDir = patchHomeDir(tempRoot);
+
+  try {
+    await createOpenCodeDatabase(tempRoot, workspacePath);
+    const opencodeDbPath = path.join(tempRoot, '.local', 'share', 'opencode', 'opencode.db');
+    const db = new Database(opencodeDbPath);
+    try {
+      db.prepare(`
+        INSERT INTO session (
+          id, project_id, slug, directory, title, version, time_created, time_updated, time_archived,
+          tokens_input, tokens_output, tokens_reasoning, tokens_cache_read, tokens_cache_write
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        'open-session-2', 'project-1', 'open-session-2', workspacePath, 'Second session', '0.0.0',
+        1_700_000_005_000, 1_700_000_006_000, null, 0, 0, 0, 0, 0,
+      );
+    } finally {
+      db.close();
+    }
+
+    await withIsolatedDatabase(async () => {
+      const synchronizer = new OpenCodeSessionSynchronizer();
+      const firstSessionId = await synchronizer.synchronizeFile(opencodeDbPath);
+      assert.equal(firstSessionId, 'open-session-2');
+      assert.equal(sessionsDb.getAllSessions().length, 2);
+      assert.ok(sessionsDb.getSessionById('open-session-1'));
+      assert.ok(sessionsDb.getSessionById('open-session-2'));
+    });
+  } finally {
+    restoreHomeDir();
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});
+
 test('OpenCode session synchronizer adopts the pending app session before watcher sync creates a duplicate', { concurrency: false }, async () => {
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'opencode-session-sync-race-'));
   const workspacePath = path.join(tempRoot, 'workspace');

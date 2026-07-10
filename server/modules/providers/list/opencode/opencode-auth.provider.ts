@@ -1,12 +1,15 @@
 import { readFile } from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
-
-import spawn from 'cross-spawn';
 
 import type { IProviderAuth } from '@/shared/interfaces.js';
 import type { ProviderAuthStatus } from '@/shared/types.js';
-import { parseCliVersion } from '@/modules/providers/services/cli-version.util.js';
+import {
+  readCliInstallProbe,
+  runProviderCliCommand,
+  type CliCommandRunner,
+  type CliInstallProbe,
+} from '@/modules/providers/services/cli-version.util.js';
+import { getOpenCodeDataDir } from '@/shared/provider-runtime-paths.js';
 import { readObjectRecord, readOptionalString } from '@/shared/utils.js';
 
 type OpenCodeCredentialsStatus = {
@@ -25,20 +28,17 @@ const OPENCODE_ENV_CREDENTIAL_KEYS = [
 ];
 
 export class OpenCodeProviderAuth implements IProviderAuth {
+  constructor(private readonly runCommand: CliCommandRunner = runProviderCliCommand) {}
+
   /**
    * Checks whether the OpenCode CLI is available to the server process and reads its version.
    */
-  private probeInstall(): { installed: boolean; version: string | null } {
+  private async probeInstall(): Promise<CliInstallProbe> {
     try {
-      const result = spawn.sync('opencode', ['--version'], {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'pipe'],
-        timeout: 5000,
-      });
-      const installed = !result.error && result.status === 0;
-      return { installed, version: installed ? parseCliVersion(result.stdout || result.stderr) : null };
-    } catch {
-      return { installed: false, version: null };
+      const result = await this.runCommand('opencode', ['--version'], 5000);
+      return readCliInstallProbe(result, 'opencode');
+    } catch (error) {
+      return readCliInstallProbe({ error, status: null }, 'opencode');
     }
   }
 
@@ -46,7 +46,8 @@ export class OpenCodeProviderAuth implements IProviderAuth {
    * Returns OpenCode CLI installation and credential status.
    */
   async getStatus(): Promise<ProviderAuthStatus> {
-    const { installed, version } = this.probeInstall();
+    const install = await this.probeInstall();
+    const { installed, version } = install;
     if (!installed) {
       return {
         installed: false,
@@ -56,6 +57,17 @@ export class OpenCodeProviderAuth implements IProviderAuth {
         method: null,
         version: null,
         error: 'OpenCode CLI is not installed',
+      };
+    }
+    if (!install.runnable) {
+      return {
+        installed: true,
+        provider: 'opencode',
+        authenticated: false,
+        email: null,
+        method: null,
+        version: null,
+        error: `OpenCode CLI was found but could not run: ${install.error}`,
       };
     }
     const credentials = await this.checkCredentials();
@@ -76,7 +88,7 @@ export class OpenCodeProviderAuth implements IProviderAuth {
    */
   private async checkCredentials(): Promise<OpenCodeCredentialsStatus> {
     try {
-      const authPath = path.join(os.homedir(), '.local', 'share', 'opencode', 'auth.json');
+      const authPath = path.join(getOpenCodeDataDir(), 'auth.json');
       const content = await readFile(authPath, 'utf8');
       const auth = readObjectRecord(JSON.parse(content)) ?? {};
 
@@ -86,9 +98,12 @@ export class OpenCodeProviderAuth implements IProviderAuth {
           continue;
         }
 
-        const hasCredential = Object.values(providerRecord).some(
-          (value) => readOptionalString(value) !== undefined || Boolean(readObjectRecord(value)),
-        );
+        const hasCredentialValue = (value: unknown): boolean => {
+          if (readOptionalString(value) !== undefined) return true;
+          const record = readObjectRecord(value);
+          return Boolean(record && Object.values(record).some(hasCredentialValue));
+        };
+        const hasCredential = Object.values(providerRecord).some(hasCredentialValue);
         if (hasCredential) {
           return {
             authenticated: true,

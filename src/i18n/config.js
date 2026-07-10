@@ -252,9 +252,16 @@ i18n
 i18n.on('languageChanged', (lng) => {
   try {
     localStorage.setItem('userLanguage', lng);
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = lng;
+    }
   } catch (error) {
     console.error('Failed to save language preference:', error);
   }
 });
+
+if (typeof document !== 'undefined') {
+  document.documentElement.lang = i18n.language || 'zh-CN';
+}
 
 export default i18n;

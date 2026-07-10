@@ -46,13 +46,13 @@ export default function SidebarFooter({
           href="/leocodebox-feedback.html"
           className="flex items-center justify-center gap-1.5 rounded-md px-1.5 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
         >
-          <Bug className="h-3.5 w-3.5" />反馈
+          <Bug className="h-3.5 w-3.5" />本地记录
         </a>
         <a
           href="/leocodebox-switch.html"
           className="flex items-center justify-center gap-1.5 rounded-md px-1.5 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
         >
-          <SlidersHorizontal className="h-3.5 w-3.5" />CC Switch
+          <SlidersHorizontal className="h-3.5 w-3.5" />Leoapi
         </a>
         <button
           className="flex items-center justify-center gap-1.5 rounded-md px-1.5 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"

@@ -140,6 +140,7 @@ const normalizeNotificationPreferences = (
 export function useSettingsController({ isOpen, initialTab }: UseSettingsControllerArgs) {
   const { isDarkMode, toggleDarkMode } = useTheme() as ThemeContextValue;
   const closeTimerRef = useRef<number | null>(null);
+  const isHydratingRef = useRef(false);
 
   const [activeTab, setActiveTab] = useState<SettingsMainTab>(() => normalizeMainTab(initialTab));
   const [saveStatus, setSaveStatus] = useState<'success' | 'error' | null>(null);
@@ -305,8 +306,12 @@ export function useSettingsController({ isOpen, initialTab }: UseSettingsControl
       return;
     }
 
+    setSaveStatus(null);
+    isHydratingRef.current = true;
     setActiveTab(normalizeMainTab(initialTab));
-    void loadSettings();
+    void loadSettings().finally(() => {
+      window.setTimeout(() => { isHydratingRef.current = false; }, 0);
+    });
     void refreshProviderAuthStatuses();
   }, [initialTab, isOpen, loadSettings, refreshProviderAuthStatuses]);
 
@@ -324,12 +329,9 @@ export function useSettingsController({ isOpen, initialTab }: UseSettingsControl
 
   // Auto-save permissions and sort order with debounce
   const autoSaveTimerRef = useRef<number | null>(null);
-  const isInitialLoadRef = useRef(true);
 
   useEffect(() => {
-    // Skip auto-save on initial load (settings are being loaded from localStorage)
-    if (isInitialLoadRef.current) {
-      isInitialLoadRef.current = false;
+    if (!isOpen || isHydratingRef.current) {
       return;
     }
 
@@ -346,7 +348,7 @@ export function useSettingsController({ isOpen, initialTab }: UseSettingsControl
         window.clearTimeout(autoSaveTimerRef.current);
       }
     };
-  }, [saveSettings]);
+  }, [isOpen, saveSettings]);
 
   // Clear save status after 2 seconds
   useEffect(() => {
@@ -357,13 +359,6 @@ export function useSettingsController({ isOpen, initialTab }: UseSettingsControl
     const timer = window.setTimeout(() => setSaveStatus(null), 2000);
     return () => window.clearTimeout(timer);
   }, [saveStatus]);
-
-  // Reset initial load flag when settings dialog opens
-  useEffect(() => {
-    if (isOpen) {
-      isInitialLoadRef.current = true;
-    }
-  }, [isOpen]);
 
   useEffect(() => () => {
     if (closeTimerRef.current !== null) {

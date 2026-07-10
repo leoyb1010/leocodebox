@@ -1,5 +1,3 @@
-
-
 import { useTranslation } from 'react-i18next';
 import { Languages } from 'lucide-react';
 
@@ -23,7 +21,7 @@ export default function LanguageSelector({ compact = false }: LanguageSelectorPr
 
   const handleLanguageChange = (event: React.ChangeEvent<HTMLSelectElement>) => {
     const newLanguage = event.target.value;
-    i18n.changeLanguage(newLanguage);
+    void i18n.changeLanguage(newLanguage);
   };
 
   // Compact style for QuickSettingsPanel
@@ -35,6 +33,7 @@ export default function LanguageSelector({ compact = false }: LanguageSelectorPr
           {t('account.language')}
         </span>
         <select
+          aria-label={t('account.language')}
           value={i18n.language}
           onChange={handleLanguageChange}
           className="w-auto min-w-[120px] max-w-[160px] rounded-lg border border-input bg-card p-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary"
@@ -61,6 +60,7 @@ export default function LanguageSelector({ compact = false }: LanguageSelectorPr
         </div>
       </div>
       <select
+        aria-label={t('account.languageLabel')}
         value={i18n.language}
         onChange={handleLanguageChange}
         className="w-36 rounded-lg border border-input bg-card p-2 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary"

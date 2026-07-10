@@ -6,6 +6,7 @@ import readline from 'node:readline';
 import type { IProviderSessions } from '@/shared/interfaces.js';
 import type { AnyRecord, FetchHistoryOptions, FetchHistoryResult, NormalizedMessage } from '@/shared/types.js';
 import { createNormalizedMessage, generateMessageId, readObjectRecord, sliceTailPage } from '@/shared/utils.js';
+import { isStandaloneProviderAuthenticationFailure } from '@/shared/provider-errors.js';
 import { sessionsDb } from '@/modules/database/index.js';
 
 const PROVIDER = 'claude';
@@ -528,6 +529,10 @@ export class ClaudeSessionsProvider implements IProviderSessions {
         let partIndex = 0;
         for (const part of raw.message.content) {
           if (part.type === 'text' && part.text) {
+            if (isStandaloneProviderAuthenticationFailure(part.text)) {
+              partIndex++;
+              continue;
+            }
             messages.push(createNormalizedMessage({
               id: `${baseId}_${partIndex}`,
               sessionId,
@@ -561,6 +566,9 @@ export class ClaudeSessionsProvider implements IProviderSessions {
           partIndex++;
         }
       } else if (typeof raw.message.content === 'string') {
+        if (isStandaloneProviderAuthenticationFailure(raw.message.content)) {
+          return messages;
+        }
         messages.push(createNormalizedMessage({
           id: baseId,
           sessionId,

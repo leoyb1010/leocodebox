@@ -15,6 +15,7 @@ import { parseJsonSafely, resolveApiErrorMessage } from '../utils';
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 const IS_LOCAL_DESKTOP = typeof window !== 'undefined' && window.leocodeboxLocal?.enabled === true;
+const IS_LOCAL_AUTH_READY = !IS_LOCAL_DESKTOP || window.leocodeboxLocal?.authReady !== false;
 
 const readStoredToken = (): string | null => localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
 
@@ -37,13 +38,17 @@ export function useAuth(): AuthContextValue {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<AuthUser | null>(() => (
-    IS_LOCAL_DESKTOP ? { username: 'local-user' } : null
+    IS_LOCAL_DESKTOP && IS_LOCAL_AUTH_READY ? { username: 'local-user' } : null
   ));
   const [token, setToken] = useState<string | null>(() => readStoredToken());
-  const [isLoading, setIsLoading] = useState(!IS_LOCAL_DESKTOP);
+  const [isLoading, setIsLoading] = useState(!IS_LOCAL_DESKTOP || !IS_LOCAL_AUTH_READY);
   const [needsSetup, setNeedsSetup] = useState(false);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(() => (
+    IS_LOCAL_DESKTOP && !IS_LOCAL_AUTH_READY
+      ? '本地服务认证初始化失败。请完全退出 leocodebox 后重新打开。'
+      : null
+  ));
 
   const setSession = useCallback((nextUser: AuthUser, nextToken: string) => {
     setUser(nextUser);
@@ -120,6 +125,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     if (IS_LOCAL_DESKTOP) {
+      if (!IS_LOCAL_AUTH_READY) {
+        setUser(null);
+        setError('本地服务认证初始化失败。请完全退出 leocodebox 后重新打开。');
+        setIsLoading(false);
+        return;
+      }
       setUser({ username: 'local-user' });
       setNeedsSetup(false);
       setHasCompletedOnboarding(true);

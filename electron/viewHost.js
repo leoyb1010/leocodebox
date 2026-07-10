@@ -260,7 +260,9 @@ export class ViewHost {
       return;
     }
     view.setBounds(this.getContentViewBounds());
-    view.setAutoResize({ width: true, height: true });
+    // BrowserView auto-resize can reuse stale parent bounds during macOS
+    // maximize/full-screen transitions. DesktopWindowManager owns sizing.
+    view.setAutoResize({ width: false, height: false });
   }
 
   resizeActiveView() {
@@ -316,6 +318,9 @@ export class ViewHost {
           view.__leocodeboxLoadingUrl = null;
         }
       }
+    }
+    if (!view.webContents.isDestroyed()) {
+      view.webContents.focus();
     }
     return view.webContents.getURL();
   }

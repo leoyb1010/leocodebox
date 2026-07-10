@@ -46,6 +46,8 @@ export interface NormalizedMessage {
   // kind-specific fields (flat for simplicity)
   role?: 'user' | 'assistant';
   content?: string;
+  errorCode?: string;
+  rawError?: string;
   /**
    * Mirrors optional transcript metadata from the server.
    *

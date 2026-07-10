@@ -275,7 +275,10 @@ export async function queryCodex(command, options = {}, ws) {
   abortSignal?.addEventListener('abort', abortFromGateway, { once: true });
 
   try {
-    codex = new Codex();
+    codex = new Codex({
+      codexPathOverride: process.env.CODEX_CLI_PATH || undefined,
+      env: { ...process.env },
+    });
 
     const threadOptions = {
       workingDirectory,

@@ -1,12 +1,15 @@
 import { readFile } from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
-
-import spawn from 'cross-spawn';
 
 import type { IProviderAuth } from '@/shared/interfaces.js';
 import type { ProviderAuthStatus } from '@/shared/types.js';
-import { parseCliVersion } from '@/modules/providers/services/cli-version.util.js';
+import {
+  readCliInstallProbe,
+  runProviderCliCommand,
+  type CliCommandRunner,
+  type CliInstallProbe,
+} from '@/modules/providers/services/cli-version.util.js';
+import { getCodexHome } from '@/shared/provider-runtime-paths.js';
 import { readObjectRecord, readOptionalString } from '@/shared/utils.js';
 
 type CodexCredentialsStatus = {
@@ -37,22 +40,17 @@ export function parseCodexCliAuthStatus(output: string): CodexCliAuthStatus | nu
 }
 
 export class CodexProviderAuth implements IProviderAuth {
-  constructor(private readonly spawnSync: typeof spawn.sync = spawn.sync) {}
+  constructor(private readonly runCommand: CliCommandRunner = runProviderCliCommand) {}
 
   /**
    * Checks whether Codex is available to the server runtime and reads its version.
    */
-  private probeInstall(): { installed: boolean; version: string | null } {
+  private async probeInstall(): Promise<CliInstallProbe> {
     try {
-      const result = this.spawnSync('codex', ['--version'], {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'pipe'],
-        timeout: 5000,
-      });
-      const installed = !result.error && result.status === 0;
-      return { installed, version: installed ? parseCliVersion(result.stdout || result.stderr) : null };
-    } catch {
-      return { installed: false, version: null };
+      const result = await this.runCommand(process.env.CODEX_CLI_PATH || 'codex', ['--version'], 5000);
+      return readCliInstallProbe(result, 'codex');
+    } catch (error) {
+      return readCliInstallProbe({ error, status: null }, 'codex');
     }
   }
 
@@ -60,7 +58,8 @@ export class CodexProviderAuth implements IProviderAuth {
    * Returns Codex SDK availability and credential status.
    */
   async getStatus(): Promise<ProviderAuthStatus> {
-    const { installed, version } = this.probeInstall();
+    const install = await this.probeInstall();
+    const { installed, version } = install;
     if (!installed) {
       return {
         installed: false,
@@ -70,6 +69,18 @@ export class CodexProviderAuth implements IProviderAuth {
         method: null,
         version: null,
         error: 'Codex CLI is not installed',
+      };
+    }
+
+    if (!install.runnable) {
+      return {
+        installed: true,
+        provider: 'codex',
+        authenticated: false,
+        email: null,
+        method: null,
+        version: null,
+        error: `Codex CLI was found but could not run: ${install.error}`,
       };
     }
 
@@ -94,7 +105,7 @@ export class CodexProviderAuth implements IProviderAuth {
       return { authenticated: true, email: 'API Key Auth', method: 'api_key' };
     }
 
-    const cliStatus = this.checkCliAuthStatus();
+    const cliStatus = await this.checkCliAuthStatus();
     if (cliStatus) {
       if (!cliStatus.authenticated) {
         return { authenticated: false, email: null, method: null, error: 'Codex CLI is not logged in' };
@@ -111,13 +122,9 @@ export class CodexProviderAuth implements IProviderAuth {
     return this.readCredentialIdentity();
   }
 
-  private checkCliAuthStatus(): CodexCliAuthStatus | null {
+  private async checkCliAuthStatus(): Promise<CodexCliAuthStatus | null> {
     try {
-      const result = this.spawnSync('codex', ['login', 'status'], {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'pipe'],
-        timeout: 5000,
-      });
+      const result = await this.runCommand('codex', ['login', 'status'], 5000);
       if (result.error) return null;
 
       const stdout = result.stdout ?? '';
@@ -130,7 +137,7 @@ export class CodexProviderAuth implements IProviderAuth {
 
   private async readCredentialIdentity(): Promise<CodexCredentialsStatus> {
     try {
-      const authPath = path.join(os.homedir(), '.codex', 'auth.json');
+      const authPath = path.join(getCodexHome(), 'auth.json');
       const content = await readFile(authPath, 'utf8');
       const auth = readObjectRecord(JSON.parse(content)) ?? {};
       const tokens = readObjectRecord(auth.tokens) ?? {};

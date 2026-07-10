@@ -7,11 +7,5 @@
   <true/>
   <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
   <true/>
-  <!-- leocodebox spawns local agent CLIs (claude/codex/cursor/opencode) and a
-       bundled node server; these need dyld env vars and library loading -->
-  <key>com.apple.security.cs.allow-dyld-environment-variables</key>
-  <true/>
-  <key>com.apple.security.cs.disable-library-validation</key>
-  <true/>
 </dict>
 </plist>

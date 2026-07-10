@@ -7,6 +7,11 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { ServerInstaller } from './serverInstaller.js';
+import {
+  getAgentCliDiagnostics,
+  getDesktopRuntimePath,
+  readLoginShellEnvironment,
+} from './runtimePath.js';
 
 const DEFAULT_PORT = Number.parseInt(
   process.env.LEOCODEBOX_DESKTOP_DEFAULT_PORT || process.env.CLOUDCLI_DESKTOP_DEFAULT_PORT || '38473',
@@ -64,7 +69,7 @@ function requestJson(url, timeoutMs = HEALTH_TIMEOUT_MS) {
   });
 }
 
-async function isCloudCliServer(baseUrl) {
+async function isLeocodeboxServer(baseUrl) {
   const response = await requestJson(`${baseUrl}/health`);
   return response.ok
     && response.json?.status === 'ok'
@@ -105,21 +110,12 @@ async function chooseServerPort(host) {
   return getFreePort();
 }
 
-function getDesktopPath() {
-  const currentPath = process.env.PATH || '';
-  const commonPaths = process.platform === 'win32'
-    ? []
-    : ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'];
-
-  return [...commonPaths, currentPath].filter(Boolean).join(path.delimiter);
-}
-
-function getNodeRuntime(usePackagedElectronRuntime) {
+function getNodeRuntime() {
   if (process.env.ELECTRON_NODE_PATH) {
     return { command: process.env.ELECTRON_NODE_PATH, env: {}, label: 'ELECTRON_NODE_PATH' };
   }
 
-  if (usePackagedElectronRuntime && process.versions.electron) {
+  if (process.versions.electron) {
     return {
       command: process.execPath,
       env: { ELECTRON_RUN_AS_NODE: '1' },
@@ -241,11 +237,11 @@ async function getExistingServerCandidateUrls(defaultUrl) {
   return urls;
 }
 
-async function waitForCloudCliServer(baseUrl, timeoutMs) {
+async function waitForLeocodeboxServer(baseUrl, timeoutMs) {
   const startedAt = Date.now();
 
   while (Date.now() - startedAt < timeoutMs) {
-    if (await isCloudCliServer(baseUrl)) {
+    if (await isLeocodeboxServer(baseUrl)) {
       return true;
     }
     await new Promise((resolve) => setTimeout(resolve, 300));
@@ -312,7 +308,7 @@ export class LocalServerController {
   getPendingTarget() {
     return {
 	      kind: 'local',
-	      name: 'Local leocodebox',
+	      name: '本地 leocodebox',
 	      url: this.localServerUrl || `http://${DISPLAY_HOST}:${this.localServerPort || DEFAULT_PORT}`,
     };
   }
@@ -398,31 +394,47 @@ export class LocalServerController {
 
   startBundledServer(port, serverEntry) {
     const bindHost = this.getServerBindHost();
-    const runtime = getNodeRuntime(this.isPackaged);
+    const runtime = getNodeRuntime();
     const serverCwd = getServerCwd(this.appRoot, serverEntry);
+    const loginShellEnvironment = readLoginShellEnvironment();
+    const runtimeEnvironment = { ...process.env, ...loginShellEnvironment };
+    const desktopPath = getDesktopRuntimePath({
+      env: runtimeEnvironment,
+      loginShellPath: loginShellEnvironment.PATH || '',
+    });
+    const agentCliDiagnostics = getAgentCliDiagnostics(desktopPath);
+    const childEnvironment = {
+      ...runtimeEnvironment,
+      ...runtime.env,
+      HOST: bindHost,
+      SERVER_PORT: String(port),
+      NODE_ENV: 'production',
+      LEOCODEBOX_LOCAL_ONLY: LOCAL_ONLY_ENV_VALUE,
+      CLOUDCLI_DESKTOP_LOCAL_ONLY: LOCAL_ONLY_ENV_VALUE,
+      LEOCODEBOX_LOCAL_AUTH_TOKEN: this.localAuthToken,
+      CLOUDCLI_DESKTOP_LOCAL_AUTH_TOKEN: this.localAuthToken,
+      LEOCODEBOX_DESKTOP_PARENT_PID: String(process.pid),
+      PATH: desktopPath,
+      ...(agentCliDiagnostics.claude ? { CLAUDE_CLI_PATH: agentCliDiagnostics.claude } : {}),
+      ...(agentCliDiagnostics.codex ? { CODEX_CLI_PATH: agentCliDiagnostics.codex } : {}),
+    };
+    // A private-release updater token belongs only to the Electron main process.
+    delete childEnvironment.GH_TOKEN;
+    delete childEnvironment.GITHUB_TOKEN;
 
     const command = `${runtime.command} ${serverEntry}`;
     this.appendStartupLog(`$ ${command}`);
     this.appendStartupLog(`runtime: ${runtime.label}`);
     this.appendStartupLog(`cwd: ${serverCwd}`);
     this.appendStartupLog(`HOST=${bindHost} SERVER_PORT=${port} NODE_ENV=production LEOCODEBOX_LOCAL_ONLY=${LOCAL_ONLY_ENV_VALUE}`);
+    this.appendStartupLog(`agent CLIs: ${Object.entries(agentCliDiagnostics)
+      .map(([commandName, executablePath]) => `${commandName}=${executablePath || 'not found'}`)
+      .join(', ')}`);
 
     this.ownedServerProcess = spawn(runtime.command, [serverEntry], {
       cwd: serverCwd,
       detached: true,
-      env: {
-        ...process.env,
-        ...runtime.env,
-        HOST: bindHost,
-	        SERVER_PORT: String(port),
-	        NODE_ENV: 'production',
-	        LEOCODEBOX_LOCAL_ONLY: LOCAL_ONLY_ENV_VALUE,
-	        CLOUDCLI_DESKTOP_LOCAL_ONLY: LOCAL_ONLY_ENV_VALUE,
-	        LEOCODEBOX_LOCAL_AUTH_TOKEN: this.localAuthToken,
-	        CLOUDCLI_DESKTOP_LOCAL_AUTH_TOKEN: this.localAuthToken,
-	        LEOCODEBOX_DESKTOP_PARENT_PID: String(process.pid),
-	        PATH: getDesktopPath(),
-	      },
+      env: childEnvironment,
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     });
@@ -472,7 +484,7 @@ export class LocalServerController {
     const forceOwnServer = process.env.ELECTRON_FORCE_OWN_SERVER !== '0';
 
     if (devUrl) {
-      const ready = await waitForCloudCliServer(defaultUrl, SERVER_START_TIMEOUT_MS);
+      const ready = await waitForLeocodeboxServer(defaultUrl, SERVER_START_TIMEOUT_MS);
       if (!ready) {
         throw new Error(`Development backend did not become ready at ${defaultDisplayUrl}`);
       }
@@ -483,7 +495,7 @@ export class LocalServerController {
     if (!forceOwnServer) {
       const candidateUrls = await getExistingServerCandidateUrls(defaultUrl);
       for (const candidateUrl of candidateUrls) {
-        if (await isCloudCliServer(candidateUrl)) {
+        if (await isLeocodeboxServer(candidateUrl)) {
           const displayUrl = getDisplayUrl(candidateUrl);
           this.localServerPort = getPortFromUrl(candidateUrl);
 	          this.appendStartupLog(`Using existing Local leocodebox at ${displayUrl}`);
@@ -500,7 +512,7 @@ export class LocalServerController {
     this.localServerPort = port;
     this.startBundledServer(port, serverEntry);
 
-    const ready = await waitForCloudCliServer(serverUrl, SERVER_START_TIMEOUT_MS);
+    const ready = await waitForLeocodeboxServer(serverUrl, SERVER_START_TIMEOUT_MS);
     if (!ready) {
       const recentLogs = this.getStartupLogs().slice(-20).join('\n');
       await this.shutdownOwnedServer();
@@ -517,7 +529,7 @@ export class LocalServerController {
   }
 
   async ensureLocalServer() {
-    if (this.localServerUrl && !await isCloudCliServer(this.localServerUrl)) {
+    if (this.localServerUrl && !await isLeocodeboxServer(this.localServerUrl)) {
       this.appendStartupLog(`Local server health check failed at ${this.localServerUrl}; restarting.`);
       this.localServerUrl = null;
       this.localServerPort = null;
@@ -532,7 +544,7 @@ export class LocalServerController {
     await this.ensureLocalServer();
     return {
 	      kind: 'local',
-	      name: 'Local leocodebox',
+	      name: '本地 leocodebox',
 	      url: this.localServerUrl,
     };
   }

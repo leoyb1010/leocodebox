@@ -19,6 +19,13 @@
     "cursor": "Cursor",
     "codex": "Codex"
   },
+  "providerErrors": {
+    "PROVIDER_CLI_NOT_FOUND": "未在这台 Mac 上检测到 {{provider}} CLI。请先完成本机安装，然后在设置中刷新。",
+    "PROVIDER_NOT_AUTHENTICATED": "{{provider}} 已安装，但当前设备尚未登录。请先在终端完成登录。",
+    "PROVIDER_AUTH_EXPIRED": "{{provider}} 的本机登录已过期，请重新登录。",
+    "PROVIDER_AUTH_INVALID": "{{provider}} 的本机凭据不可用，请重新登录。",
+    "details": "原始诊断"
+  },
   "tools": {
     "settings": "工具设置",
     "error": "工具错误",

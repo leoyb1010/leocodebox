@@ -21,6 +21,8 @@ import readline from 'node:readline';
 import type { NextFunction, Request, RequestHandler, Response } from 'express';
 
 import { parseFrontMatter } from '@/shared/frontmatter.js';
+import { classifyProviderError } from '@/shared/provider-errors.js';
+import { getOpenCodeDataDir } from '@/shared/provider-runtime-paths.js';
 import type {
   AnyRecord,
   ApiSuccessShape,
@@ -340,8 +342,20 @@ export function generateMessageId(prefix = 'msg'): string {
  * timestamp, and provider marker.
  */
 export function createNormalizedMessage(fields: NormalizedMessageInput): NormalizedMessage {
+  const providerError = fields.kind === 'error' ? classifyProviderError(fields.content) : null;
+  const currentErrorCode = typeof fields.errorCode === 'string' ? fields.errorCode : null;
+  const errorFields = providerError
+    ? {
+        errorCode: !currentErrorCode || currentErrorCode === 'PROVIDER_RUN_FAILED'
+          ? providerError.code
+          : currentErrorCode,
+        rawError: typeof fields.rawError === 'string' ? fields.rawError : providerError.rawError,
+      }
+    : {};
+
   return {
     ...fields,
+    ...errorFields,
     id: fields.id || generateMessageId(fields.kind),
     sessionId: fields.sessionId || '',
     timestamp: fields.timestamp || new Date().toISOString(),
@@ -1078,7 +1092,7 @@ export function readJsonRecord(value: unknown): AnyRecord | null {
  * it as a deletable transcript path for an individual app session row.
  */
 export function getOpenCodeDatabasePath(): string {
-  return path.join(os.homedir(), '.local', 'share', 'opencode', 'opencode.db');
+  return path.join(getOpenCodeDataDir(), 'opencode.db');
 }
 
 /**
@@ -1140,7 +1154,7 @@ export function sanitizeLeafDirectoryName(inputName: string, label = 'directory 
  *
  * Provider synchronizers call this to find transcript artifacts under provider
  * home directories. Pass `lastScanAt` to include only files created after the
- * previous scan, or pass `null` to perform a full rescan. Missing directories
+ * previous scan based on modification time, or pass `null` to perform a full rescan. Missing directories
  * are treated as empty because not every provider exists on every machine.
  */
 export async function findFilesRecursivelyCreatedAfter(
@@ -1149,32 +1163,39 @@ export async function findFilesRecursivelyCreatedAfter(
   lastScanAt: Date | null,
   fileList: string[] = []
 ): Promise<string[]> {
+  let entries;
   try {
-    const entries = await readdir(rootDir, { withFileTypes: true });
-    for (const entry of entries) {
-      const fullPath = path.join(rootDir, entry.name);
+    entries = await readdir(rootDir, { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return fileList;
+    throw error;
+  }
 
-      if (entry.isDirectory()) {
-        await findFilesRecursivelyCreatedAfter(fullPath, extension, lastScanAt, fileList);
-        continue;
-      }
+  for (const entry of entries) {
+    const fullPath = path.join(rootDir, entry.name);
 
-      if (!entry.isFile() || !entry.name.endsWith(extension)) {
-        continue;
-      }
-
-      if (!lastScanAt) {
-        fileList.push(fullPath);
-        continue;
-      }
-
-      const fileStat = await stat(fullPath);
-      if (fileStat.birthtime > lastScanAt) {
-        fileList.push(fullPath);
-      }
+    if (entry.isDirectory()) {
+      await findFilesRecursivelyCreatedAfter(fullPath, extension, lastScanAt, fileList);
+      continue;
     }
-  } catch {
-    // Missing provider folders are expected in first-run or partial setups.
+
+    if (!entry.isFile() || !entry.name.endsWith(extension)) {
+      continue;
+    }
+
+    if (!lastScanAt) {
+      fileList.push(fullPath);
+      continue;
+    }
+
+    try {
+      const fileStat = await stat(fullPath);
+      if (fileStat.mtime >= lastScanAt) {
+        fileList.push(fullPath);
+      }
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
   }
 
   return fileList;

@@ -205,6 +205,8 @@ export function normalizedToChatMessages(messages: NormalizedMessage[]): ChatMes
         converted.push({
           type: 'error',
           content: msg.content || 'Unknown error',
+          errorCode: msg.errorCode,
+          rawError: msg.rawError,
           timestamp: msg.timestamp,
           ...sharedMetadata,
         });

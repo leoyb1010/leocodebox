@@ -33,13 +33,22 @@ const readOptionalString = (value: unknown): string | undefined =>
 const readNumber = (value: unknown): number | undefined =>
   typeof value === 'number' && Number.isFinite(value) ? value : undefined;
 
-const apiUrl = (process.env.CLOUDCLI_BROWSER_USE_API_URL || 'http://127.0.0.1:3001/api/browser-use-mcp').replace(/\/$/, '');
-const apiToken = process.env.CLOUDCLI_BROWSER_USE_MCP_TOKEN || '';
-const API_TIMEOUT_MS = Number.parseInt(process.env.CLOUDCLI_BROWSER_USE_API_TIMEOUT_MS || '60000', 10);
+const apiUrl = (
+  process.env.LEOCODEBOX_BROWSER_USE_API_URL
+  || process.env.CLOUDCLI_BROWSER_USE_API_URL
+  || 'http://127.0.0.1:3001/api/browser-use-mcp'
+).replace(/\/$/, '');
+const apiToken = process.env.LEOCODEBOX_BROWSER_USE_MCP_TOKEN || process.env.CLOUDCLI_BROWSER_USE_MCP_TOKEN || '';
+const API_TIMEOUT_MS = Number.parseInt(
+  process.env.LEOCODEBOX_BROWSER_USE_API_TIMEOUT_MS
+  || process.env.CLOUDCLI_BROWSER_USE_API_TIMEOUT_MS
+  || '60000',
+  10,
+);
 
 async function callBrowserUseApi(toolName: string, input: Record<string, unknown>) {
   if (!apiToken) {
-    throw new Error('CLOUDCLI_BROWSER_USE_MCP_TOKEN is not configured.');
+    throw new Error('LEOCODEBOX_BROWSER_USE_MCP_TOKEN is not configured.');
   }
 
   const response = await fetch(`${apiUrl}/tools/${encodeURIComponent(toolName)}`, {

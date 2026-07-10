@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-function isCloudCliAppOrigin(location) {
+function isLeocodeboxAppOrigin(location) {
   if (location.protocol === 'file:') return true;
 
   if (location.protocol === 'http:') {
@@ -18,7 +18,7 @@ function isLocalHttpOrigin(location) {
 }
 
 function installLocalOnlyAuthToken(location) {
-  if (!isLocalHttpOrigin(location)) return;
+  if (!isLocalHttpOrigin(location)) return false;
 
   try {
     const languageMigrationKey = 'leocodebox-language-default-v1';
@@ -32,10 +32,12 @@ function installLocalOnlyAuthToken(location) {
     const token = ipcRenderer.sendSync('leocodebox:get-local-auth-token', location.origin);
     if (typeof token === 'string' && token) {
       window.localStorage.setItem('auth-token', token);
+      return true;
     }
   } catch (error) {
     console.warn('[leocodebox] Could not install local auth token:', error?.message || error);
   }
+  return false;
 }
 
 function onDesktopStateUpdated(callback) {
@@ -46,17 +48,36 @@ function onDesktopStateUpdated(callback) {
   };
 }
 
-installLocalOnlyAuthToken(window.location);
+const localAuthReady = installLocalOnlyAuthToken(window.location);
 
 if (isLocalHttpOrigin(window.location)) {
-  contextBridge.exposeInMainWorld('leocodeboxLocal', Object.freeze({ enabled: true }));
+  const localBridge = { enabled: true, authReady: localAuthReady };
+  if (window.location.pathname === '/leocodebox-switch.html') {
+    localBridge.openMain = () => ipcRenderer.invoke('leocodebox-desktop:open-local');
+  }
+  contextBridge.exposeInMainWorld('leocodeboxLocal', Object.freeze(localBridge));
 }
 
-if (isCloudCliAppOrigin(window.location)) {
+if (isLeocodeboxAppOrigin(window.location)) {
   contextBridge.exposeInMainWorld('leocodeboxDesktopNotifications', {
     getState: () => ipcRenderer.invoke('leocodebox-desktop:get-state'),
     update: (settings) => ipcRenderer.invoke('leocodebox-desktop:update-desktop-notifications', settings),
     onStateUpdated: onDesktopStateUpdated,
+  });
+}
+
+if (isLocalHttpOrigin(window.location)) {
+  contextBridge.exposeInMainWorld('leocodeboxDesktopUpdater', {
+    getState: () => ipcRenderer.invoke('leocodebox-desktop:update-get-state'),
+    setGithubToken: (token) => ipcRenderer.invoke('leocodebox-desktop:update-set-token', token),
+    checkForUpdates: () => ipcRenderer.invoke('leocodebox-desktop:update-check'),
+    downloadUpdate: () => ipcRenderer.invoke('leocodebox-desktop:update-download'),
+    installUpdate: () => ipcRenderer.invoke('leocodebox-desktop:update-install'),
+    onStateChanged: (callback) => {
+      const listener = (_event, state) => callback(state);
+      ipcRenderer.on('leocodebox-desktop:update-state', listener);
+      return () => ipcRenderer.removeListener('leocodebox-desktop:update-state', listener);
+    },
   });
 }
 

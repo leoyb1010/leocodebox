@@ -1,4 +1,5 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, session, shell } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, ipcMain, safeStorage, session, shell, webContents } from 'electron';
+import updaterPackage from 'electron-updater';
 import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
@@ -9,9 +10,16 @@ import { CloudController } from './cloud.js';
 import { DesktopWindowManager } from './desktopWindow.js';
 import { DesktopNotificationsController } from './desktopNotifications.js';
 import { LocalServerController } from './localServer.js';
+import { readProductVersion } from './productMetadata.js';
 import { TabsController } from './tabs.js';
+import { DesktopUpdaterController, clearUpdaterTokenEnvironment } from './updater.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const { autoUpdater } = updaterPackage;
+
+// electron-updater also reads GITHUB_TOKEN directly. Update credentials must
+// come from the encrypted per-user settings store, never inherited env vars.
+clearUpdaterTokenEnvironment();
 
 const APP_NAME = 'leocodebox';
 const APP_USER_MODEL_ID = 'com.leoyuan.leocodebox';
@@ -39,12 +47,21 @@ let desktopWindow = null;
 let localServer = null;
 let cloud = null;
 let desktopNotifications = null;
+let desktopUpdater = null;
 let isQuitting = false;
 let isRefreshingCloud = false;
 let pendingCloudConnectStartedAt = 0;
+let productVersion = null;
 
 function getAppRoot() {
   return app.isPackaged ? app.getAppPath() : path.resolve(__dirname, '..');
+}
+
+function getProductVersion() {
+  if (!productVersion) {
+    productVersion = readProductVersion(getAppRoot(), app.getVersion());
+  }
+  return productVersion;
 }
 
 function getLauncherPath() {
@@ -72,6 +89,10 @@ function getSettingsPath() {
 
 function getDesktopNotificationsSettingsPath() {
   return path.join(app.getPath('userData'), 'desktop-notifications-settings.json');
+}
+
+function getDesktopUpdaterSettingsPath() {
+  return path.join(app.getPath('userData'), 'desktop-updater.json');
 }
 
 async function clearLocalOnlyWebCaches() {
@@ -144,7 +165,7 @@ function getDesktopState() {
   const localState = getLocalState();
   const authState = LOCAL_ONLY_MODE ? 'local_only' : cloud.getAuthState();
   return {
-    appVersion: app.getVersion(),
+    appVersion: getProductVersion(),
     localOnly: LOCAL_ONLY_MODE,
     account: {
       connected: !LOCAL_ONLY_MODE && authState === 'connected',
@@ -165,7 +186,18 @@ function getDesktopState() {
     desktopNotifications: LOCAL_ONLY_MODE
       ? { enabled: false, supported: false, connectedCount: 0, targetCount: 0 }
       : (desktopNotifications?.getState() || { enabled: false, supported: false, connectedCount: 0, targetCount: 0 }),
+    desktopUpdater: desktopUpdater?.getState() || null,
   };
+}
+
+function emitDesktopUpdaterState(state = desktopUpdater?.getState()) {
+  if (!state) return;
+  for (const contents of webContents.getAllWebContents()) {
+    if (!contents.isDestroyed()) {
+      contents.send('leocodebox-desktop:update-state', state);
+    }
+  }
+  syncDesktopState();
 }
 
 async function openExternalUrl(url) {
@@ -204,6 +236,29 @@ function isAllowedLocalAuthOrigin(origin) {
   if (!port || parsed.protocol !== 'http:') return false;
   const hostAllowed = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '::1' || parsed.hostname === '[::1]';
   return hostAllowed && Number.parseInt(parsed.port || '80', 10) === port;
+}
+
+function isTrustedLocalIpcSender(event, claimedOrigin = null) {
+  const senderUrl = event?.senderFrame?.url || event?.sender?.getURL?.() || '';
+  let senderOrigin;
+  try {
+    senderOrigin = new URL(senderUrl).origin;
+  } catch {
+    return false;
+  }
+  if (!isAllowedLocalAuthOrigin(senderOrigin)) return false;
+  if (!claimedOrigin) return true;
+  try {
+    return new URL(String(claimedOrigin)).origin === senderOrigin;
+  } catch {
+    return false;
+  }
+}
+
+function requireTrustedLocalIpcSender(event) {
+  if (!isTrustedLocalIpcSender(event)) {
+    throw new Error('Rejected privileged desktop request from an untrusted renderer.');
+  }
 }
 
 async function showError(title, error) {
@@ -295,7 +350,7 @@ function getDiagnosticsText() {
   const localState = getLocalState();
   return JSON.stringify({
     app: APP_NAME,
-    version: app.getVersion(),
+    version: getProductVersion(),
     electron: process.versions.electron,
     node: process.versions.node,
     platform: process.platform,
@@ -316,6 +371,7 @@ function getDiagnosticsText() {
     cloudAuthState: LOCAL_ONLY_MODE ? 'local_only' : cloud.getAuthState(),
     cloudAccountPath: getStorePath(),
     controlPlaneUrl: LOCAL_ONLY_MODE ? null : CLOUDCLI_CONTROL_PLANE_URL,
+    localStartupLogs: localServer.getStartupLogs().slice(-100),
   }, null, 2);
 }
 
@@ -677,7 +733,7 @@ async function openSwitchInDesktop() {
   const baseUrl = localServer.getLocalServerUrl() || localTarget.url;
   const target = {
     kind: 'switch',
-    name: 'CC Switch 配置切换',
+    name: 'Leoapi 接口切换',
     url: new URL('/leocodebox-switch.html', baseUrl).toString(),
   };
   await desktopWindow.showTarget(target);
@@ -862,7 +918,7 @@ function registerProtocolHandler() {
 
 function registerIpcHandlers() {
   ipcMain.on('leocodebox:get-local-auth-token', (event, origin) => {
-    event.returnValue = isAllowedLocalAuthOrigin(origin) ? localServer.getLocalAuthToken() : null;
+    event.returnValue = isTrustedLocalIpcSender(event, origin) ? localServer.getLocalAuthToken() : null;
   });
 
   ipcMain.handle('leocodebox-desktop:connect-cloud', async () => ({
@@ -916,6 +972,31 @@ function registerIpcHandlers() {
   ipcMain.handle('leocodebox-desktop:switch-tab', async (_event, tabId) => desktopWindow.switchDesktopTab(tabId));
   ipcMain.handle('leocodebox-desktop:close-tab', async (_event, tabId) => desktopWindow.closeDesktopTab(tabId));
   ipcMain.handle('leocodebox-desktop:update-setting', async (_event, key, value) => updateDesktopSetting(key, value));
+  ipcMain.handle('leocodebox-desktop:update-get-state', (event) => {
+    requireTrustedLocalIpcSender(event);
+    return desktopUpdater.getState();
+  });
+  ipcMain.handle('leocodebox-desktop:update-set-token', async (event, token) => {
+    requireTrustedLocalIpcSender(event);
+    return desktopUpdater.saveGithubToken(token);
+  });
+  ipcMain.handle('leocodebox-desktop:update-check', async (event) => {
+    requireTrustedLocalIpcSender(event);
+    return desktopUpdater.checkForUpdates();
+  });
+  ipcMain.handle('leocodebox-desktop:update-download', async (event) => {
+    requireTrustedLocalIpcSender(event);
+    return desktopUpdater.downloadUpdate();
+  });
+  ipcMain.handle('leocodebox-desktop:update-install', async (event) => {
+    requireTrustedLocalIpcSender(event);
+    await desktopUpdater.installUpdate(async () => {
+      isQuitting = true;
+      desktopNotifications?.stop();
+      await localServer?.shutdownOwnedServer();
+    });
+    return desktopUpdater.getState();
+  });
 }
 
 function registerAppEvents() {
@@ -1036,7 +1117,7 @@ async function bootstrap() {
   app.setName(APP_NAME);
   app.setAboutPanelOptions({
     applicationName: APP_NAME,
-    applicationVersion: app.getVersion(),
+    applicationVersion: getProductVersion(),
     copyright: 'leocodebox',
   });
 
@@ -1046,7 +1127,7 @@ async function bootstrap() {
     appRoot: getAppRoot(),
     settingsPath: getSettingsPath(),
     isPackaged: app.isPackaged,
-    appVersion: app.getVersion(),
+    appVersion: getProductVersion(),
     onChange: syncDesktopState,
   });
   cloud = new CloudController({
@@ -1057,7 +1138,7 @@ async function bootstrap() {
   });
   desktopNotifications = new DesktopNotificationsController({
     settingsPath: getDesktopNotificationsSettingsPath(),
-    appVersion: app.getVersion(),
+    appVersion: getProductVersion(),
     appName: APP_NAME,
     getDeviceId: () => cloud.getAccount()?.deviceId || '',
     getAccountEmail: () => cloud.getAccount()?.email || null,
@@ -1068,8 +1149,17 @@ async function bootstrap() {
     openNotificationTarget,
     onChange: syncDesktopState,
   });
+  desktopUpdater = new DesktopUpdaterController({
+    appVersion: getProductVersion(),
+    isPackaged: app.isPackaged,
+    settingsPath: getDesktopUpdaterSettingsPath(),
+    onChange: emitDesktopUpdaterState,
+    updater: autoUpdater,
+    storage: safeStorage,
+  });
 
   await localServer.loadDesktopSettings();
+  await desktopUpdater.load();
   if (!LOCAL_ONLY_MODE) {
     await cloud.loadCloudAccount();
     await desktopNotifications.loadSettings();
@@ -1080,6 +1170,11 @@ async function bootstrap() {
   registerAppEvents();
   await createDesktopWindow();
   await openLocalInDesktop();
+  if (desktopUpdater.getState().configured) {
+    setTimeout(() => {
+      void desktopUpdater.checkForUpdates();
+    }, 15_000);
+  }
   if (!LOCAL_ONLY_MODE) {
     void refreshCloudEnvironments({ showErrors: false });
   }

@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+
 import { version } from '../../package.json';
 import type { ReleaseInfo } from '../types/sharedTypes';
 
@@ -8,6 +9,7 @@ export const useVersionCheck = (_owner?: string, _repo?: string) => {
   const [installMode, setInstallMode] = useState<InstallMode>('git');
   const [runningVersion, setRunningVersion] = useState<string | null>(null);
   const [restartRequired, setRestartRequired] = useState(false);
+  const [desktopUpdate, setDesktopUpdate] = useState<DesktopUpdateState | null>(null);
 
   useEffect(() => {
     const fetchHealth = async () => {
@@ -17,29 +19,90 @@ export const useVersionCheck = (_owner?: string, _repo?: string) => {
         if (data.installMode === 'npm' || data.installMode === 'git') {
           setInstallMode(data.installMode);
         }
-        // `data.version` is the version the server process is actually running.
-        // This module's `version` is baked into the frontend bundle at build
-        // time, so it reflects the installed (on-disk) package. If they differ,
-        // the package was updated but the server process was not restarted, and
-        // DB-backed actions may silently fail until it is.
         if (typeof data.version === 'string' && data.version.length > 0) {
           setRunningVersion(data.version);
           setRestartRequired(data.version !== version);
         }
       } catch {
-        // Default to git / no restart hint on error
+        // The desktop updater still works when the local health check is temporarily unavailable.
       }
     };
-    fetchHealth();
+
+    void fetchHealth();
   }, []);
 
+  useEffect(() => {
+    const bridge = window.leocodeboxDesktopUpdater;
+    if (!bridge) return undefined;
+
+    let active = true;
+    void bridge.getState().then((state) => {
+      if (active) setDesktopUpdate(state);
+    });
+    const unsubscribe = bridge.onStateChanged((state) => {
+      if (active) setDesktopUpdate(state);
+    });
+
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, []);
+
+  const callUpdater = useCallback(async (
+    operation: (bridge: NonNullable<typeof window.leocodeboxDesktopUpdater>) => Promise<DesktopUpdateState>,
+  ) => {
+    const bridge = window.leocodeboxDesktopUpdater;
+    if (!bridge) return null;
+    const state = await operation(bridge);
+    setDesktopUpdate(state);
+    return state;
+  }, []);
+
+  const checkForUpdates = useCallback(
+    () => callUpdater((bridge) => bridge.checkForUpdates()),
+    [callUpdater],
+  );
+  const downloadUpdate = useCallback(
+    () => callUpdater((bridge) => bridge.downloadUpdate()),
+    [callUpdater],
+  );
+  const installUpdate = useCallback(
+    () => callUpdater((bridge) => bridge.installUpdate()),
+    [callUpdater],
+  );
+  const setGithubToken = useCallback(
+    (token: string) => callUpdater((bridge) => bridge.setGithubToken(token)),
+    [callUpdater],
+  );
+
+  const updateAvailable = desktopUpdate
+    ? ['available', 'downloading', 'downloaded', 'installing'].includes(desktopUpdate.status)
+    : false;
+  const latestVersion = desktopUpdate?.latestVersion || null;
+  const releaseInfo: ReleaseInfo | null = desktopUpdate?.releaseNotes || desktopUpdate?.releaseName
+    ? {
+        title: desktopUpdate.releaseName || (latestVersion ? `leocodebox v${latestVersion}` : 'leocodebox 更新'),
+        body: desktopUpdate.releaseNotes || '',
+        htmlUrl: latestVersion
+          ? `https://github.com/leoyb1010/leocodebox/releases/tag/v${latestVersion}`
+          : 'https://github.com/leoyb1010/leocodebox/releases',
+        publishedAt: '',
+      }
+    : null;
+
   return {
-    updateAvailable: false,
-    latestVersion: null as string | null,
-    currentVersion: version,
-    releaseInfo: null as ReleaseInfo | null,
+    updateAvailable,
+    latestVersion,
+    currentVersion: desktopUpdate?.currentVersion || version,
+    releaseInfo,
     installMode,
     runningVersion,
     restartRequired,
+    desktopUpdate,
+    checkForUpdates,
+    downloadUpdate,
+    installUpdate,
+    setGithubToken,
   };
 };

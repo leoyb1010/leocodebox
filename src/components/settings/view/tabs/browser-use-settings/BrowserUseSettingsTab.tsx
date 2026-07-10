@@ -29,6 +29,21 @@ async function readJson<T>(response: Response): Promise<T> {
   return data as T;
 }
 
+function localizeRuntimeMessage(message?: string): string {
+  switch (message) {
+    case 'Install Playwright and Chromium to use browser sessions.':
+      return '需要安装 Playwright 和 Chromium 才能使用浏览器会话。';
+    case 'Playwright is installed, but Chromium is missing. Install the Chromium runtime to continue.':
+      return '已安装 Playwright，但缺少 Chromium。请先安装 Chromium 运行环境。';
+    case 'Browser runtime is not ready.':
+      return '浏览器运行环境尚未就绪。';
+    case 'Browser runtime is available.':
+      return '浏览器运行环境已就绪。';
+    default:
+      return message || '安装浏览器运行环境后，本机智能体才能创建浏览器会话。';
+  }
+}
+
 export default function BrowserUseSettingsTab() {
   const [settings, setSettings] = useState<BrowserUseSettings | null>(null);
   const [status, setStatus] = useState<BrowserUseStatus | null>(null);
@@ -56,11 +71,11 @@ export default function BrowserUseSettingsTab() {
     setIsStatusLoading(true);
 
     void loadSettings()
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load Browser settings'))
+      .catch((err) => setError(err instanceof Error ? err.message : '无法读取浏览器设置'))
       .finally(() => setIsSettingsLoading(false));
 
     void loadStatus()
-      .catch((err) => setError(err instanceof Error ? err.message : 'Failed to load Browser status'))
+      .catch((err) => setError(err instanceof Error ? err.message : '无法读取浏览器状态'))
       .finally(() => setIsStatusLoading(false));
   }, [loadSettings, loadStatus]);
 
@@ -78,7 +93,7 @@ export default function BrowserUseSettingsTab() {
       setIsStatusLoading(true);
       await loadStatus();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save Browser settings');
+      setError(err instanceof Error ? err.message : '无法保存浏览器设置');
     } finally {
       setIsStatusLoading(false);
       setIsSaving(false);
@@ -94,7 +109,7 @@ export default function BrowserUseSettingsTab() {
       setIsStatusLoading(true);
       await loadStatus();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to install browser runtime');
+      setError(err instanceof Error ? err.message : '无法安装浏览器运行环境');
     } finally {
       setIsStatusLoading(false);
       setIsInstalling(false);
@@ -105,21 +120,21 @@ export default function BrowserUseSettingsTab() {
   const needsBrowserBinaries = Boolean(browserEnabled && status && (!status.playwrightInstalled || !status.chromiumInstalled));
   const runtimeLabel = (installed?: boolean) => {
     if (isStatusLoading && !status) {
-      return 'checking...';
+      return '检查中';
     }
-    return installed ? 'installed' : 'missing';
+    return installed ? '已安装' : '未安装';
   };
 
   return (
     <div className="space-y-8">
       <SettingsSection
-        title="Browser"
-        description="Allow agents to create guarded Playwright browser sessions that you can monitor from the Browser tab."
+        title="浏览器"
+        description="允许本机智能体创建受控的 Playwright 浏览器会话，并在浏览器页面中查看运行状态。"
       >
         <SettingsCard divided>
           <SettingsRow
-            label="Enable Browser"
-            description="Registers Browser for supported agents. Agents can create browser sessions; you can watch, stop, and delete them."
+            label="启用浏览器能力"
+            description="启用后，支持的智能体可以创建浏览器会话；您可以查看和停止这些会话。"
           >
             {isSettingsLoading && !settings ? (
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
@@ -127,7 +142,7 @@ export default function BrowserUseSettingsTab() {
               <SettingsToggle
                 checked={browserEnabled}
                 onChange={(value) => void updateSettings({ enabled: value })}
-                ariaLabel="Enable Browser"
+                ariaLabel="启用浏览器能力"
                 disabled={isSaving}
               />
             )}
@@ -142,16 +157,16 @@ export default function BrowserUseSettingsTab() {
                 Chromium: {runtimeLabel(status?.chromiumInstalled)}
               </span>
               <span className="rounded-md border border-border px-2 py-1">
-                Status: {isStatusLoading && !status ? 'checking...' : status?.available ? 'ready' : browserEnabled ? 'setup required' : 'disabled'}
+                状态：{isStatusLoading && !status ? '检查中' : status?.available ? '可用' : browserEnabled ? '需要安装' : '未启用'}
               </span>
             </div>
 
             {needsBrowserBinaries && (
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0 space-y-1">
-                  <div className="text-sm font-medium text-foreground">Browser runtime required</div>
+                  <div className="text-sm font-medium text-foreground">需要浏览器运行环境</div>
                   <p className="text-sm text-muted-foreground">
-                    {status?.message || 'Install the browser runtime before agents can create Browser sessions.'}
+                    {localizeRuntimeMessage(status?.message)}
                   </p>
                 </div>
 
@@ -167,7 +182,7 @@ export default function BrowserUseSettingsTab() {
                   ) : (
                     <Download className="h-4 w-4" />
                   )}
-                  {isInstalling || status?.installInProgress ? 'Installing...' : 'Install Runtime'}
+                  {isInstalling || status?.installInProgress ? '安装中…' : '安装运行环境'}
                 </Button>
               </div>
             )}

@@ -46,11 +46,11 @@ export class OpenCodeSessionSynchronizer implements IProviderSessionSynchronizer
    * Handles watcher changes for opencode.db.
    */
   async synchronizeFile(filePath: string): Promise<string | null> {
-    if (path.basename(filePath) !== 'opencode.db') {
+    if (!['opencode.db', 'opencode.db-wal', 'opencode.db-shm'].includes(path.basename(filePath))) {
       return null;
     }
 
-    const result = this.synchronizeRows(undefined, 1);
+    const result = this.synchronizeRows();
     return result.firstSessionId;
   }
 
@@ -99,7 +99,7 @@ export class OpenCodeSessionSynchronizer implements IProviderSessionSynchronizer
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       console.warn('[OpenCodeProvider] Failed to synchronize sessions:', message);
-      return { processed: 0, firstSessionId: null };
+      throw error;
     } finally {
       db.close();
     }

@@ -24,18 +24,88 @@ if [ ! -f "$DMG" ]; then
   exit 1
 fi
 
-echo "==> Verifying the DMG's app is Developer ID signed (not adhoc)"
-if ! codesign -dv --verbose=2 "$DMG" 2>&1 | grep -qi "Developer ID Application"; then
-  echo "warning: could not confirm a Developer ID signature on $DMG — notarization will fail if the app is unsigned/adhoc." >&2
+MOUNT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/leocodebox-notary.XXXXXX")"
+STAPLE_ROOT=""
+cleanup() {
+  hdiutil detach "$MOUNT_DIR" -quiet 2>/dev/null || true
+  rmdir "$MOUNT_DIR" 2>/dev/null || true
+  if [ -n "$STAPLE_ROOT" ]; then
+    rm -rf "$STAPLE_ROOT"
+  fi
+}
+trap cleanup EXIT
+
+echo "==> Verifying the Developer ID signature inside the DMG"
+hdiutil attach -readonly -nobrowse -mountpoint "$MOUNT_DIR" "$DMG" >/dev/null
+APP_PATH="$(find "$MOUNT_DIR" -maxdepth 1 -type d -name '*.app' -print -quit)"
+if [ -z "$APP_PATH" ]; then
+  echo "error: no app bundle found in $DMG" >&2
+  exit 1
 fi
+codesign --verify --deep --strict --verbose=2 "$APP_PATH"
+SIGNATURE_DETAILS="$(codesign -dv --verbose=2 "$APP_PATH" 2>&1)"
+printf '%s\n' "$SIGNATURE_DETAILS"
+if ! grep -qi "Authority=Developer ID Application" <<<"$SIGNATURE_DETAILS"; then
+  echo "error: app is not signed with a Developer ID Application certificate: $APP_PATH" >&2
+  exit 1
+fi
+hdiutil detach "$MOUNT_DIR" -quiet
+rmdir "$MOUNT_DIR"
+trap - EXIT
 
 echo "==> Submitting to Apple notary service (profile: $PROFILE). This can take several minutes."
-xcrun notarytool submit "$DMG" --keychain-profile "$PROFILE" --wait
+SUBMISSION_JSON="$(xcrun notarytool submit "$DMG" \
+  --keychain-profile "$PROFILE" \
+  --wait \
+  --output-format json)"
+printf '%s\n' "$SUBMISSION_JSON"
+SUBMISSION_ID="$(printf '%s' "$SUBMISSION_JSON" | plutil -extract id raw -o - -)"
+SUBMISSION_STATUS="$(printf '%s' "$SUBMISSION_JSON" | plutil -extract status raw -o - -)"
+if [ "$SUBMISSION_STATUS" != "Accepted" ]; then
+  echo "error: Apple notarization status is $SUBMISSION_STATUS" >&2
+  xcrun notarytool log "$SUBMISSION_ID" --keychain-profile "$PROFILE" || true
+  exit 1
+fi
 
 echo "==> Stapling the notarization ticket into the DMG"
 xcrun stapler staple "$DMG"
+xcrun stapler validate "$DMG"
+
+echo "==> Stapling the notarized app and rebuilding updater artifacts"
+STAPLE_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/leocodebox-app-staple.XXXXXX")"
+STAPLED_APP="$STAPLE_ROOT/leocodebox.app"
+MOUNT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/leocodebox-app-source.XXXXXX")"
+trap cleanup EXIT
+hdiutil attach -readonly -nobrowse -mountpoint "$MOUNT_DIR" "$DMG" >/dev/null
+APP_PATH="$(find "$MOUNT_DIR" -maxdepth 1 -type d -name '*.app' -print -quit)"
+if [ -z "$APP_PATH" ]; then
+  echo "error: no app bundle found in notarized $DMG" >&2
+  exit 1
+fi
+ditto --norsrc --noqtn "$APP_PATH" "$STAPLED_APP"
+hdiutil detach "$MOUNT_DIR" -quiet
+rmdir "$MOUNT_DIR"
+trap - EXIT
+xcrun stapler staple "$STAPLED_APP"
+xcrun stapler validate "$STAPLED_APP"
+codesign --verify --deep --strict --verbose=2 "$STAPLED_APP"
+spctl -a -vvv --type execute "$STAPLED_APP"
+node scripts/release/finalize-notarized-mac-artifacts.js "$STAPLED_APP"
+rm -rf "$STAPLE_ROOT"
+STAPLE_ROOT=""
 
 echo "==> Gatekeeper assessment"
-spctl -a -vvv --type install "$DMG" || true
+MOUNT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/leocodebox-gatekeeper.XXXXXX")"
+trap cleanup EXIT
+hdiutil attach -readonly -nobrowse -mountpoint "$MOUNT_DIR" "$DMG" >/dev/null
+APP_PATH="$(find "$MOUNT_DIR" -maxdepth 1 -type d -name '*.app' -print -quit)"
+if [ -z "$APP_PATH" ]; then
+  echo "error: no app bundle found in notarized $DMG" >&2
+  exit 1
+fi
+spctl -a -vvv --type execute "$APP_PATH"
+hdiutil detach "$MOUNT_DIR" -quiet
+rmdir "$MOUNT_DIR"
+trap - EXIT
 
 echo "Done: $DMG is signed, notarized, and stapled."

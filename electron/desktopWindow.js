@@ -61,6 +61,7 @@ export class DesktopWindowManager {
     this.settingsWindow = null;
     this.tray = null;
     this.launcherLoaded = false;
+    this.contentViewResizeTimer = null;
     this.viewHost = new ViewHost({
       appName: this.appName,
       getMainWindow: () => this.mainWindow,
@@ -89,6 +90,15 @@ export class DesktopWindowManager {
       width,
       height: Math.max(0, height - TITLEBAR_HEIGHT),
     };
+  }
+
+  resizeContentView() {
+    this.viewHost.resizeActiveView();
+    if (this.contentViewResizeTimer) clearTimeout(this.contentViewResizeTimer);
+    this.contentViewResizeTimer = setTimeout(() => {
+      this.contentViewResizeTimer = null;
+      this.viewHost.resizeActiveView();
+    }, 180);
   }
 
   detachActiveContentView() {
@@ -722,15 +732,21 @@ export class DesktopWindowManager {
     });
 
     this.mainWindow.on('resize', () => {
-      this.viewHost.resizeActiveView();
+      this.resizeContentView();
       this.syncSettingsWindowBounds();
     });
+
+    for (const eventName of ['maximize', 'unmaximize', 'enter-full-screen', 'leave-full-screen']) {
+      this.mainWindow.on(eventName, () => this.resizeContentView());
+    }
 
     this.mainWindow.on('move', () => {
       this.syncSettingsWindowBounds();
     });
 
     this.mainWindow.on('closed', () => {
+      if (this.contentViewResizeTimer) clearTimeout(this.contentViewResizeTimer);
+      this.contentViewResizeTimer = null;
       this.viewHost.clear();
       this.settingsWindow = null;
       this.mainWindow = null;

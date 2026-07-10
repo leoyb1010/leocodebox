@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 
-const CACHE_KEY = 'CLOUDCLI_GITHUB_STARS';
-const DISMISS_KEY = 'CLOUDCLI_HIDE_GITHUB_STAR';
+const CACHE_KEY = 'LEOCODEBOX_GITHUB_STARS';
+const DISMISS_KEY = 'LEOCODEBOX_HIDE_GITHUB_LINK';
 const CACHE_TTL = 60 * 60 * 1000; // 1 hour
 
 type CachedStars = {

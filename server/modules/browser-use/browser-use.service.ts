@@ -14,8 +14,18 @@ import { getModuleDir } from '@/utils/runtime-paths.js';
 const require = createRequire(import.meta.url);
 const __dirname = getModuleDir(import.meta.url);
 const IS_PLATFORM = process.env.VITE_IS_PLATFORM === 'true';
-const MAX_SESSIONS_PER_OWNER = Number.parseInt(process.env.CLOUDCLI_BROWSER_USE_MAX_SESSIONS_PER_OWNER || '3', 10);
-const SESSION_TTL_MS = Number.parseInt(process.env.CLOUDCLI_BROWSER_USE_SESSION_TTL_MS || String(30 * 60 * 1000), 10);
+const MAX_SESSIONS_PER_OWNER = Number.parseInt(
+  process.env.LEOCODEBOX_BROWSER_USE_MAX_SESSIONS_PER_OWNER
+  || process.env.CLOUDCLI_BROWSER_USE_MAX_SESSIONS_PER_OWNER
+  || '3',
+  10,
+);
+const SESSION_TTL_MS = Number.parseInt(
+  process.env.LEOCODEBOX_BROWSER_USE_SESSION_TTL_MS
+  || process.env.CLOUDCLI_BROWSER_USE_SESSION_TTL_MS
+  || String(30 * 60 * 1000),
+  10,
+);
 const BROWSER_USE_SETTINGS_KEY = 'browser_use_settings';
 const BROWSER_USE_MCP_TOKEN_KEY = 'browser_use_mcp_token';
 
@@ -241,7 +251,9 @@ function getRuntimeReadiness(options: { force?: boolean } = {}): RuntimeReadines
 }
 
 const INSTALL_COMMAND_TIMEOUT_MS = Number.parseInt(
-  process.env.CLOUDCLI_BROWSER_USE_INSTALL_TIMEOUT_MS || String(10 * 60 * 1000),
+  process.env.LEOCODEBOX_BROWSER_USE_INSTALL_TIMEOUT_MS
+  || process.env.CLOUDCLI_BROWSER_USE_INSTALL_TIMEOUT_MS
+  || String(10 * 60 * 1000),
   10,
 );
 
@@ -469,8 +481,8 @@ export const browserUseService = {
       command,
       args,
       env: {
-        CLOUDCLI_BROWSER_USE_MCP_TOKEN: getOrCreateMcpToken(),
-        CLOUDCLI_BROWSER_USE_API_URL: getMcpApiUrl(),
+        LEOCODEBOX_BROWSER_USE_MCP_TOKEN: getOrCreateMcpToken(),
+        LEOCODEBOX_BROWSER_USE_API_URL: getMcpApiUrl(),
       },
     });
     return { name: MCP_SERVER_NAME, command, args, results };

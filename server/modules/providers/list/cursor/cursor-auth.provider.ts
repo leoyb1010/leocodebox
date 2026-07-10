@@ -1,8 +1,12 @@
-import spawn from 'cross-spawn';
-
 import type { IProviderAuth } from '@/shared/interfaces.js';
 import type { ProviderAuthStatus } from '@/shared/types.js';
-import { parseCliVersion } from '@/modules/providers/services/cli-version.util.js';
+import {
+  readCliInstallProbe,
+  runProviderCliCommand,
+  type CliCommandRunner,
+  type CliInstallProbe,
+  type CliProbeProcessResult,
+} from '@/modules/providers/services/cli-version.util.js';
 
 type CursorLoginStatus = {
   authenticated: boolean;
@@ -23,28 +27,24 @@ export function parseCursorLoginStatus(output: string): CursorLoginStatus {
 }
 
 export class CursorProviderAuth implements IProviderAuth {
-  constructor(private readonly spawnSync: typeof spawn.sync = spawn.sync) {}
+  constructor(private readonly runCommand: CliCommandRunner = runProviderCliCommand) {}
 
-  private run(args: string[], timeout = 5000) {
-    return this.spawnSync('cursor-agent', args, {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-      timeout,
-    });
+  private run(args: string[], timeout = 5000): Promise<CliProbeProcessResult> {
+    return this.runCommand('cursor-agent', args, timeout);
   }
 
-  private probeInstall(): { installed: boolean; version: string | null } {
+  private async probeInstall(): Promise<CliInstallProbe> {
     try {
-      const result = this.run(['--version']);
-      const installed = !result.error && result.status === 0;
-      return { installed, version: installed ? parseCliVersion(result.stdout || result.stderr) : null };
-    } catch {
-      return { installed: false, version: null };
+      const result = await this.run(['--version']);
+      return readCliInstallProbe(result, 'cursor-agent');
+    } catch (error) {
+      return readCliInstallProbe({ error, status: null }, 'cursor-agent');
     }
   }
 
   async getStatus(): Promise<ProviderAuthStatus> {
-    const { installed, version } = this.probeInstall();
+    const install = await this.probeInstall();
+    const { installed, version } = install;
     if (!installed) {
       return {
         installed: false,
@@ -57,7 +57,19 @@ export class CursorProviderAuth implements IProviderAuth {
       };
     }
 
-    const login = this.checkCursorLogin();
+    if (!install.runnable) {
+      return {
+        installed: true,
+        provider: 'cursor',
+        authenticated: false,
+        email: null,
+        method: null,
+        version: null,
+        error: `Cursor CLI was found but could not run: ${install.error}`,
+      };
+    }
+
+    const login = await this.checkCursorLogin();
     return {
       installed: true,
       provider: 'cursor',
@@ -65,13 +77,13 @@ export class CursorProviderAuth implements IProviderAuth {
       email: login.email,
       method: login.method,
       version,
-      error: login.authenticated ? undefined : login.error || 'Not logged in',
+      error: login.error || (login.authenticated ? undefined : 'Not logged in'),
     };
   }
 
-  private checkCursorLogin(): CursorLoginStatus {
+  private async checkCursorLogin(): Promise<CursorLoginStatus> {
     try {
-      const statusResult = this.run(['status']);
+      const statusResult = await this.run(['status']);
       const statusOutput = `${statusResult.stdout || ''}\n${statusResult.stderr || ''}`;
       if (statusResult.error || statusResult.status !== 0) {
         return { authenticated: false, email: null, method: null, error: statusOutput.trim() || 'Not logged in' };
@@ -82,8 +94,19 @@ export class CursorProviderAuth implements IProviderAuth {
 
       // `cursor-agent status` can report a stale keychain entry as logged in.
       // Listing models performs the lightweight authenticated request used by real sessions.
-      const capabilityResult = this.run(['--list-models'], 10_000);
+      const capabilityResult = await this.run(['--list-models'], 10_000);
       if (capabilityResult.error || capabilityResult.status !== 0) {
+        const capabilityOutput = `${capabilityResult.stdout || ''}\n${capabilityResult.stderr || ''}`.trim();
+        const capabilityError = capabilityOutput
+          || (capabilityResult.error instanceof Error
+            ? capabilityResult.error.message
+            : String(capabilityResult.error || 'unknown error'));
+        if (!/authentication required|not logged in|unauthorized|invalid credentials?|\b401\b/i.test(capabilityError)) {
+          return {
+            ...login,
+            error: `Cursor is logged in, but its service capability check failed: ${capabilityError}`,
+          };
+        }
         return {
           authenticated: false,
           email: login.email,

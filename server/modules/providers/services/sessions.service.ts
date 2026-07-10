@@ -11,7 +11,7 @@ import type {
   LLMProvider,
   NormalizedMessage,
 } from '@/shared/types.js';
-import { AppError } from '@/shared/utils.js';
+import { AppError, normalizeProjectPath } from '@/shared/utils.js';
 
 type CreateAppSessionResult = {
   sessionId: string;
@@ -121,11 +121,19 @@ export const sessionsService = {
    * this row later, when the provider runtime announces it mid-run.
    */
   createAppSession(provider: LLMProvider, projectPath: string): CreateAppSessionResult {
-    const normalizedProjectPath = projectPath.trim();
+    const normalizedProjectPath = normalizeProjectPath(projectPath);
     if (!normalizedProjectPath) {
       throw new AppError('projectPath is required.', {
         code: 'PROJECT_PATH_REQUIRED',
         statusCode: 400,
+      });
+    }
+
+    const project = projectsDb.getProjectPath(normalizedProjectPath);
+    if (!project || Boolean(project.isArchived)) {
+      throw new AppError('请先在 leocodebox 中打开有效的本地项目，再创建会话。', {
+        code: 'PROJECT_NOT_ACTIVE',
+        statusCode: 404,
       });
     }
 

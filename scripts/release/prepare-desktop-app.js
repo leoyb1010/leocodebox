@@ -105,6 +105,7 @@ function buildDesktopPackageJson(copiedOptionalDependencies) {
       mac: packageJson.build.mac,
       win: packageJson.build.win,
       nsis: packageJson.build.nsis,
+      publish: packageJson.build.publish,
     },
   };
 }

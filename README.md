@@ -1,6 +1,6 @@
 # leocodebox
 
-![version](https://img.shields.io/badge/version-1.36.1-blue)
+![version](https://img.shields.io/badge/version-1.36.2-blue)
 ![platform](https://img.shields.io/badge/platform-macOS%20arm64-lightgrey)
 ![signed](https://img.shields.io/badge/signed-Developer%20ID%20%2B%20Notarized-brightgreen)
 ![license](https://img.shields.io/badge/license-AGPL--3.0-orange)
@@ -11,11 +11,11 @@
 
 ## ⬇️ 下载
 
-[![下载 DMG](https://img.shields.io/badge/⬇%20下载-leocodebox%201.36.1%20(mac--arm64)-brightgreen?style=for-the-badge)](https://github.com/leoyb1010/leocodebox/releases/latest)
+[![下载 DMG](https://img.shields.io/badge/下载-leocodebox%201.36.2%20(mac--arm64)-brightgreen?style=for-the-badge)](https://github.com/leoyb1010/leocodebox/releases/latest)
 
 - **最新版本**：<https://github.com/leoyb1010/leocodebox/releases/latest>
-- **直接下载 DMG**：[leocodebox-1.36.1-mac-arm64.dmg](https://github.com/leoyb1010/leocodebox/releases/download/v1.36.1/leocodebox-1.36.1-mac-arm64.dmg)（403 MB · 仅 Apple 芯片）
-- **SHA-256**：`8ff10f07f60c5c7690c28ea6f79a217478b3e4e844d865afbc02dda9129d44db`
+- **直接下载 DMG**：[leocodebox-1.36.2-mac-arm64.dmg](https://github.com/leoyb1010/leocodebox/releases/download/v1.36.2/leocodebox-1.36.2-mac-arm64.dmg)（422 MB · 仅 Apple 芯片）
+- **SHA-256**：`30e7dd635be3784f7b83ccedb534595b6500cdb5fc60c32aa58d7c2fc31b330a`
 
 已 **Developer ID 签名 + Apple 公证**：双击 DMG → 拖入「应用程序」→ 双击运行，无 Gatekeeper 警告，无需 `xattr` 去隔离。
 
@@ -25,14 +25,16 @@
 
 ## ✨ 特性
 
-- **本地优先，零云端**：打开 App 自动在 `127.0.0.1:38473` 启动本地服务，退出即停止并释放端口。数据存本机 `~/.leocodebox/`，不上传云端。
-- **多 Agent 统一管理**：在一个界面里管理 Claude Code / Codex / Cursor / OpenCode 的认证、模型、权限模式、会话、Skills 和 MCP。
-- **实时 CLI 版本与一键更新**：设置页显示每个 CLI 的实时版本，检测 npm 上的新版本，并支持一键自更新（`claude update` / `codex update` / `opencode upgrade` / `cursor-agent update`）。
+- **本地优先，无 leocodebox 云端依赖**：打开 App 自动在 `127.0.0.1:38473` 启动本地服务，退出即停止并释放端口。项目索引、会话索引和工作台配置保存在本机。
+- **多智能体统一管理**：在一个界面里管理 Claude Code / Codex / Cursor / OpenCode 的认证、模型、权限模式、会话、技能和 MCP。
+- **跨设备发现本机 CLI**：从登录 Shell 和 npm、Homebrew、Volta、nvm、mise、asdf、fnm、bun、pnpm、yarn 等常见安装位置合并运行路径；支持 `CLAUDE_CONFIG_DIR`、`CODEX_HOME`、`OPENCODE_CONFIG_DIR`、`OPENCODE_DATA_DIR` 与 XDG 自定义目录。
+- **实时 CLI 版本与安全更新**：设置页显示每个 CLI 的实时版本；Claude Code、Codex 与 Cursor 使用自身更新命令。OpenCode、Gemini、Hermes 只提示状态，避免在不同安装方式的设备上误装第二份 CLI。
 - **模型列表自动跟随 CLI**：模型目录随本机 CLI 更新自动刷新（例如 Codex 升级后自动出现新一代模型），带源文件指纹失效机制。
-- **CC Switch 内置整合**：Provider 配置切换器内置在应用内（不跳外部 App），支持新增/编辑/应用/删除 Provider、连通性与延迟测试、备份恢复，并可从原生 CC Switch 数据库(`~/.cc-switch/cc-switch.db`)一键导入。
+- **Leoapi 接口切换**：接口配置切换器内置在应用内（不跳外部 App），支持多个请求地址、自动选择最快可用地址、模型列表读取、真实模型测速、Claude Sonnet/Opus/Haiku 映射、备份恢复，并可从旧切换器数据库（`~/.cc-switch/cc-switch.db`）一键导入。
 - **项目按 Agent 分类**：侧边栏项目列表按 Claude / Codex / OpenCode / Cursor / Gemini 显示彩色会话计数徽章，并过滤一次性/临时目录，只留真实项目。
 - **简体中文默认**，深色/浅色/跟随系统主题。
-- **单用户本地账号**：桌面模式免登录；也支持用户名/密码登录（bcrypt + JWT）。
+- **桌面模式完全免登录**：本地能力 token 由 Electron 自动注入，只允许本机应用访问；不显示账号密码页。
+- **应用内热更新**：可在“设置 → 关于”检查、下载并重启安装。Private Release 需要每台 Mac 配置只读 GitHub Token，凭据使用 macOS 钥匙串加密保存。
 - **签名 + 公证发布**：提供 Apple Developer ID 签名并经 Apple 公证的 DMG，别人下载双击即可运行，无 Gatekeeper 警告。
 
 ## 🖥️ 支持的 Agent
@@ -44,7 +46,7 @@
 | **Cursor** | Cursor Agent CLI | `cursor-agent login` |
 | **OpenCode** | OpenCode CLI | OAuth / Provider API Key |
 
-> Agent CLI 本身不打包在应用内——leocodebox 检测并驱动本机已安装的 CLI。
+> Agent CLI 本身不打包在应用内。每台 Mac 安装 leocodebox 后，应用会检测并驱动该设备上已安装的 CLI；Agent 的登录与网络请求仍直接连接各自服务商。
 
 ## 🏗️ 架构
 
@@ -58,7 +60,7 @@
 ┌───────────────▼─────────────────────────────┐
 │  本地服务 (server/) — Node + Express          │
 │  · Providers / Projects / Sessions / MCP      │
-│  · Skills / Git / CC Switch / Agent API       │
+│  · 技能 / 代码仓库 / Leoapi / 本地接口        │
 │  · SQLite  ~/.leocodebox/auth.db               │
 └───────────────┬─────────────────────────────┘
                 │ 静态托管
@@ -121,7 +123,7 @@ npm run desktop:notarize:mac        # 提交 Apple 公证 + 钉章
 
 ```
 electron/        Electron 主进程、启动台、窗口/Tab 管理、本地服务生命周期
-server/          本地 Node/Express 服务：providers / projects / sessions / mcp / git / cc-switch
+server/          本地 Node/Express 服务：providers / projects / sessions / mcp / git / Leoapi
 src/             React 前端（组件、hooks、i18n、状态）
 shared/          前后端共享工具
 build/           签名 entitlements
@@ -133,8 +135,8 @@ dist/ dist-server/  构建产物（不入库）
 ## 🔒 本地与隐私
 
 - 服务绑定 `127.0.0.1`，桌面模式用每次启动生成的本地能力 token。
-- 云账号、托管环境、Web Push、远程下载在本构建中禁用。
-- 所有配置与凭据存本机 `~/.leocodebox/`，不外发。
+- leocodebox 云账号和托管 Agent 环境在本构建中禁用；应用更新仅在用户主动配置 GitHub 凭据或通用更新源后启用。
+- 智能体凭据保留在各命令行工具的本机配置目录；Leoapi 数据以 `0700/0600` 权限保存在 `~/.leocodebox/switch/`，应用更新凭据由 macOS 钥匙串加密。
 
 ## 📄 许可与归属
 

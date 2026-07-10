@@ -58,10 +58,18 @@ export default function AgentListItem({
 }: AgentListItemProps) {
   const config = agentConfig[agentId];
   const colors = colorClasses[config.color];
+  const statusLabel = authStatus.loading
+    ? '正在检查'
+    : authStatus.authenticated
+      ? '已连接'
+      : '未连接';
+  const buttonLabel = `${config.name}，${statusLabel}`;
 
   if (isMobile) {
     return (
       <button
+        type="button"
+        aria-label={buttonLabel}
         onClick={onClick}
         className={cn(
           'min-w-0 flex-1 touch-manipulation rounded-md px-2 py-2 text-center transition-all duration-150',
@@ -74,7 +82,7 @@ export default function AgentListItem({
           <SessionProviderLogo provider={agentId} className="h-4 w-4 flex-shrink-0" />
           <span className="truncate text-xs font-medium">{config.name}</span>
           {authStatus.authenticated && (
-            <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${colors.dot}`} />
+            <span aria-hidden="true" className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${colors.dot}`} />
           )}
         </div>
       </button>
@@ -83,6 +91,8 @@ export default function AgentListItem({
 
   return (
     <button
+      type="button"
+      aria-label={buttonLabel}
       onClick={onClick}
       className={cn(
         'flex touch-manipulation items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-all duration-150',
@@ -94,9 +104,9 @@ export default function AgentListItem({
       <SessionProviderLogo provider={agentId} className="h-4 w-4 flex-shrink-0" />
       <span>{config.name}</span>
       {authStatus.authenticated ? (
-        <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${colors.dot}`} />
+        <span aria-hidden="true" className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${colors.dot}`} />
       ) : authStatus.loading ? (
-        <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-muted-foreground/30 animate-pulse" />
+        <span aria-hidden="true" className="h-1.5 w-1.5 flex-shrink-0 animate-pulse rounded-full bg-muted-foreground/30" />
       ) : null}
     </button>
   );

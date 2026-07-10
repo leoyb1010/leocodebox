@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -67,6 +67,7 @@ function AppContentInner() {
     activeTab,
     sidebarOpen,
     isLoadingProjects,
+    projectsError,
     externalMessageUpdate,
     newSessionTrigger,
     setActiveTab,
@@ -77,6 +78,7 @@ function AppContentInner() {
     registerOptimisticSession,
     sidebarSharedProps,
     handleNewSession,
+    fetchProjects,
   } = useProjectsState({
     sessionId,
     navigate,
@@ -84,6 +86,7 @@ function AppContentInner() {
     isMobile,
     activeSessions: processingSessions,
   });
+  const runningSessionFailures = useRef(0);
 
   // Queued messages for sessions that finish while another session (or none)
   // is being viewed are sent from here; the viewed session's composer handles
@@ -100,11 +103,14 @@ function AppContentInner() {
     try {
       const response = await api.runningSessions();
       if (!response.ok) {
+        runningSessionFailures.current += 1;
+        if (runningSessionFailures.current >= 2) syncProcessingSessions([]);
         return;
       }
 
       const payload = (await response.json()) as RunningSessionsApiPayload;
       const sessions = Array.isArray(payload.data?.sessions) ? payload.data.sessions : [];
+      runningSessionFailures.current = 0;
 
       syncProcessingSessions(
         sessions
@@ -124,6 +130,8 @@ function AppContentInner() {
       );
     } catch (error) {
       console.error('[AppContent] Failed to sync running sessions:', error);
+      runningSessionFailures.current += 1;
+      if (runningSessionFailures.current >= 2) syncProcessingSessions([]);
     }
   }, [syncProcessingSessions]);
 
@@ -238,7 +246,21 @@ function AppContentInner() {
       )}
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <MainContent
+        {projectsError ? (
+          <main className="flex min-w-0 flex-1 items-center justify-center p-6">
+            <div role="alert" className="max-w-lg border border-destructive/40 bg-card p-6 text-center">
+              <h2 className="text-base font-semibold text-foreground">本地项目加载失败</h2>
+              <p className="mt-2 text-sm text-muted-foreground">{projectsError}</p>
+              <button
+                type="button"
+                onClick={() => void fetchProjects()}
+                className="mt-4 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
+              >
+                重试
+              </button>
+            </div>
+          </main>
+        ) : <MainContent
           selectedProject={selectedProject}
           selectedSession={selectedSession}
           activeTab={activeTab}
@@ -261,7 +283,7 @@ function AppContentInner() {
           onShowSettings={openSettings}
           externalMessageUpdate={externalMessageUpdate}
           newSessionTrigger={newSessionTrigger}
-        />
+        />}
       </div>
 
       <CommandPalette

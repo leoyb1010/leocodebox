@@ -1,4 +1,3 @@
-import os from 'node:os';
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 
@@ -11,6 +10,7 @@ import {
   readFileTimestamps,
 } from '@/shared/utils.js';
 import type { IProviderSessionSynchronizer } from '@/shared/interfaces.js';
+import { getCodexHome } from '@/shared/provider-runtime-paths.js';
 
 type ParsedSession = {
   sessionId: string;
@@ -23,7 +23,7 @@ type ParsedSession = {
  */
 export class CodexSessionSynchronizer implements IProviderSessionSynchronizer {
   private readonly provider = 'codex' as const;
-  private readonly codexHome = path.join(os.homedir(), '.codex');
+  private readonly codexHome = getCodexHome();
 
   /**
    * Scans ~/.codex/sessions and upserts discovered sessions into DB.

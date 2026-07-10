@@ -1,0 +1,83 @@
+import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+import test from 'node:test';
+
+import { DesktopUpdaterController, clearUpdaterTokenEnvironment } from './updater.js';
+
+class FakeUpdater extends EventEmitter {
+  setFeedURL(options) {
+    this.feed = options;
+  }
+
+  async checkForUpdates() {
+    this.emit('update-available', { version: '1.36.2', releaseName: 'Cross-device fix' });
+  }
+
+  async downloadUpdate() {
+    this.emit('download-progress', { percent: 54.4 });
+    this.emit('update-downloaded', { version: '1.36.2' });
+  }
+
+  quitAndInstall() {
+    this.didInstall = true;
+  }
+}
+
+const fakeStorage = {
+  isEncryptionAvailable: () => true,
+  encryptString: (value) => Buffer.from(`encrypted:${value}`),
+  decryptString: (value) => value.toString().replace(/^encrypted:/, ''),
+};
+
+test('updater credentials are removed from inherited child-process environments', () => {
+  const environment = {
+    GH_TOKEN: 'legacy-token',
+    GITHUB_TOKEN: 'github-token',
+    PATH: '/usr/bin',
+  };
+  clearUpdaterTokenEnvironment(environment);
+  assert.deepEqual(environment, { PATH: '/usr/bin' });
+});
+
+test('private updater requires a credential and never exposes the saved token in state', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'leocodebox-updater-'));
+  const updater = new FakeUpdater();
+  const controller = new DesktopUpdaterController({
+    appVersion: '1.36.2',
+    isPackaged: true,
+    settingsPath: path.join(root, 'updater.json'),
+    updater,
+    storage: fakeStorage,
+  });
+
+  try {
+    await controller.load();
+    assert.equal(controller.getState().status, 'authentication-required');
+
+    const state = await controller.saveGithubToken('github-secret');
+    assert.equal(state.configured, true);
+    assert.equal(JSON.stringify(state).includes('github-secret'), false);
+    assert.equal(updater.feed.provider, 'github');
+    assert.equal(updater.feed.private, true);
+
+    await controller.checkForUpdates();
+    assert.equal(controller.getState().status, 'available');
+    assert.equal(controller.getState().latestVersion, '1.36.2');
+
+    await controller.downloadUpdate();
+    assert.equal(controller.getState().status, 'downloaded');
+    assert.equal(controller.getState().progress, 100);
+
+    let prepared = false;
+    await controller.installUpdate(async () => {
+      prepared = true;
+    });
+    assert.equal(prepared, true);
+    assert.equal(updater.didInstall, true);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});

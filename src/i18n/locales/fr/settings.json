@@ -474,7 +474,7 @@
     "docs": "Docs",
     "sections": {
       "officialTitle": "Plugins officiels",
-      "officialDescription": "Maintenus par l'équipe CloudCLI et prêts à être installés directement.",
+      "officialDescription": "Maintenus par l'équipe leocodebox et prêts à être installés directement.",
       "unofficialTitle": "Autres plugins",
       "unofficialDescription": "Plugins non officiels et intégrations d'autres utilisateurs. Examinez le code source avant d'installer."
     },
@@ -502,10 +502,10 @@
       "description": "Surveillez les sessions Claude Code longues pour détecter les blocages et exposez les contrôles de processus.",
       "install": "Installer"
     },
-    "prismCloudCLI": {
-      "name": "PRISM CloudCLI",
+    "prismleocodebox": {
+      "name": "PRISM leocodebox",
       "badge": "non officiel",
-      "description": "Intelligence de session pour Claude Code, dans CloudCLI. Voyez pourquoi vos sessions consomment des tokens sans quitter le navigateur.",
+      "description": "Intelligence de session pour Claude Code, dans leocodebox. Voyez pourquoi vos sessions consomment des tokens sans quitter le navigateur.",
       "install": "Installer"
     },
     "sessionManagerPlugin": {

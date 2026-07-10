@@ -1,93 +1,73 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useEffect, useState } from 'react';
 
 const ThemeContext = createContext();
+const THEME_MODES = new Set(['system', 'light', 'dark']);
+
+function readInitialThemeMode() {
+  const savedMode = localStorage.getItem('themeMode');
+  if (THEME_MODES.has(savedMode)) return savedMode;
+
+  const legacyTheme = localStorage.getItem('theme');
+  if (legacyTheme === 'light' || legacyTheme === 'dark') return legacyTheme;
+  return 'system';
+}
+
+function getSystemDarkMode() {
+  return Boolean(window.matchMedia?.('(prefers-color-scheme: dark)').matches);
+}
 
 export const useTheme = () => {
   const context = useContext(ThemeContext);
-  if (!context) {
-    throw new Error('useTheme must be used within a ThemeProvider');
-  }
+  if (!context) throw new Error('useTheme must be used within a ThemeProvider');
   return context;
 };
 
 export const ThemeProvider = ({ children }) => {
-  // Check for saved theme preference or default to system preference
-  const [isDarkMode, setIsDarkMode] = useState(() => {
-    // Check localStorage first
-    const savedTheme = localStorage.getItem('theme');
-    if (savedTheme) {
-      return savedTheme === 'dark';
-    }
-    
-    // Check system preference
-    if (window.matchMedia) {
-      return window.matchMedia('(prefers-color-scheme: dark)').matches;
-    }
-    
-    return false;
-  });
+  const [themeMode, setThemeModeState] = useState(readInitialThemeMode);
+  const [systemDarkMode, setSystemDarkMode] = useState(getSystemDarkMode);
+  const isDarkMode = themeMode === 'system' ? systemDarkMode : themeMode === 'dark';
 
-  // Update document class and localStorage when theme changes
   useEffect(() => {
-    if (isDarkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-      
-      // Update iOS status bar style and theme color for dark mode
-      const statusBarMeta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
-      if (statusBarMeta) {
-        statusBarMeta.setAttribute('content', 'black-translucent');
-      }
-      
-      const themeColorMeta = document.querySelector('meta[name="theme-color"]');
-      if (themeColorMeta) {
-        themeColorMeta.setAttribute('content', '#141414'); // Dark background color (hsl(0 0% 8%))
-      }
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-      
-      // Update iOS status bar style and theme color for light mode
-      const statusBarMeta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
-      if (statusBarMeta) {
-        statusBarMeta.setAttribute('content', 'default');
-      }
-      
-      const themeColorMeta = document.querySelector('meta[name="theme-color"]');
-      if (themeColorMeta) {
-        themeColorMeta.setAttribute('content', '#f6f4ef'); // Light background color (warm cream)
-      }
-    }
-  }, [isDarkMode]);
+    const mediaQuery = window.matchMedia?.('(prefers-color-scheme: dark)');
+    if (!mediaQuery) return undefined;
 
-  // Listen for system theme changes
-  useEffect(() => {
-    if (!window.matchMedia) return;
-
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-    const handleChange = (e) => {
-      // Only update if user hasn't manually set a preference
-      const savedTheme = localStorage.getItem('theme');
-      if (!savedTheme) {
-        setIsDarkMode(e.matches);
-      }
-    };
-
-    mediaQuery.addEventListener('change', handleChange);
-    return () => mediaQuery.removeEventListener('change', handleChange);
+    const handleSystemThemeChange = (event) => setSystemDarkMode(event.matches);
+    mediaQuery.addEventListener('change', handleSystemThemeChange);
+    return () => mediaQuery.removeEventListener('change', handleSystemThemeChange);
   }, []);
 
-  const toggleDarkMode = () => {
-    setIsDarkMode(prev => !prev);
+  useEffect(() => {
+    const handleStorage = (event) => {
+      if (event.key === 'themeMode' && THEME_MODES.has(event.newValue)) {
+        setThemeModeState(event.newValue);
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', isDarkMode);
+    localStorage.setItem('themeMode', themeMode);
+    // Keep the resolved value for existing integrations and the Leoapi view.
+    localStorage.setItem('theme', isDarkMode ? 'dark' : 'light');
+
+    const statusBarMeta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+    statusBarMeta?.setAttribute('content', isDarkMode ? 'black-translucent' : 'default');
+    const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+    themeColorMeta?.setAttribute('content', isDarkMode ? '#141414' : '#f6f4ef');
+  }, [isDarkMode, themeMode]);
+
+  const setThemeMode = (nextMode) => {
+    if (THEME_MODES.has(nextMode)) setThemeModeState(nextMode);
   };
 
-  const value = {
-    isDarkMode,
-    toggleDarkMode,
+  const toggleDarkMode = () => {
+    setThemeModeState(isDarkMode ? 'light' : 'dark');
   };
 
   return (
-    <ThemeContext.Provider value={value}>
+    <ThemeContext.Provider value={{ isDarkMode, themeMode, setThemeMode, toggleDarkMode }}>
       {children}
     </ThemeContext.Provider>
   );

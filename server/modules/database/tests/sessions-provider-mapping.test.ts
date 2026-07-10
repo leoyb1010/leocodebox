@@ -6,7 +6,9 @@ import test from 'node:test';
 
 import { closeConnection } from '@/modules/database/connection.js';
 import { initializeDatabase } from '@/modules/database/init-db.js';
+import { projectsDb } from '@/modules/database/repositories/projects.db.js';
 import { sessionsDb } from '@/modules/database/repositories/sessions.db.js';
+import { sessionsService } from '@/modules/providers/services/sessions.service.js';
 
 async function withIsolatedDatabase(runTest: () => void | Promise<void>): Promise<void> {
   const previousDatabasePath = process.env.DATABASE_PATH;
@@ -104,5 +106,32 @@ test('legacy provider-keyed rows stay resolvable through both lookups', async ()
 
     assert.equal(sessionsDb.getSessionById('legacy-1')?.provider, 'opencode');
     assert.equal(sessionsDb.getSessionByProviderSessionId('legacy-1')?.session_id, 'legacy-1');
+  });
+});
+
+test('app session creation accepts only an active registered project', async () => {
+  await withIsolatedDatabase(() => {
+    projectsDb.createProjectPath('/workspace/demo');
+
+    const created = sessionsService.createAppSession('claude', '/workspace/demo/../demo');
+    assert.equal(created.projectPath, '/workspace/demo');
+    assert.equal(sessionsDb.getSessionById(created.sessionId)?.project_path, '/workspace/demo');
+
+    assert.throws(
+      () => sessionsService.createAppSession('claude', '/workspace/not-registered'),
+      (error: unknown) => (error as { code?: string }).code === 'PROJECT_NOT_ACTIVE',
+    );
+  });
+});
+
+test('app session creation rejects archived projects', async () => {
+  await withIsolatedDatabase(() => {
+    projectsDb.createProjectPath('/workspace/archived');
+    projectsDb.updateProjectIsArchived('/workspace/archived', true);
+
+    assert.throws(
+      () => sessionsService.createAppSession('codex', '/workspace/archived'),
+      (error: unknown) => (error as { code?: string }).code === 'PROJECT_NOT_ACTIVE',
+    );
   });
 });

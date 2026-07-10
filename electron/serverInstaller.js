@@ -14,7 +14,7 @@ import path from 'node:path';
  */
 
 const DEFAULT_INSTALL_ROOT = path.join(os.homedir(), '.leocodebox', 'server');
-const DEFAULT_BUNDLE_BASE_URL = 'https://github.com/leoyuan/leocodebox/releases/download';
+const DEFAULT_BUNDLE_BASE_URL = 'https://github.com/leoyb1010/leocodebox/releases/download';
 const MAX_REDIRECTS = 5;
 const LOCAL_DOWNLOAD_HOSTS = new Set(['localhost', '127.0.0.1', '::1']);
 

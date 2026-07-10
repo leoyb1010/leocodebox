@@ -8,13 +8,19 @@ import { execFile } from 'node:child_process';
 import TOML from '@iarna/toml';
 import express from 'express';
 
+import {
+  getClaudeConfigDir,
+  getCodexHome,
+  getGeminiHome,
+  getHermesHome,
+  getOpenCodeConfigDir,
+} from '../shared/provider-runtime-paths.js';
 import { findAppRoot, getModuleDir } from '../utils/runtime-paths.js';
 
 const router = express.Router();
 
 const ROUTE_DIR = getModuleDir(import.meta.url);
 const APP_ROOT = findAppRoot(ROUTE_DIR);
-const CC_SWITCH_REFERENCE_VERSION = '3.16.5';
 const MAX_TEXT_FIELD = 20_000;
 let switchMutationQueue = Promise.resolve();
 
@@ -131,6 +137,34 @@ function providerStorePath() {
   return path.join(switchDir(), 'providers.json');
 }
 
+function targetConfigPaths(targetId) {
+  if (targetId === 'claude') {
+    return [path.join(getClaudeConfigDir(process.env, homeDir()), 'settings.json')];
+  }
+  if (targetId === 'codex') {
+    const codexHome = getCodexHome(process.env, homeDir());
+    return [path.join(codexHome, 'auth.json'), path.join(codexHome, 'config.toml')];
+  }
+  if (targetId === 'opencode') {
+    return [path.join(getOpenCodeConfigDir(process.env, homeDir()), 'opencode.json')];
+  }
+  if (targetId === 'gemini') {
+    return [path.join(getGeminiHome(process.env, homeDir()), '.env')];
+  }
+  if (targetId === 'hermes') {
+    return [path.join(getHermesHome(process.env, homeDir()), 'config.yaml')];
+  }
+  return (TARGETS[targetId]?.configPaths || []).map(expandHome);
+}
+
+function displayConfigPath(filePath) {
+  const home = path.resolve(homeDir());
+  const resolved = path.resolve(filePath);
+  return resolved === home || resolved.startsWith(`${home}${path.sep}`)
+    ? `~${resolved.slice(home.length)}`
+    : resolved;
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -172,6 +206,32 @@ function sanitizeProvider(provider) {
   };
 }
 
+function normalizeEndpointUrls(input, existing, baseUrl) {
+  const source = Array.isArray(input?.endpoints)
+    ? input.endpoints
+    : Array.isArray(existing?.endpoints) ? existing.endpoints : [];
+  const urls = [];
+  for (const endpoint of source) {
+    const url = safeText(typeof endpoint === 'string' ? endpoint : endpoint?.url, 800).replace(/\/+$/, '');
+    if (url && !urls.includes(url)) urls.push(url);
+    if (urls.length >= 20) break;
+  }
+  const normalizedBase = safeText(baseUrl, 800).replace(/\/+$/, '');
+  if (normalizedBase && !urls.includes(normalizedBase)) urls.unshift(normalizedBase);
+  return urls;
+}
+
+function normalizeModelMapping(input, existing, fallbackModel) {
+  const source = input?.modelMapping && typeof input.modelMapping === 'object'
+    ? input.modelMapping
+    : existing?.modelMapping && typeof existing.modelMapping === 'object' ? existing.modelMapping : {};
+  return {
+    sonnet: safeText(source.sonnet || fallbackModel, 240),
+    opus: safeText(source.opus || fallbackModel, 240),
+    haiku: safeText(source.haiku || fallbackModel, 240),
+  };
+}
+
 function normalizeProvider(input, existing = null) {
   const target = normalizeTarget(input?.target || existing?.target);
   if (!target) {
@@ -185,13 +245,23 @@ function normalizeProvider(input, existing = null) {
   const currentApiKey = existing?.apiKey || '';
   const nextApiKey = input?.apiKey === '__KEEP__' ? currentApiKey : safeText(input?.apiKey ?? currentApiKey, 4000);
 
+  const baseUrl = safeText(input?.baseUrl ?? existing?.baseUrl ?? '', 800).replace(/\/+$/, '');
+  const model = safeText(input?.model ?? existing?.model ?? '', 200);
   return {
     id,
     target,
     name,
-    baseUrl: safeText(input?.baseUrl ?? existing?.baseUrl ?? '', 800),
+    baseUrl,
+    endpoints: normalizeEndpointUrls(input, existing, baseUrl),
+    autoSelectEndpoint: typeof input?.autoSelectEndpoint === 'boolean'
+      ? input.autoSelectEndpoint
+      : Boolean(existing?.autoSelectEndpoint),
+    endpointStats: existing?.endpointStats && typeof existing.endpointStats === 'object'
+      ? existing.endpointStats
+      : {},
     apiKey: nextApiKey,
-    model: safeText(input?.model ?? existing?.model ?? '', 200),
+    model,
+    modelMapping: normalizeModelMapping(input, existing, model),
     wireApi: normalizeWireApi(input?.wireApi ?? existing?.wireApi),
     notes: safeText(input?.notes ?? existing?.notes ?? '', 2000),
     category: safeText(input?.category ?? existing?.category ?? 'custom', 80),
@@ -202,7 +272,12 @@ function normalizeProvider(input, existing = null) {
 }
 
 async function ensureDir(dir) {
-  await fs.mkdir(dir, { recursive: true });
+  await fs.mkdir(dir, { recursive: true, mode: 0o700 });
+  try {
+    await fs.chmod(dir, 0o700);
+  } catch {
+    // chmod is best-effort on filesystems that support POSIX modes.
+  }
 }
 
 async function atomicWrite(filePath, contents, mode = 0o600) {
@@ -260,6 +335,7 @@ async function writeJsonFile(filePath, value, mode = 0o600) {
 }
 
 async function readStore() {
+  await ensureDir(switchDir());
   const store = await readJsonFile(providerStorePath(), { providers: [], activeByTarget: {} });
   return {
     providers: Array.isArray(store.providers) ? store.providers : [],
@@ -282,7 +358,14 @@ async function fileExists(filePath) {
 
 async function backupFile(filePath) {
   if (!(await fileExists(filePath))) return null;
-  const relative = path.relative(homeDir(), filePath).replace(/\.\./g, '_').replace(/^\/+/, '');
+  const resolvedFilePath = path.resolve(filePath);
+  const relativeToHome = path.relative(path.resolve(homeDir()), resolvedFilePath);
+  const isInsideHome = relativeToHome
+    && !relativeToHome.startsWith(`..${path.sep}`)
+    && !path.isAbsolute(relativeToHome);
+  const relative = isInsideHome
+    ? relativeToHome
+    : path.join('__external__', Buffer.from(resolvedFilePath).toString('base64url'));
   const backupPath = path.join(
     switchDir(),
     'backups',
@@ -291,20 +374,48 @@ async function backupFile(filePath) {
   );
   await ensureDir(path.dirname(backupPath));
   await fs.copyFile(filePath, backupPath);
+  try {
+    await fs.chmod(backupPath, 0o600);
+  } catch {
+    // chmod is best-effort on filesystems that support POSIX modes.
+  }
   return backupPath;
+}
+
+function resolveBackupDestination(relativePath) {
+  const parts = relativePath.split(/[\\/]+/).filter(Boolean);
+  if (parts.length < 2) return null;
+  if (parts[1] === '__external__') {
+    if (parts.length !== 3) return null;
+    try {
+      const decoded = Buffer.from(parts[2], 'base64url').toString('utf8');
+      return path.isAbsolute(decoded) ? path.resolve(decoded) : null;
+    } catch {
+      return null;
+    }
+  }
+  return path.resolve(homeDir(), ...parts.slice(1));
+}
+
+function allowedConfigDestinations() {
+  return new Set(
+    Object.keys(TARGETS)
+      .flatMap((targetId) => targetConfigPaths(targetId))
+      .map((filePath) => path.resolve(filePath)),
+  );
 }
 
 function configStatus() {
   return Object.fromEntries(Object.entries(TARGETS).map(([id, target]) => {
-    const files = target.configPaths.map((displayPath) => {
-      const resolvedPath = expandHome(displayPath);
+    const configPaths = targetConfigPaths(id);
+    const files = configPaths.map((resolvedPath) => {
       return {
-        path: displayPath,
+        path: displayConfigPath(resolvedPath),
         resolvedPath,
         exists: fsSync.existsSync(resolvedPath),
       };
     });
-    return [id, { ...target, files }];
+    return [id, { ...target, configPaths: configPaths.map(displayConfigPath), files }];
   }));
 }
 
@@ -362,7 +473,7 @@ function removeManagedTopLevelKeys(config) {
 }
 
 async function applyClaudeProvider(provider) {
-  const settingsPath = expandHome('~/.claude/settings.json');
+  const [settingsPath] = targetConfigPaths('claude');
   await backupFile(settingsPath);
   const settings = await readJsonFile(settingsPath, {});
   const env = settings.env && typeof settings.env === 'object' ? settings.env : {};
@@ -376,12 +487,15 @@ async function applyClaudeProvider(provider) {
     delete env.ANTHROPIC_AUTH_TOKEN;
     delete env.ANTHROPIC_API_KEY;
   }
-  if (provider.model) {
-    env.ANTHROPIC_MODEL = provider.model;
-    env.ANTHROPIC_DEFAULT_SONNET_MODEL = provider.model;
-  } else {
-    delete env.ANTHROPIC_MODEL;
-    delete env.ANTHROPIC_DEFAULT_SONNET_MODEL;
+  const mappedModels = {
+    ANTHROPIC_MODEL: provider.model,
+    ANTHROPIC_DEFAULT_SONNET_MODEL: provider.modelMapping?.sonnet || provider.model,
+    ANTHROPIC_DEFAULT_OPUS_MODEL: provider.modelMapping?.opus || provider.model,
+    ANTHROPIC_DEFAULT_HAIKU_MODEL: provider.modelMapping?.haiku || provider.model,
+  };
+  for (const [key, value] of Object.entries(mappedModels)) {
+    if (value) env[key] = value;
+    else delete env[key];
   }
 
   const nextSettings = {
@@ -393,8 +507,7 @@ async function applyClaudeProvider(provider) {
 }
 
 async function applyCodexProvider(provider) {
-  const authPath = expandHome('~/.codex/auth.json');
-  const configPath = expandHome('~/.codex/config.toml');
+  const [authPath, configPath] = targetConfigPaths('codex');
   await backupFile(authPath);
   await backupFile(configPath);
 
@@ -416,7 +529,7 @@ async function applyCodexProvider(provider) {
   const providerKey = `leocodebox_${sanitizeIdPart(provider.id)}`;
   const providerTablePattern = new RegExp(`^\\s*\\[model_providers\\.${providerKey}\\]\\s*$`, 'm');
   if (providerTablePattern.test(unmanaged)) {
-    const error = new Error(`Codex config already defines model_providers.${providerKey}; rename the CC Switch provider before applying it.`);
+    const error = new Error(`Codex 配置中已存在 model_providers.${providerKey}，请修改 Leoapi 接口名称后重试。`);
     error.statusCode = 409;
     throw error;
   }
@@ -432,38 +545,71 @@ function parseEnv(content) {
   const env = {};
   for (const line of String(content || '').split(/\r?\n/)) {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#') || !trimmed.includes('=')) continue;
-    const [key, ...rest] = trimmed.split('=');
-    if (/^[A-Z0-9_]+$/.test(key)) env[key] = rest.join('=');
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const match = trimmed.match(/^(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$/);
+    if (!match) continue;
+    let value = match[2];
+    if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+      value = value.slice(1, -1);
+    }
+    env[match[1]] = value;
   }
   return env;
 }
 
-function serializeEnv(env) {
-  return Object.keys(env)
-    .sort()
-    .map((key) => `${key}=${String(env[key] ?? '')}`)
-    .join('\n') + '\n';
+function serializeEnvValue(value) {
+  const text = String(value ?? '');
+  return /^[A-Za-z0-9_./:@%+,=-]*$/.test(text) ? text : JSON.stringify(text);
+}
+
+function updateManagedEnv(content, updates) {
+  const source = String(content || '');
+  const newline = source.includes('\r\n') ? '\r\n' : '\n';
+  const hadTrailingNewline = /\r?\n$/.test(source);
+  const lines = source ? source.split(/\r?\n/) : [];
+  if (hadTrailingNewline) lines.pop();
+  const pending = new Map(Object.entries(updates));
+  const output = [];
+
+  for (const line of lines) {
+    const match = line.match(/^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=/);
+    const key = match?.[1];
+    if (!key || !pending.has(key)) {
+      output.push(line);
+      continue;
+    }
+    const value = pending.get(key);
+    pending.delete(key);
+    if (value != null && value !== '') {
+      output.push(`${key}=${serializeEnvValue(value)}`);
+    }
+  }
+
+  for (const [key, value] of pending) {
+    if (value != null && value !== '') {
+      output.push(`${key}=${serializeEnvValue(value)}`);
+    }
+  }
+  return `${output.join(newline)}${output.length || hadTrailingNewline ? newline : ''}`;
 }
 
 async function applyGeminiProvider(provider) {
-  const envPath = expandHome('~/.gemini/.env');
+  const [envPath] = targetConfigPaths('gemini');
   await backupFile(envPath);
-  let env = {};
+  let existing = '';
   try {
-    env = parseEnv(await fs.readFile(envPath, 'utf8'));
+    existing = await fs.readFile(envPath, 'utf8');
   } catch (error) {
     if (error?.code !== 'ENOENT') throw error;
   }
 
-  if (provider.apiKey) {
-    env.GEMINI_API_KEY = provider.apiKey;
-    env.GOOGLE_API_KEY = provider.apiKey;
-  }
-  if (provider.baseUrl) env.GOOGLE_GEMINI_BASE_URL = provider.baseUrl;
-  if (provider.model) env.GEMINI_MODEL = provider.model;
-
-  await atomicWrite(envPath, serializeEnv(env));
+  const next = updateManagedEnv(existing, {
+    GEMINI_API_KEY: provider.apiKey || null,
+    GOOGLE_API_KEY: provider.apiKey || null,
+    GOOGLE_GEMINI_BASE_URL: provider.baseUrl || null,
+    GEMINI_MODEL: provider.model || null,
+  });
+  await atomicWrite(envPath, next);
   return [envPath];
 }
 
@@ -484,7 +630,7 @@ function opencodeProviderFragment(provider) {
 }
 
 async function applyOpenCodeProvider(provider) {
-  const configPath = expandHome('~/.config/opencode/opencode.json');
+  const [configPath] = targetConfigPaths('opencode');
   await backupFile(configPath);
   const config = await readJsonFile(configPath, {
     $schema: 'https://opencode.ai/config.json',
@@ -531,7 +677,7 @@ function removeManagedHermesBlock(config) {
 }
 
 async function applyHermesProvider(provider) {
-  const configPath = expandHome('~/.hermes/config.yaml');
+  const [configPath] = targetConfigPaths('hermes');
   await backupFile(configPath);
   let existing = '';
   try {
@@ -562,7 +708,7 @@ async function applyProvider(provider) {
 }
 
 async function applyProviderTransactionally(provider, commit) {
-  const filePaths = TARGETS[provider.target].configPaths.map(expandHome);
+  const filePaths = targetConfigPaths(provider.target);
   const snapshots = await captureFiles(filePaths);
   try {
     const changedFiles = await applyProvider(provider);
@@ -582,7 +728,8 @@ async function importCurrentProviders(store) {
   const imported = [];
 
   try {
-    const claudeSettings = await readJsonFile(expandHome('~/.claude/settings.json'), null);
+    const [claudeSettingsPath] = targetConfigPaths('claude');
+    const claudeSettings = await readJsonFile(claudeSettingsPath, null);
     const env = claudeSettings?.env;
     if (env && typeof env === 'object') {
       const provider = normalizeProvider({
@@ -592,6 +739,11 @@ async function importCurrentProviders(store) {
         baseUrl: env.ANTHROPIC_BASE_URL || '',
         apiKey: env.ANTHROPIC_AUTH_TOKEN || env.ANTHROPIC_API_KEY || '',
         model: env.ANTHROPIC_MODEL || env.ANTHROPIC_DEFAULT_SONNET_MODEL || '',
+        modelMapping: {
+          sonnet: env.ANTHROPIC_DEFAULT_SONNET_MODEL || env.ANTHROPIC_MODEL || '',
+          opus: env.ANTHROPIC_DEFAULT_OPUS_MODEL || env.ANTHROPIC_MODEL || '',
+          haiku: env.ANTHROPIC_DEFAULT_HAIKU_MODEL || env.ANTHROPIC_MODEL || '',
+        },
         wireApi: 'chat',
         category: 'imported',
       }, store.providers.find((item) => item.id === 'claude-current'));
@@ -603,15 +755,26 @@ async function importCurrentProviders(store) {
   }
 
   try {
-    const auth = await readJsonFile(expandHome('~/.codex/auth.json'), {});
+    const [codexAuthPath, codexConfigPath] = targetConfigPaths('codex');
+    const auth = await readJsonFile(codexAuthPath, {});
     let config = '';
     try {
-      config = await fs.readFile(expandHome('~/.codex/config.toml'), 'utf8');
+      config = await fs.readFile(codexConfigPath, 'utf8');
     } catch {
       config = '';
     }
-    const baseUrl = config.match(/^\s*base_url\s*=\s*["']([^"']+)["']/m)?.[1] || '';
-    const model = config.match(/^\s*model\s*=\s*["']([^"']+)["']/m)?.[1] || '';
+    const parsed = config ? TOML.parse(config) : {};
+    const activeProviderId = typeof parsed.model_provider === 'string' ? parsed.model_provider : '';
+    const configuredProviders = parsed.model_providers && typeof parsed.model_providers === 'object'
+      ? parsed.model_providers
+      : {};
+    const providerConfig = activeProviderId && configuredProviders[activeProviderId]
+      && typeof configuredProviders[activeProviderId] === 'object'
+      ? configuredProviders[activeProviderId]
+      : null;
+    const baseUrl = typeof providerConfig?.base_url === 'string' ? providerConfig.base_url : '';
+    const model = typeof parsed.model === 'string' ? parsed.model : '';
+    const wireApi = providerConfig?.wire_api === 'chat' ? 'chat' : 'responses';
     if (auth.OPENAI_API_KEY || baseUrl || model) {
       const provider = normalizeProvider({
         id: 'codex-current',
@@ -620,7 +783,7 @@ async function importCurrentProviders(store) {
         baseUrl,
         apiKey: auth.OPENAI_API_KEY || '',
         model,
-        wireApi: 'responses',
+        wireApi,
         category: 'imported',
       }, store.providers.find((item) => item.id === 'codex-current'));
       upsertProviderInStore(store, provider);
@@ -631,7 +794,8 @@ async function importCurrentProviders(store) {
   }
 
   try {
-    const env = parseEnv(await fs.readFile(expandHome('~/.gemini/.env'), 'utf8'));
+    const [geminiEnvPath] = targetConfigPaths('gemini');
+    const env = parseEnv(await fs.readFile(geminiEnvPath, 'utf8'));
     if (env.GEMINI_API_KEY || env.GOOGLE_API_KEY || env.GOOGLE_GEMINI_BASE_URL || env.GEMINI_MODEL) {
       const provider = normalizeProvider({
         id: 'gemini-current',
@@ -651,12 +815,22 @@ async function importCurrentProviders(store) {
   }
 
   try {
-    const opencode = await readJsonFile(expandHome('~/.config/opencode/opencode.json'), {});
+    const [opencodeConfigPath] = targetConfigPaths('opencode');
+    const opencode = await readJsonFile(opencodeConfigPath, {});
     const configuredProviders = opencode.provider && typeof opencode.provider === 'object' ? opencode.provider : {};
-    const [providerId, providerConfig] = Object.entries(configuredProviders)[0] || [];
+    const configuredModel = typeof opencode.model === 'string' ? opencode.model : '';
+    const modelSeparator = configuredModel.indexOf('/');
+    const activeProviderId = modelSeparator > 0 ? configuredModel.slice(0, modelSeparator) : '';
+    const activeProviderConfig = activeProviderId && configuredProviders[activeProviderId]
+      && typeof configuredProviders[activeProviderId] === 'object'
+      ? configuredProviders[activeProviderId]
+      : null;
+    const [fallbackProviderId, fallbackProviderConfig] = Object.entries(configuredProviders)[0] || [];
+    const providerId = activeProviderConfig ? activeProviderId : fallbackProviderId;
+    const providerConfig = activeProviderConfig || fallbackProviderConfig;
     if (providerId && providerConfig && typeof providerConfig === 'object') {
-      const modelFromConfig = typeof opencode.model === 'string' && opencode.model.includes('/')
-        ? opencode.model.split('/').slice(1).join('/')
+      const modelFromConfig = activeProviderConfig && modelSeparator > 0
+        ? configuredModel.slice(modelSeparator + 1)
         : Object.keys(providerConfig.models || {})[0] || '';
       const provider = normalizeProvider({
         id: 'opencode-current',
@@ -676,7 +850,8 @@ async function importCurrentProviders(store) {
   }
 
   try {
-    const hermes = await fs.readFile(expandHome('~/.hermes/config.yaml'), 'utf8');
+    const [hermesConfigPath] = targetConfigPaths('hermes');
+    const hermes = await fs.readFile(hermesConfigPath, 'utf8');
     const baseUrl = hermes.match(/^\s*base_url:\s*["']?([^"'\n]+)["']?/m)?.[1] || '';
     const apiKey = hermes.match(/^\s*api_key:\s*["']?([^"'\n]+)["']?/m)?.[1] || '';
     const model = hermes.match(/^\s*(?:default|model):\s*["']?([^"'\n]+)["']?/m)?.[1] || '';
@@ -701,6 +876,117 @@ async function importCurrentProviders(store) {
   return imported;
 }
 
+function chooseActiveProvider(providers, target, predicate, preferredId) {
+  const matches = providers.filter((provider) => provider.target === target && predicate(provider));
+  return matches.find((provider) => provider.id === preferredId)?.id || matches[0]?.id || null;
+}
+
+function matchesCurrentValues(provider, current) {
+  return safeText(provider.baseUrl, 800) === safeText(current.baseUrl, 800)
+    && safeText(provider.apiKey, 4000) === safeText(current.apiKey, 4000)
+    && safeText(provider.model, 200) === safeText(current.model, 200);
+}
+
+async function detectActiveByTarget(providers, lastAppliedByTarget = {}) {
+  const active = {};
+
+  try {
+    const [settingsPath] = targetConfigPaths('claude');
+    const settings = await readJsonFile(settingsPath, null);
+    if (settings?.env && typeof settings.env === 'object') {
+      const current = {
+        baseUrl: settings.env.ANTHROPIC_BASE_URL || '',
+        apiKey: settings.env.ANTHROPIC_AUTH_TOKEN || settings.env.ANTHROPIC_API_KEY || '',
+        model: settings.env.ANTHROPIC_MODEL || settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL || '',
+      };
+      const match = chooseActiveProvider(
+        providers,
+        'claude',
+        (provider) => matchesCurrentValues(provider, current),
+        lastAppliedByTarget.claude,
+      );
+      if (match) active.claude = match;
+    }
+  } catch {
+    // A single unreadable tool config must not hide the other active targets.
+  }
+
+  try {
+    const [authPath, configPath] = targetConfigPaths('codex');
+    const [auth, config] = await Promise.all([
+      readJsonFile(authPath, {}),
+      fs.readFile(configPath, 'utf8').catch(() => ''),
+    ]);
+    let match = chooseActiveProvider(
+      providers,
+      'codex',
+      (provider) => config.includes(`model_provider = "leocodebox_${sanitizeIdPart(provider.id)}"`),
+      lastAppliedByTarget.codex,
+    );
+    if (!match && (auth.OPENAI_API_KEY || config)) {
+      const current = {
+        baseUrl: config.match(/^\s*base_url\s*=\s*["']([^"']+)["']/m)?.[1] || '',
+        apiKey: auth.OPENAI_API_KEY || '',
+        model: config.match(/^\s*model\s*=\s*["']([^"']+)["']/m)?.[1] || '',
+      };
+      match = chooseActiveProvider(
+        providers,
+        'codex',
+        (provider) => matchesCurrentValues(provider, current),
+        lastAppliedByTarget.codex,
+      );
+    }
+    if (match) active.codex = match;
+  } catch {
+    // Best-effort detection.
+  }
+
+  try {
+    const [geminiEnvPath] = targetConfigPaths('gemini');
+    const env = parseEnv(await fs.readFile(geminiEnvPath, 'utf8'));
+    const current = {
+      baseUrl: env.GOOGLE_GEMINI_BASE_URL || '',
+      apiKey: env.GEMINI_API_KEY || env.GOOGLE_API_KEY || '',
+      model: env.GEMINI_MODEL || '',
+    };
+    const match = chooseActiveProvider(
+      providers,
+      'gemini',
+      (provider) => matchesCurrentValues(provider, current),
+      lastAppliedByTarget.gemini,
+    );
+    if (match) active.gemini = match;
+  } catch {
+    // Best-effort detection.
+  }
+
+  try {
+    const [configPath] = targetConfigPaths('opencode');
+    const config = await readJsonFile(configPath, {});
+    const match = chooseActiveProvider(providers, 'opencode', (provider) => {
+      const key = `leocodebox_${sanitizeIdPart(provider.id)}`;
+      return Boolean(config.provider?.[key]) || String(config.model || '').startsWith(`${key}/`);
+    }, lastAppliedByTarget.opencode);
+    if (match) active.opencode = match;
+  } catch {
+    // Best-effort detection.
+  }
+
+  try {
+    const [hermesConfigPath] = targetConfigPaths('hermes');
+    const config = await fs.readFile(hermesConfigPath, 'utf8');
+    const match = chooseActiveProvider(providers, 'hermes', (provider) => {
+      const key = `leocodebox_${sanitizeIdPart(provider.id)}`;
+      return config.includes(`provider: "${key}"`) || config.includes(`name: "${key}"`);
+    }, lastAppliedByTarget.hermes);
+    if (match) active.hermes = match;
+  } catch {
+    // Best-effort detection.
+  }
+
+  return active;
+}
+
 function upsertProviderInStore(store, provider) {
   const index = store.providers.findIndex((item) => item.id === provider.id);
   if (index === -1) {
@@ -710,7 +996,7 @@ function upsertProviderInStore(store, provider) {
   }
 }
 
-// Maps one native CC Switch `providers` row (app_type + settings_config JSON)
+// Maps one legacy switch `providers` row (app_type + settings_config JSON)
 // onto the leocodebox provider shape. Returns null for app types leocodebox
 // cannot yet write, so they are reported as skipped rather than mis-imported.
 function mapCcSwitchRow(row) {
@@ -728,11 +1014,17 @@ function mapCcSwitchRow(row) {
   let baseUrl = '';
   let apiKey = '';
   let model = '';
+  let modelMapping = null;
 
   if (target === 'claude') {
     baseUrl = env.ANTHROPIC_BASE_URL || '';
     apiKey = env.ANTHROPIC_AUTH_TOKEN || env.ANTHROPIC_API_KEY || '';
     model = env.ANTHROPIC_MODEL || env.ANTHROPIC_DEFAULT_SONNET_MODEL || (typeof settings.model === 'string' ? settings.model : '');
+    modelMapping = {
+      sonnet: env.ANTHROPIC_DEFAULT_SONNET_MODEL || model,
+      opus: env.ANTHROPIC_DEFAULT_OPUS_MODEL || model,
+      haiku: env.ANTHROPIC_DEFAULT_HAIKU_MODEL || model,
+    };
   } else if (target === 'codex') {
     const auth = settings.auth && typeof settings.auth === 'object' ? settings.auth : {};
     apiKey = auth.OPENAI_API_KEY || '';
@@ -753,6 +1045,7 @@ function mapCcSwitchRow(row) {
     baseUrl,
     apiKey,
     model,
+    ...(modelMapping ? { modelMapping } : {}),
     wireApi: target === 'codex' ? 'responses' : 'chat',
     isCurrent: row.is_current === 1 || row.is_current === true,
     notes: safeText(row.notes || '', 2000),
@@ -801,57 +1094,341 @@ async function importCcSwitchProviders(store) {
   return { dbFound: true, imported, skipped };
 }
 
-// Lightweight reachability + latency probe against a provider's base URL.
-// Reports HTTP status and round-trip time — an honest connectivity signal
-// without over-claiming quota/billing checks the endpoint may not expose.
+function appendApiPath(baseUrl, suffix) {
+  const base = baseUrl.replace(/\/+$/, '');
+  if (/\/v1$/i.test(base) && suffix.startsWith('/v1/')) {
+    return `${base}${suffix.slice(3)}`;
+  }
+  return `${base}${suffix}`;
+}
+
+function buildProviderProbe(provider, rawBase) {
+  const headers = {
+    'Content-Type': 'application/json',
+    'User-Agent': 'leocodebox-connectivity-check',
+  };
+  if (provider.apiKey) {
+    headers.Authorization = `Bearer ${provider.apiKey}`;
+  }
+
+  if (provider.target === 'claude') {
+    if (provider.apiKey) {
+      headers['x-api-key'] = provider.apiKey;
+      headers['anthropic-version'] = '2023-06-01';
+    }
+    return {
+      url: appendApiPath(rawBase, '/v1/messages'),
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        model: provider.model || 'claude-sonnet-4-5',
+        max_tokens: 1,
+        messages: [{ role: 'user', content: 'Reply with OK.' }],
+      }),
+    };
+  }
+
+  if (provider.target === 'gemini' && /generativelanguage\.googleapis\.com/i.test(rawBase)) {
+    const url = new URL(appendApiPath(rawBase, '/models'));
+    if (provider.apiKey) url.searchParams.set('key', provider.apiKey);
+    delete headers.Authorization;
+    return { url: url.toString(), method: 'GET', headers };
+  }
+
+  const base = rawBase.replace(/\/(?:responses|chat\/completions|models)\/?$/i, '');
+  return { url: appendApiPath(base, '/models'), method: 'GET', headers };
+}
+
+function providerProbeNote(response) {
+  if (response.ok) return { authStatus: 'accepted', note: '端点可达且认证通过。' };
+  if (response.status === 401 || response.status === 403) {
+    return { authStatus: 'rejected', note: `端点可达（HTTP ${response.status}），但凭据被拒绝。` };
+  }
+  if (response.status === 429) {
+    return { authStatus: 'accepted', note: '端点可达且凭据未被拒绝，但当前请求受到限流。' };
+  }
+  if ([400, 422].includes(response.status)) {
+    return { authStatus: 'accepted', note: `端点可达且凭据未被拒绝（HTTP ${response.status}），请检查模型名称或请求参数。` };
+  }
+  if ([404, 405].includes(response.status)) {
+    return { authStatus: 'unknown', note: `端点可达（HTTP ${response.status}），但接口路径或协议不匹配。` };
+  }
+  if (response.status >= 500) {
+    return { authStatus: 'unknown', note: `端点可达，但上游服务异常（HTTP ${response.status}）。` };
+  }
+  return { authStatus: 'unknown', note: `端点可达（HTTP ${response.status}）。` };
+}
+
+// Protocol-aware reachability, credential and latency probe. It sends at most
+// one token for Anthropic-compatible endpoints when the upstream accepts it.
 async function testProviderConnectivity(provider) {
   const rawBase = safeText(provider.baseUrl, 800);
   if (!rawBase) {
     return { reachable: false, latencyMs: null, httpStatus: null, note: '未配置 Base URL，无法测试连通性。' };
   }
 
-  let target = rawBase.replace(/\/+$/, '');
-  if (/\/(v1|responses|chat|models)$/i.test(target) === false && /\/v1$/i.test(target) === false) {
-    target = `${target}/models`;
-  } else if (/\/v1$/i.test(target)) {
-    target = `${target}/models`;
-  }
-
-  const headers = { 'User-Agent': 'leocodebox-connectivity-check' };
-  if (provider.apiKey) {
-    headers.Authorization = `Bearer ${provider.apiKey}`;
-    headers['x-api-key'] = provider.apiKey;
-    headers['anthropic-version'] = '2023-06-01';
-  }
+  const probe = buildProviderProbe(provider, rawBase);
 
   const startedAt = Date.now();
   try {
-    const response = await fetch(target, {
-      method: 'GET',
-      headers,
+    const response = await fetch(probe.url, {
+      method: probe.method,
+      headers: probe.headers,
+      body: probe.body,
       // Do not follow redirects: prevents a provider baseUrl from bouncing the
       // attached API key to a different host.
       redirect: 'manual',
       signal: AbortSignal.timeout(8000),
     });
     const latencyMs = Date.now() - startedAt;
-    // Any HTTP response (even 401/403) proves the endpoint is reachable.
+    const assessment = providerProbeNote(response);
     return {
       reachable: true,
       latencyMs,
       httpStatus: response.status,
-      note: response.ok
-        ? '端点可达且认证通过。'
-        : `端点可达（HTTP ${response.status}）。${response.status === 401 || response.status === 403 ? '凭据可能无效或需要不同的认证头。' : ''}`,
+      authStatus: assessment.authStatus,
+      note: assessment.note,
     };
   } catch (error) {
     return {
       reachable: false,
       latencyMs: Date.now() - startedAt,
       httpStatus: null,
+      authStatus: 'unknown',
       note: error?.name === 'TimeoutError' ? '连接超时（8 秒）。' : `无法连接：${error?.message || '未知错误'}`,
     };
   }
+}
+
+function parseBoundedInteger(value, fallback, minimum, maximum) {
+  const parsed = Number.parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.min(maximum, Math.max(minimum, parsed));
+}
+
+function buildModelListProbe(provider, rawBase) {
+  const headers = {
+    Accept: 'application/json',
+    'User-Agent': 'leocodebox-model-discovery',
+  };
+  if (provider.apiKey) headers.Authorization = `Bearer ${provider.apiKey}`;
+
+  if (provider.target === 'claude') {
+    if (provider.apiKey) {
+      headers['x-api-key'] = provider.apiKey;
+      headers['anthropic-version'] = '2023-06-01';
+    }
+    return { url: appendApiPath(rawBase, '/v1/models'), headers };
+  }
+
+  if (provider.target === 'gemini' && /generativelanguage\.googleapis\.com/i.test(rawBase)) {
+    const url = new URL(appendApiPath(rawBase, '/v1beta/models'));
+    if (provider.apiKey) url.searchParams.set('key', provider.apiKey);
+    delete headers.Authorization;
+    return { url: url.toString(), headers };
+  }
+
+  const base = rawBase.replace(/\/(?:responses|chat\/completions|models)\/?$/i, '');
+  return { url: appendApiPath(base, '/models'), headers };
+}
+
+function extractModelIds(payload) {
+  const rows = Array.isArray(payload?.data)
+    ? payload.data
+    : Array.isArray(payload?.models) ? payload.models : Array.isArray(payload) ? payload : [];
+  const models = [];
+  for (const row of rows) {
+    const rawId = typeof row === 'string' ? row : row?.id || row?.name || row?.model;
+    const id = safeText(rawId, 240).replace(/^models\//, '');
+    if (id && !models.includes(id)) models.push(id);
+    if (models.length >= 300) break;
+  }
+  return models.sort((left, right) => left.localeCompare(right));
+}
+
+async function discoverProviderModels(provider, options = {}) {
+  const rawBase = safeText(options.baseUrl || provider.baseUrl, 800);
+  if (!rawBase) {
+    const error = new Error('请先填写请求地址。');
+    error.statusCode = 400;
+    throw error;
+  }
+  const timeoutMs = parseBoundedInteger(options.timeoutMs, 8000, 1000, 30000);
+  const probe = buildModelListProbe(provider, rawBase);
+  const startedAt = Date.now();
+  const response = await fetch(probe.url, {
+    method: 'GET',
+    headers: probe.headers,
+    redirect: 'manual',
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  const latencyMs = Date.now() - startedAt;
+  let payload = null;
+  try {
+    payload = await response.json();
+  } catch {
+    payload = null;
+  }
+  if (!response.ok) {
+    const message = safeText(payload?.error?.message || payload?.message, 300);
+    const error = new Error(message || `模型列表读取失败（HTTP ${response.status}）。`);
+    error.statusCode = response.status >= 400 && response.status < 600 ? response.status : 502;
+    error.details = { latencyMs, httpStatus: response.status };
+    throw error;
+  }
+  return {
+    models: extractModelIds(payload),
+    latencyMs,
+    httpStatus: response.status,
+    endpoint: rawBase,
+  };
+}
+
+function buildModelBenchmarkProbe(provider, model) {
+  const rawBase = safeText(provider.baseUrl, 800);
+  const headers = {
+    'Content-Type': 'application/json',
+    'User-Agent': 'leocodebox-model-benchmark',
+  };
+  if (provider.apiKey) headers.Authorization = `Bearer ${provider.apiKey}`;
+
+  if (provider.target === 'claude') {
+    if (provider.apiKey) {
+      headers['x-api-key'] = provider.apiKey;
+      headers['anthropic-version'] = '2023-06-01';
+    }
+    return {
+      url: appendApiPath(rawBase, '/v1/messages'),
+      headers,
+      body: { model, max_tokens: 1, messages: [{ role: 'user', content: 'Reply with OK.' }] },
+    };
+  }
+
+  if (provider.target === 'gemini' && /generativelanguage\.googleapis\.com/i.test(rawBase)) {
+    const url = new URL(appendApiPath(rawBase, `/v1beta/models/${encodeURIComponent(model)}:generateContent`));
+    if (provider.apiKey) url.searchParams.set('key', provider.apiKey);
+    delete headers.Authorization;
+    return {
+      url: url.toString(),
+      headers,
+      body: { contents: [{ parts: [{ text: 'Reply with OK.' }] }], generationConfig: { maxOutputTokens: 1 } },
+    };
+  }
+
+  const base = rawBase.replace(/\/(?:responses|chat\/completions)\/?$/i, '');
+  if (provider.wireApi === 'responses') {
+    return {
+      url: appendApiPath(base, '/responses'),
+      headers,
+      body: { model, input: 'Reply with OK.', max_output_tokens: 1 },
+    };
+  }
+  return {
+    url: appendApiPath(base, '/chat/completions'),
+    headers,
+    body: { model, messages: [{ role: 'user', content: 'Reply with OK.' }], max_tokens: 1 },
+  };
+}
+
+async function benchmarkProviderModel(provider, options = {}) {
+  const model = safeText(options.model || provider.model, 240);
+  if (!provider.baseUrl || !model) {
+    const error = new Error('测速前需要填写请求地址和模型名称。');
+    error.statusCode = 400;
+    throw error;
+  }
+  const attempts = parseBoundedInteger(options.attempts, 1, 1, 5);
+  const timeoutMs = parseBoundedInteger(options.timeoutMs, 8000, 1000, 30000);
+  const results = [];
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const probe = buildModelBenchmarkProbe(provider, model);
+    const startedAt = Date.now();
+    try {
+      const response = await fetch(probe.url, {
+        method: 'POST',
+        headers: probe.headers,
+        body: JSON.stringify(probe.body),
+        redirect: 'manual',
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      const latencyMs = Date.now() - startedAt;
+      let payload = null;
+      try {
+        payload = await response.json();
+      } catch {
+        payload = null;
+      }
+      results.push({
+        attempt,
+        ok: response.ok,
+        latencyMs,
+        httpStatus: response.status,
+        error: response.ok ? null : safeText(payload?.error?.message || payload?.message || `HTTP ${response.status}`, 300),
+      });
+    } catch (error) {
+      results.push({
+        attempt,
+        ok: false,
+        latencyMs: Date.now() - startedAt,
+        httpStatus: null,
+        error: error?.name === 'TimeoutError' ? `超过 ${timeoutMs} ms` : safeText(error?.message || '连接失败', 300),
+      });
+    }
+  }
+  const successful = results.filter((result) => result.ok);
+  const latencies = successful.map((result) => result.latencyMs);
+  return {
+    model,
+    attempts,
+    successCount: successful.length,
+    averageLatencyMs: latencies.length ? Math.round(latencies.reduce((sum, value) => sum + value, 0) / latencies.length) : null,
+    minimumLatencyMs: latencies.length ? Math.min(...latencies) : null,
+    maximumLatencyMs: latencies.length ? Math.max(...latencies) : null,
+    results,
+  };
+}
+
+async function testProviderEndpoints(provider, options = {}) {
+  const endpoints = normalizeEndpointUrls(
+    { endpoints: Array.isArray(options.endpoints) ? options.endpoints : provider.endpoints },
+    provider,
+    provider.baseUrl,
+  );
+  const timeoutMs = parseBoundedInteger(options.timeoutMs, 8000, 1000, 30000);
+  const results = [];
+  for (const endpoint of endpoints) {
+    const probe = buildModelListProbe(provider, endpoint);
+    const startedAt = Date.now();
+    try {
+      const response = await fetch(probe.url, {
+        method: 'GET',
+        headers: probe.headers,
+        redirect: 'manual',
+        signal: AbortSignal.timeout(timeoutMs),
+      });
+      const assessment = providerProbeNote(response);
+      results.push({
+        url: endpoint,
+        reachable: true,
+        usable: assessment.authStatus !== 'rejected' && response.status < 500 && ![404, 405].includes(response.status),
+        latencyMs: Date.now() - startedAt,
+        httpStatus: response.status,
+        authStatus: assessment.authStatus,
+        note: assessment.note,
+      });
+    } catch (error) {
+      results.push({
+        url: endpoint,
+        reachable: false,
+        usable: false,
+        latencyMs: Date.now() - startedAt,
+        httpStatus: null,
+        authStatus: 'unknown',
+        note: error?.name === 'TimeoutError' ? `超过 ${timeoutMs} ms` : safeText(error?.message || '连接失败', 300),
+      });
+    }
+  }
+  return results;
 }
 
 function parseRepositoryUrl(repo) {
@@ -898,7 +1475,7 @@ async function readPackageJson() {
 async function checkUpdates() {
   const pkg = await readPackageJson();
   const currentVersion = pkg.version || null;
-  const repoPath = parseRepositoryUrl(pkg.repository) || 'leoyuan/leocodebox';
+  const repoPath = parseRepositoryUrl(pkg.repository) || 'leoyb1010/leocodebox';
   const result = {
     checkedAt: nowIso(),
     current: {
@@ -912,21 +1489,6 @@ async function checkUpdates() {
       url: `https://github.com/${repoPath}/releases`,
       error: null,
     },
-    upstream: {
-      package: '@cloudcli-ai/cloudcli',
-      latest: null,
-      updateAvailable: false,
-      url: 'https://www.npmjs.com/package/@cloudcli-ai/cloudcli',
-      error: null,
-    },
-    ccSwitch: {
-      repository: 'farion1231/cc-switch',
-      referenceVersion: CC_SWITCH_REFERENCE_VERSION,
-      latest: null,
-      updateAvailable: false,
-      url: 'https://github.com/farion1231/cc-switch',
-      error: null,
-    },
   };
 
   try {
@@ -935,28 +1497,9 @@ async function checkUpdates() {
     result.own.url = release.html_url || result.own.url;
     result.own.updateAvailable = Boolean(currentVersion && result.own.latest && compareSemver(result.own.latest, currentVersion) > 0);
   } catch (error) {
-    if (error.statusCode === 404) {
-      result.own.latest = currentVersion;
-      result.own.error = null;
-    } else {
-      result.own.error = error.message;
-    }
-  }
-
-  try {
-    const npmInfo = await fetchJson('https://registry.npmjs.org/%40cloudcli-ai%2Fcloudcli/latest');
-    result.upstream.latest = npmInfo.version || null;
-    result.upstream.updateAvailable = Boolean(currentVersion && result.upstream.latest && compareSemver(result.upstream.latest, currentVersion) > 0);
-  } catch (error) {
-    result.upstream.error = error.message;
-  }
-
-  try {
-    const ccPkg = await fetchJson('https://raw.githubusercontent.com/farion1231/cc-switch/main/package.json');
-    result.ccSwitch.latest = ccPkg.version || null;
-    result.ccSwitch.updateAvailable = Boolean(result.ccSwitch.latest && compareSemver(result.ccSwitch.latest, CC_SWITCH_REFERENCE_VERSION) > 0);
-  } catch (error) {
-    result.ccSwitch.error = error.message;
+    result.own.error = error.statusCode === 404
+      ? 'Private release metadata is unavailable here. Check updates in Settings > About.'
+      : error.message;
   }
 
   return result;
@@ -987,11 +1530,11 @@ const CLI_TOOLS = {
   },
   opencode: {
     id: 'opencode',
-    // `opencode upgrade` alone launches an interactive TUI that blocks headless;
-    // pinning the install method makes it run non-interactively.
     label: 'OpenCode',
     cmd: 'opencode',
-    updateArgs: ['upgrade', '-m', 'npm'],
+    // OpenCode supports several installers. Guessing npm can create a second,
+    // shadowed installation on another Mac, so only report status here.
+    updateArgs: null,
     npmPackage: 'opencode-ai',
     docsUrl: 'https://opencode.ai',
   },
@@ -1002,6 +1545,22 @@ const CLI_TOOLS = {
     updateArgs: ['update'],
     npmPackage: null,
     docsUrl: 'https://cursor.com',
+  },
+  gemini: {
+    id: 'gemini',
+    label: 'Gemini CLI',
+    cmd: 'gemini',
+    updateArgs: null,
+    npmPackage: '@google/gemini-cli',
+    docsUrl: 'https://github.com/google-gemini/gemini-cli',
+  },
+  hermes: {
+    id: 'hermes',
+    label: 'Hermes Agent',
+    cmd: 'hermes',
+    updateArgs: null,
+    npmPackage: null,
+    docsUrl: 'https://hermes-agent.nousresearch.com',
   },
 };
 
@@ -1038,9 +1597,10 @@ async function readCliLatestVersion(tool) {
 
 async function getCliToolStatus(tool, { checkLatest = true } = {}) {
   const probe = await runCliCommand(tool.cmd, ['--version'], 5000);
-  const installed = probe.ok;
-  const currentVersion = installed ? parseCliVersionText(probe.stdout || probe.stderr) : null;
-  const latestVersion = checkLatest && installed ? await readCliLatestVersion(tool) : null;
+  const installed = probe.code !== 'ENOENT';
+  const runnable = probe.ok;
+  const currentVersion = runnable ? parseCliVersionText(probe.stdout || probe.stderr) : null;
+  const latestVersion = checkLatest && runnable ? await readCliLatestVersion(tool) : null;
   const updateAvailable = Boolean(
     currentVersion && latestVersion && compareSemver(latestVersion, currentVersion) > 0,
   );
@@ -1049,10 +1609,12 @@ async function getCliToolStatus(tool, { checkLatest = true } = {}) {
     label: tool.label,
     command: tool.cmd,
     installed,
+    runnable,
+    error: runnable ? null : (probe.stderr || probe.error || `${tool.cmd} could not run`).trim(),
     currentVersion,
     latestVersion,
     updateAvailable,
-    canSelfUpdate: true,
+    canSelfUpdate: runnable && Array.isArray(tool.updateArgs),
     docsUrl: tool.docsUrl,
   };
 }
@@ -1084,6 +1646,10 @@ router.post('/cli/:id/update', async (req, res, next) => {
       res.status(409).json({ success: false, error: `${tool.label} CLI is not installed.` });
       return;
     }
+    if (!Array.isArray(tool.updateArgs)) {
+      res.status(409).json({ success: false, error: `${tool.label} 请使用原安装方式更新。` });
+      return;
+    }
     const result = await runCliCommand(tool.cmd, tool.updateArgs, 180_000);
     const after = await getCliToolStatus(tool, { checkLatest: false });
     res.json({
@@ -1111,11 +1677,13 @@ router.use('/switch', (req, res, next) => {
 router.get('/switch/status', async (_req, res, next) => {
   try {
     const store = await readStore();
+    const activeByTarget = await detectActiveByTarget(store.providers, store.activeByTarget);
     res.json({
       success: true,
       targets: configStatus(),
       presets: PRESETS,
-      activeByTarget: store.activeByTarget,
+      activeByTarget,
+      lastAppliedByTarget: store.activeByTarget,
       providers: store.providers.map(sanitizeProvider),
       storePath: providerStorePath(),
     });
@@ -1192,7 +1760,7 @@ router.post('/switch/import-cc-switch', async (_req, res, next) => {
       const store = await readStore();
       const result = await importCcSwitchProviders(store);
       if (!result.dbFound) {
-        res.status(404).json({ success: false, error: '未找到原生 CC Switch 数据库 (~/.cc-switch/cc-switch.db)。' });
+        res.status(404).json({ success: false, error: '未找到旧切换器数据库（~/.cc-switch/cc-switch.db）。' });
         return;
       }
       await writeStore(store);
@@ -1250,6 +1818,83 @@ router.post('/switch/providers/:id/test', async (req, res, next) => {
   }
 });
 
+router.post('/switch/providers/:id/models', async (req, res, next) => {
+  try {
+    const store = await readStore();
+    const provider = store.providers.find((item) => item.id === req.params.id);
+    if (!provider) {
+      res.status(404).json({ success: false, error: 'Provider not found.' });
+      return;
+    }
+    const result = await discoverProviderModels(provider, req.body || {});
+    res.json({ success: true, provider: provider.id, ...result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/switch/providers/:id/benchmark', async (req, res, next) => {
+  try {
+    const store = await readStore();
+    const provider = store.providers.find((item) => item.id === req.params.id);
+    if (!provider) {
+      res.status(404).json({ success: false, error: 'Provider not found.' });
+      return;
+    }
+    const result = await benchmarkProviderModel(provider, req.body || {});
+    res.json({ success: true, provider: provider.id, ...result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/switch/providers/:id/endpoints/test', async (req, res, next) => {
+  try {
+    await withSwitchMutation(async () => {
+      const store = await readStore();
+      const provider = store.providers.find((item) => item.id === req.params.id);
+      if (!provider) {
+        res.status(404).json({ success: false, error: 'Provider not found.' });
+        return;
+      }
+      const requestedEndpoints = Array.isArray(req.body?.endpoints)
+        ? req.body.endpoints.map((endpoint) => safeText(typeof endpoint === 'string' ? endpoint : endpoint?.url, 800).replace(/\/+$/, '')).filter(Boolean)
+        : provider.endpoints;
+      if (requestedEndpoints?.length && !requestedEndpoints.includes(provider.baseUrl)) {
+        provider.baseUrl = requestedEndpoints[0];
+      }
+      const endpoints = normalizeEndpointUrls({ endpoints: requestedEndpoints }, provider, provider.baseUrl);
+      const results = await testProviderEndpoints(provider, { ...req.body, endpoints });
+      const autoSelectEndpoint = typeof req.body?.autoSelectEndpoint === 'boolean'
+        ? req.body.autoSelectEndpoint
+        : Boolean(provider.autoSelectEndpoint);
+      const fastest = results
+        .filter((result) => result.usable)
+        .sort((left, right) => left.latencyMs - right.latencyMs)[0] || null;
+      provider.endpoints = endpoints;
+      provider.autoSelectEndpoint = autoSelectEndpoint;
+      provider.endpointStats = Object.fromEntries(results.map((result) => [result.url, {
+        latencyMs: result.latencyMs,
+        httpStatus: result.httpStatus,
+        authStatus: result.authStatus,
+        usable: result.usable,
+        testedAt: nowIso(),
+      }]));
+      if (autoSelectEndpoint && fastest) provider.baseUrl = fastest.url;
+      provider.updatedAt = nowIso();
+      await writeStore(store);
+      res.json({
+        success: true,
+        provider: sanitizeProvider(provider),
+        selectedBaseUrl: provider.baseUrl,
+        results,
+      });
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.get('/switch/backups', async (_req, res, next) => {
   try {
     const root = path.join(switchDir(), 'backups');
@@ -1267,9 +1912,12 @@ router.get('/switch/backups', async (_req, res, next) => {
         if (entry.isDirectory()) {
           await walk(filePath);
         } else {
+          const relativePath = path.relative(root, filePath);
+          const targetPath = resolveBackupDestination(relativePath);
           backups.push({
             path: filePath,
-            relativePath: path.relative(root, filePath),
+            relativePath,
+            targetPath: targetPath ? displayConfigPath(targetPath) : null,
           });
         }
       }
@@ -1294,16 +1942,14 @@ router.post('/switch/backups/restore', async (req, res, next) => {
         throw error;
       }
 
-      const parts = relativePath.split(/[\\/]+/).filter(Boolean);
-      if (parts.length < 2) {
+      const destination = resolveBackupDestination(relativePath);
+      if (!destination) {
         const error = new Error('Backup path does not include a restorable config path.');
         error.statusCode = 400;
         throw error;
       }
-      const destination = path.resolve(homeDir(), ...parts.slice(1));
-      const home = path.resolve(homeDir());
-      if (!destination.startsWith(`${home}${path.sep}`)) {
-        const error = new Error('Backup destination escapes the local home directory.');
+      if (!allowedConfigDestinations().has(destination)) {
+        const error = new Error('Backup destination is not a recognized local Agent config path.');
         error.statusCode = 400;
         throw error;
       }

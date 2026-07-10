@@ -20,6 +20,13 @@
     "codex": "Codex",
     "opencode": "OpenCode"
   },
+  "providerErrors": {
+    "PROVIDER_CLI_NOT_FOUND": "{{provider}} CLI was not found on this Mac. Install it locally, then refresh Settings.",
+    "PROVIDER_NOT_AUTHENTICATED": "{{provider}} is installed but this device is not signed in. Sign in from Terminal first.",
+    "PROVIDER_AUTH_EXPIRED": "The local {{provider}} login has expired. Sign in again.",
+    "PROVIDER_AUTH_INVALID": "The local {{provider}} credentials are not usable. Sign in again.",
+    "details": "Raw diagnostics"
+  },
   "tools": {
     "settings": "Tool Settings",
     "error": "Tool Error",

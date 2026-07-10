@@ -1,4 +1,6 @@
 import fs from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
@@ -100,10 +102,10 @@ const GENERIC_PATH_SEGMENTS = new Set([
 const URL_NOISE_TOKENS = new Set(['http', 'https', 'www', 'com', 'net', 'org', 'cn', 'top', 'url']);
 const LOCAL_PATH_NOISE_TOKENS = new Set([
   'users',
-  'leoyuan',
-  'leoworkspace',
   'desktop',
   'documents',
+  'workspace',
+  'workspaces',
   'codex',
   'library',
   'application',
@@ -122,14 +124,23 @@ function providerDisplayName(provider: string | null | undefined): string {
  * folders (bare UUIDs, `agent-<hex>`, date-stamped one-off containers).
  * Starred projects are never treated as junk (caller enforces this).
  */
-function isJunkProjectPath(projectPath: string): boolean {
+export function isJunkProjectPath(
+  projectPath: string,
+  homeDir = os.homedir(),
+  existsSyncImpl: typeof existsSync = existsSync,
+): boolean {
   const normalized = String(projectPath || '').replace(/\\/g, '/');
+  const normalizedHome = String(homeDir || '').replace(/\\/g, '/').replace(/\/$/, '');
   const segments = normalized.split('/').filter(Boolean);
   const leaf = segments[segments.length - 1] || '';
 
+  if (normalizedHome && normalized.replace(/\/$/, '') === normalizedHome) return true;
   if (/\/worktrees\//.test(normalized)) return true;
   if (/(^|\/)(private\/tmp|tmp|var\/folders)\//.test(normalized)) return true;
   if (/\/scratchpad(\/|$)/.test(normalized)) return true;
+  if (/\/\.claude-mem\/observer-sessions(\/|$)/i.test(normalized)) return true;
+  if (/\.app\/Contents\/Resources(\/|$)/i.test(normalized)) return true;
+  if (/\/Library\/Application Support\/(?!Mobile Documents(?:\/|$))/i.test(normalized)) return true;
   if (/^files-mentioned-by-the-user-/i.test(leaf)) return true;
   if (/^agent-[0-9a-f]{12,}$/i.test(leaf)) return true;
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(leaf)) return true;
@@ -138,7 +149,11 @@ function isJunkProjectPath(projectPath: string): boolean {
   // so a real project deeper under a dated tree (…/2026-07-09/work/my-app) is
   // NOT hidden.
   const parent = segments[segments.length - 2];
-  if (parent && /^\d{4}[-_]\d{2}[-_]\d{2}$/.test(parent)) return true;
+  if (
+    parent
+    && /^\d{4}[-_]\d{2}[-_]\d{2}$/.test(parent)
+    && !existsSyncImpl(path.join(projectPath, '.git'))
+  ) return true;
 
   return false;
 }
@@ -215,7 +230,7 @@ function githubRepoNameFromReverseSlug(slug: string): string | null {
   return nameFromTokens(tokens.slice(ownerTokenCount));
 }
 
-function friendlyProjectLeafName(segment: string): string | null {
+export function friendlyProjectLeafName(segment: string): string | null {
   const normalizedSegment = stripDatePrefix(segment);
 
   const agentWorkspace = normalizedSegment.match(/^agent-([a-z0-9]{12,})$/i);
@@ -246,8 +261,11 @@ function friendlyProjectLeafName(segment: string): string | null {
     return nameFromTokens(tokens);
   }
 
-  if (/(^|-)users-leoyuan(-|$)/i.test(normalizedSegment)) {
-    const tokens = cleanSlugTokens(normalizedSegment.split(/[-_]+/).filter(Boolean), LOCAL_PATH_NOISE_TOKENS);
+  const localPathTokens = normalizedSegment.split(/[-_]+/).filter(Boolean);
+  const usersIndex = localPathTokens.findIndex((token) => token.toLowerCase() === 'users');
+  if (usersIndex >= 0 && localPathTokens[usersIndex + 1]) {
+    localPathTokens.splice(usersIndex + 1, 1);
+    const tokens = cleanSlugTokens(localPathTokens, LOCAL_PATH_NOISE_TOKENS);
     const name = nameFromTokens(tokens);
     if (name) return name;
   }
@@ -433,7 +451,6 @@ export async function getProjectsWithSessions(
     // Filter noise from the active list, but never hide a starred project.
     const isStarred = Boolean(row.isStarred);
     if (!isStarred) {
-      if (sessionsPage.total === 0) continue;
       if (isJunkProjectPath(projectPath)) continue;
       if (!(await directoryExists(projectPath))) continue;
     }

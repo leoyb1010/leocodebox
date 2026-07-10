@@ -37,6 +37,8 @@ export interface SubagentChildTool {
 export interface ChatMessage {
   type: string;
   content?: string;
+  errorCode?: string;
+  rawError?: string;
   displayText?: string;
   timestamp: string | number | Date;
   images?: ChatImage[];

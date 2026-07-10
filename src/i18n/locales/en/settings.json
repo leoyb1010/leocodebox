@@ -334,6 +334,8 @@
       "checking": "Checking...",
       "connected": "Connected",
       "notConnected": "Not connected",
+      "notInstalled": "{{agent}} CLI was not found on this Mac",
+      "missing": "Not installed",
       "disconnected": "Disconnected",
       "checkingAuth": "Checking authentication status...",
       "loggedInAs": "Logged in as {{email}}",
@@ -362,6 +364,15 @@
       "button": "Login",
       "reLoginButton": "Re-login"
     },
+    "authErrors": {
+      "notInstalled": "The local CLI was not found. Install it, then refresh this page.",
+      "notAuthenticated": "The CLI is installed but is not signed in or has no usable credentials.",
+      "expired": "The local login has expired. Sign in again.",
+      "unusable": "Local credentials were found, but the capability check failed. Sign in again.",
+      "checkFailed": "Authentication status could not be checked. Verify the CLI in Terminal.",
+      "details": "Diagnostic details"
+    },
+    "installHint": "Install the {{agent}} CLI in Terminal, then return here and refresh.",
     "error": "Error: {{error}}"
   },
   "permissions": {
@@ -472,7 +483,7 @@
     },
     "managed": {
       "badge": "Managed",
-      "hint": "Managed by CloudCLI."
+      "hint": "Managed by leocodebox."
     },
     "help": {
       "title": "About Codex MCP",
@@ -503,10 +514,10 @@
     "starter": "Starter",
     "docs": "Docs",
     "sections": {
-      "officialTitle": "Official Plugins",
-      "officialDescription": "Maintained by the CloudCLI team and ready for direct install.",
-      "unofficialTitle": "Other Plugins",
-      "unofficialDescription": "Unofficial plugins and integrations from other users. Review the source before installing."
+      "officialTitle": "Compatible Plugins",
+      "officialDescription": "Third-party projects compatible with the existing plugin protocol. Review the source before installing.",
+      "unofficialTitle": "Community Plugins",
+      "unofficialDescription": "Community plugins and integrations. Review the source and requested permissions before installing."
     },
     "starterPlugin": {
       "name": "Project Stats",
@@ -532,10 +543,10 @@
       "description": "Watch long-running Claude Code sessions for hangs and expose process controls.",
       "install": "Install"
     },
-    "prismCloudCLI": {
-      "name": "PRISM CloudCLI",
+    "prismleocodebox": {
+      "name": "PRISM leocodebox",
       "badge": "unofficial",
-      "description": "Session intelligence for Claude Code, inside CloudCLI. See why your sessions are burning tokens without leaving the browser.",
+      "description": "Session intelligence for Claude Code, inside leocodebox. See why your sessions are burning tokens without leaving the browser.",
       "install": "Install"
     },
     "sessionManagerPlugin": {

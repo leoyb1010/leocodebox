@@ -20,7 +20,7 @@
     "runClaudeCli": "Run Claude CLI in a project directory to get started"
   },
   "app": {
-    "title": "CloudCLI",
+    "title": "leocodebox",
     "subtitle": "AI coding assistant interface"
   },
   "sessions": {
@@ -122,6 +122,8 @@
   "search": {
     "modeProjects": "Projects",
     "modeConversations": "Conversations",
+    "runningTooltip": "Running sessions",
+    "archiveOnlyTooltip": "Archive only",
     "conversationsPlaceholder": "Search in conversations...",
     "searching": "Searching...",
     "noResults": "No results found",

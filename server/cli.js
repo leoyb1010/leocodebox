@@ -190,10 +190,10 @@ Environment Variables:
   CONTEXT_WINDOW      Set context window size (default: 160000)
 
 Documentation:
-  ${packageJson.homepage || 'https://github.com/leoyuan/leocodebox'}
+  ${packageJson.homepage || 'https://github.com/leoyb1010/leocodebox'}
 
 Report Issues:
-  ${packageJson.bugs?.url || 'https://github.com/leoyuan/leocodebox/issues'}
+  ${packageJson.bugs?.url || 'https://github.com/leoyb1010/leocodebox/issues'}
 `);
 }
 
@@ -216,13 +216,29 @@ function isNewerVersion(v1, v2) {
 // Check for updates
 async function checkForUpdates(silent = false) {
     try {
-        const { execSync } = await import('child_process');
-        const latestVersion = execSync('npm show @cloudcli-ai/cloudcli version', { encoding: 'utf8' }).trim();
         const currentVersion = packageJson.version;
+        const token = process.env.GH_TOKEN?.trim();
+        if (!token) {
+            if (!silent) {
+                console.log(`${c.info('[INFO]')} Desktop updates are managed inside the leocodebox app.`);
+            }
+            return { hasUpdate: false, latestVersion: currentVersion, currentVersion };
+        }
+
+        const response = await fetch('https://api.github.com/repos/leoyb1010/leocodebox/releases/latest', {
+            headers: {
+                Accept: 'application/vnd.github+json',
+                Authorization: `Bearer ${token}`,
+                'User-Agent': `leocodebox/${currentVersion}`,
+            },
+        });
+        if (!response.ok) throw new Error(`GitHub returned HTTP ${response.status}`);
+        const release = await response.json();
+        const latestVersion = String(release.tag_name || release.name || currentVersion).replace(/^v/, '');
 
         if (isNewerVersion(latestVersion, currentVersion)) {
-            console.log(`\n${c.warn('[UPDATE]')} Reference upstream package is newer: ${c.bright(latestVersion)} (current leocodebox: ${currentVersion})`);
-            console.log(`         Open Provider Switch > 更新检测 for desktop update details.\n`);
+            console.log(`\n${c.warn('[UPDATE]')} leocodebox ${c.bright(latestVersion)} is available (current: ${currentVersion})`);
+            console.log('         Open Settings > About in the desktop app to install it.\n');
             return { hasUpdate: true, latestVersion, currentVersion };
         } else if (!silent) {
             console.log(`${c.ok('[OK]')} You are on the latest version (${currentVersion})`);
@@ -248,11 +264,11 @@ async function updatePackage() {
             return;
         }
 
-        console.log(`${c.info('[INFO]')} Reference upstream package ${latestVersion} is newer than this leocodebox build (${currentVersion}).`);
-        console.log(`${c.tip('[TIP]')} Desktop builds are updated from leocodebox releases, not by installing the upstream npm package.`);
+        console.log(`${c.info('[INFO]')} leocodebox ${latestVersion} is available (current: ${currentVersion}).`);
+        console.log(`${c.tip('[TIP]')} Open Settings > About in the desktop app to install it.`);
     } catch (e) {
         console.error(`${c.error('[ERROR]')} Update failed: ${e.message}`);
-        console.log(`${c.tip('[TIP]')} Open Provider Switch > 更新检测 to check leocodebox, the reference upstream package, and cc-switch versions.`);
+        console.log(`${c.tip('[TIP]')} Open Settings > About in the desktop app to check for updates.`);
     }
 }
 
