@@ -1,0 +1,518 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>leocodebox CC Switch</title>
+  <link rel="icon" href="/favicon.png">
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f7f8fb;
+      --panel: #ffffff;
+      --panel-2: #f1f4f8;
+      --text: #17202c;
+      --muted: #657184;
+      --line: #d9e0ea;
+      --accent: #0f7b6c;
+      --accent-2: #2457d6;
+      --warn: #b26a00;
+      --danger: #b42318;
+      --ok: #0b7a46;
+      --shadow: 0 10px 28px rgba(24, 39, 75, .08);
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #101318;
+        --panel: #171c23;
+        --panel-2: #202733;
+        --text: #eef3f8;
+        --muted: #98a5b7;
+        --line: #2d3644;
+        --accent: #2dd4bf;
+        --accent-2: #7aa2ff;
+        --warn: #f0b95f;
+        --danger: #ff8d85;
+        --ok: #61d394;
+        --shadow: none;
+      }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font-size: 14px; }
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    .shell { min-height: 100vh; display: grid; grid-template-rows: auto 1fr; }
+    header {
+      position: sticky; top: 0; z-index: 4;
+      display: flex; align-items: center; gap: 16px; padding: 14px 18px;
+      border-bottom: 1px solid var(--line); background: color-mix(in srgb, var(--panel) 92%, transparent);
+      backdrop-filter: blur(12px);
+    }
+    .brand { display: flex; align-items: center; gap: 10px; min-width: 220px; }
+    .brand img { width: 26px; height: 26px; }
+    .brand strong { font-size: 15px; letter-spacing: 0; }
+    .brand span { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+    .status { margin-left: auto; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+    .dot { width: 8px; height: 8px; border-radius: 999px; display: inline-block; background: var(--ok); }
+    .layout { display: grid; grid-template-columns: 300px minmax(0, 1fr); gap: 18px; padding: 18px; }
+    aside, main section {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow);
+    }
+    aside { align-self: start; padding: 14px; position: sticky; top: 70px; }
+    main { display: grid; gap: 18px; min-width: 0; }
+    h1, h2, h3, p { margin: 0; }
+    h2 { font-size: 15px; margin-bottom: 10px; }
+    .help { color: var(--muted); line-height: 1.55; font-size: 13px; }
+    .btn {
+      border: 1px solid var(--line); background: var(--panel-2); color: var(--text);
+      border-radius: 6px; min-height: 34px; padding: 0 12px; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .btn.ghost { background: transparent; }
+    .btn.danger { border-color: color-mix(in srgb, var(--danger) 50%, var(--line)); color: var(--danger); }
+    .btn:disabled { opacity: .55; cursor: not-allowed; }
+    .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .field { display: grid; gap: 6px; margin-bottom: 12px; }
+    label { color: var(--muted); font-size: 12px; font-weight: 600; }
+    input, select, textarea {
+      width: 100%; border: 1px solid var(--line); border-radius: 6px; min-height: 36px; padding: 8px 10px;
+      background: var(--panel); color: var(--text);
+    }
+    textarea { resize: vertical; min-height: 72px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+    section { overflow: hidden; }
+    .section-head {
+      display: flex; align-items: center; gap: 12px; justify-content: space-between;
+      padding: 14px 16px; border-bottom: 1px solid var(--line); background: var(--panel-2);
+    }
+    .section-body { padding: 16px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { color: var(--muted); font-size: 12px; font-weight: 700; background: var(--panel-2); }
+    tr:last-child td { border-bottom: 0; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+    .pill { display: inline-flex; align-items: center; gap: 5px; min-height: 22px; padding: 0 8px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 12px; }
+    .pill.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, var(--line)); }
+    .pill.warn { color: var(--warn); border-color: color-mix(in srgb, var(--warn) 45%, var(--line)); }
+    .path-list { display: grid; gap: 8px; margin-top: 10px; }
+    .path-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px; background: var(--panel-2); border-radius: 6px; }
+    .empty { padding: 18px; color: var(--muted); text-align: center; border: 1px dashed var(--line); border-radius: 8px; }
+    .message { min-height: 20px; color: var(--muted); font-size: 13px; margin-top: 10px; white-space: pre-wrap; }
+    .message.error { color: var(--danger); }
+    .message.ok { color: var(--ok); }
+    .role-grid { display: grid; gap: 8px; }
+    .role-grid .pill { justify-content: space-between; border-radius: 6px; padding: 8px 10px; }
+    .lang { width: 92px; }
+    @media (max-width: 920px) {
+      .layout { grid-template-columns: 1fr; }
+      aside { position: static; }
+      .grid2, .grid3 { grid-template-columns: 1fr; }
+      header { align-items: flex-start; flex-direction: column; }
+      .brand { min-width: 0; }
+      .status { margin-left: 0; flex-wrap: wrap; width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <div class="brand">
+        <img src="/logo-32.png" alt="">
+        <div><strong data-i18n="title">CC Switch 配置切换</strong><span data-i18n="subtitle">本地 Agent 配置台</span></div>
+      </div>
+      <div class="status"><span class="dot"></span><span id="statusText" aria-live="polite">local protected</span><select id="lang" class="lang" aria-label="语言"><option value="zh-CN">中文</option><option value="en">English</option></select></div>
+    </header>
+    <div class="layout">
+      <aside>
+        <h2 data-i18n="formTitle">新增或编辑 Provider</h2>
+        <p class="help" data-i18n="formHelp">保存后可一键写入对应 agent 的本机配置。写入前会自动备份原文件。</p>
+        <form id="providerForm">
+          <input type="hidden" name="id">
+          <div class="field"><label for="providerName" data-i18n="name">名称</label><input id="providerName" name="name" autocomplete="off" required placeholder="OpenAI / Anthropic / 本地代理"></div>
+          <div class="grid2">
+            <div class="field"><label for="providerTarget" data-i18n="target">目标 agent</label><select id="providerTarget" name="target" required></select></div>
+            <div class="field"><label for="providerWireApi">wire_api</label><select id="providerWireApi" name="wireApi"><option value="responses">responses</option><option value="chat">chat</option></select></div>
+          </div>
+          <div class="field"><label for="providerBaseUrl">Base URL</label><input id="providerBaseUrl" name="baseUrl" placeholder="https://api.openai.com/v1"></div>
+          <div class="field"><label for="providerApiKey">API Key</label><input id="providerApiKey" name="apiKey" type="password" placeholder="留空则编辑时保留原密钥"></div>
+          <div class="field"><label for="providerModel" data-i18n="model">模型</label><input id="providerModel" name="model" placeholder="gpt-5-codex / claude-sonnet-4-5"></div>
+          <div class="field"><label for="providerNotes" data-i18n="notes">备注</label><textarea id="providerNotes" name="notes" placeholder="用途、账号、速率限制、代理说明"></textarea></div>
+          <div class="toolbar">
+            <button class="btn primary" type="submit" data-i18n="save">保存</button>
+            <button class="btn" type="button" id="resetForm" data-i18n="reset">清空</button>
+            <button class="btn" type="button" id="importCurrent" data-i18n="import">导入当前配置</button>
+            <button class="btn" type="button" id="importCcSwitch" data-i18n="importCcSwitch">从 CC Switch 导入</button>
+          </div>
+          <div id="formMessage" class="message" role="status" aria-live="polite"></div>
+        </form>
+      </aside>
+      <main>
+        <section>
+          <div class="section-head"><div><h2 data-i18n="providers">Providers</h2><p class="help" data-i18n="providersHelp">Claude Code、Codex、Gemini、OpenCode、Hermes 支持本机写入；Cursor 先做状态记录。</p></div><button class="btn" id="refresh" data-i18n="refresh">刷新</button></div>
+          <div class="section-body"><div id="providersTable"></div></div>
+        </section>
+        <section>
+          <div class="section-head"><div><h2 data-i18n="paths">配置路径</h2><p class="help" data-i18n="pathsHelp">只写这些已知路径，所有写入都会先备份到 ~/.leocodebox/switch/backups。</p></div></div>
+          <div class="section-body" id="paths"></div>
+        </section>
+        <section>
+          <div class="section-head"><div><h2 data-i18n="backups">备份与恢复</h2><p class="help" data-i18n="backupsHelp">应用前自动生成备份，可从这里恢复单个配置文件。</p></div></div>
+          <div class="section-body" id="backupsBox"></div>
+        </section>
+        <section>
+          <div class="section-head"><div><h2 data-i18n="updates">更新检测</h2><p class="help" data-i18n="updatesHelp">检测 leocodebox、参考上游 npm 包、以及 cc-switch 参考项目版本。</p></div><button class="btn" id="checkUpdates" data-i18n="check">检测</button></div>
+          <div class="section-body" id="updatesBox"><div class="empty" data-i18n="notChecked">尚未检测</div></div>
+        </section>
+        <section>
+          <div class="section-head"><div><h2 data-i18n="auditRoles">审计角色矩阵</h2><p class="help" data-i18n="auditHelp">这些角色会用于本轮对抗审计和问题收集。</p></div><a class="btn" href="/leocodebox-feedback.html" data-i18n="feedback">提交问题</a></div>
+          <div class="section-body"><div class="role-grid" id="roleGrid"></div></div>
+        </section>
+      </main>
+    </div>
+  </div>
+  <script>
+    const i18n = {
+      "zh-CN": {
+        title: "CC Switch 配置切换",
+        subtitle: "本地 agent 配置台",
+        formTitle: "新增或编辑 Provider",
+        formHelp: "保存后可一键写入对应 agent 的本机配置。写入前会自动备份原文件。",
+        name: "名称",
+        target: "目标 agent",
+        model: "模型",
+        notes: "备注",
+        save: "保存",
+        reset: "清空",
+        import: "导入当前配置",
+        importCcSwitch: "从 CC Switch 导入",
+        test: "测试",
+        delete: "删除",
+        providers: "Providers",
+        providersHelp: "Claude Code、Codex、Gemini、OpenCode、Hermes 支持本机写入；Cursor 先做状态记录。",
+        refresh: "刷新",
+        paths: "配置路径",
+        pathsHelp: "只写这些已知路径，所有写入都会先备份到 ~/.leocodebox/switch/backups。",
+        updates: "更新检测",
+        updatesHelp: "检测 leocodebox、参考上游 npm 包、以及 cc-switch 参考项目版本。",
+        check: "检测",
+        notChecked: "尚未检测",
+        auditRoles: "审计角色矩阵",
+        auditHelp: "这些角色会用于本轮对抗审计和问题收集。",
+        feedback: "提交问题",
+        active: "当前启用",
+        apply: "应用",
+        edit: "编辑",
+        noProvider: "还没有 provider。",
+        saved: "已保存。",
+        applied: "已应用，改动文件：",
+        imported: "导入完成。",
+        exists: "存在",
+        missing: "未创建",
+        backups: "备份与恢复",
+        backupsHelp: "应用前自动生成备份，可从这里恢复单个配置文件。",
+        restore: "恢复",
+        noBackups: "暂无备份。",
+        restored: "已恢复：",
+        updateAvailable: "有更新",
+        upToDate: "当前无更新",
+        error: "错误",
+      },
+      en: {
+        title: "CC Switch",
+        subtitle: "Local agent configuration",
+        formTitle: "Add or edit provider",
+        formHelp: "Save a provider, then apply it to a local agent config. Files are backed up first.",
+        name: "Name",
+        target: "Target agent",
+        model: "Model",
+        notes: "Notes",
+        save: "Save",
+        reset: "Reset",
+        import: "Import current config",
+        importCcSwitch: "Import from CC Switch",
+        test: "Test",
+        delete: "Delete",
+        providers: "Providers",
+        providersHelp: "Claude Code, Codex, Gemini, OpenCode and Hermes have local writers. Cursor is tracked only.",
+        refresh: "Refresh",
+        paths: "Config paths",
+        pathsHelp: "Only known local paths are written. Backups go to ~/.leocodebox/switch/backups.",
+        updates: "Update checks",
+        updatesHelp: "Checks leocodebox, the reference upstream npm package, and the cc-switch reference project.",
+        check: "Check",
+        notChecked: "Not checked",
+        auditRoles: "Audit role matrix",
+        auditHelp: "These roles drive this adversarial audit and issue capture.",
+        feedback: "Report issue",
+        active: "Active",
+        apply: "Apply",
+        edit: "Edit",
+        noProvider: "No providers yet.",
+        saved: "Saved.",
+        applied: "Applied. Changed files:",
+        imported: "Imported.",
+        exists: "Exists",
+        missing: "Missing",
+        backups: "Backups and restore",
+        backupsHelp: "A backup is created before apply. Restore individual config files here.",
+        restore: "Restore",
+        noBackups: "No backups yet.",
+        restored: "Restored:",
+        updateAvailable: "Update available",
+        upToDate: "No update",
+        error: "Error",
+      }
+    };
+
+    const roles = [
+      ["品牌", "命名、Logo、视觉一致性、原作者痕迹、个人归属感"],
+      ["法务", "AGPL/MIT notice、第三方归属、不可误导声明"],
+      ["开发", "代码可维护性、构建脚本、打包产物、异常路径"],
+      ["架构", "服务生命周期、端口、认证边界、扩展性"],
+      ["安全", "本地 token、密钥脱敏、配置写入权限、CORS"],
+      ["隐私", "不连云端、不泄露本地路径和 API key"],
+      ["新手", "首次打开、无需登录、默认中文、按钮语义"],
+      ["老手", "可快速切换 provider、保留原配置和备份"],
+      ["重度 agent 用户", "多 agent 并存、会话命名、更新检测、故障恢复"],
+      ["运维", "端口占用、启动失败、日志、升级回滚"],
+      ["技术支持", "问题反馈记录可定位、版本和环境信息完整"],
+      ["产品", "核心工作流闭环、避免装饰性功能、信息密度"],
+    ];
+
+    let state = null;
+    let backups = [];
+    const $ = (selector) => document.querySelector(selector);
+    const token = () => localStorage.getItem("auth-token") || "";
+    const lang = () => (localStorage.getItem("userLanguage") === "en" ? "en" : "zh-CN");
+    const t = (key) => i18n[lang()][key] || key;
+
+    function setLang(next) {
+      localStorage.setItem("userLanguage", next === "en" ? "en" : "zh-CN");
+      document.documentElement.lang = lang();
+      $("#lang").value = lang();
+      document.querySelectorAll("[data-i18n]").forEach((node) => { node.textContent = t(node.dataset.i18n); });
+      render();
+    }
+
+    async function api(path, options = {}) {
+      const response = await fetch(path, {
+        ...options,
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token()}`,
+          ...(options.headers || {}),
+        },
+      });
+      const json = await response.json().catch(() => ({}));
+      if (!response.ok || json.success === false) throw new Error(json.error || response.statusText);
+      return json;
+    }
+
+    function message(node, text, tone = "") {
+      node.className = `message ${tone}`;
+      node.textContent = text || "";
+    }
+
+    function fillTargets() {
+      const select = $("#providerForm").elements.target;
+      select.innerHTML = "";
+      const targets = state?.targets || {};
+      Object.values(targets).forEach((target) => {
+        const option = document.createElement("option");
+        option.value = target.id;
+        option.textContent = `${target.label}${target.writable ? "" : " (status only)"}`;
+        select.appendChild(option);
+      });
+    }
+
+    function renderProviders() {
+      const box = $("#providersTable");
+      const providers = state?.providers || [];
+      if (!providers.length) {
+        box.innerHTML = `<div class="empty">${t("noProvider")}</div>`;
+        return;
+      }
+      box.innerHTML = `<table><thead><tr><th>Agent</th><th>Name</th><th>Base URL</th><th>Model</th><th>Key</th><th></th></tr></thead><tbody>${providers.map((provider) => {
+        const target = state.targets[provider.target] || { label: provider.target, writable: false };
+        const active = state.activeByTarget?.[provider.target] === provider.id;
+        return `<tr>
+          <td><span class="pill ${active ? "ok" : ""}">${target.label}${active ? " · " + t("active") : ""}</span></td>
+          <td><strong>${escapeHtml(provider.name)}</strong><div class="help mono">${escapeHtml(provider.id)}</div></td>
+          <td class="mono">${escapeHtml(provider.baseUrl || "-")}</td>
+          <td>${escapeHtml(provider.model || "-")}</td>
+          <td class="mono">${provider.hasApiKey ? escapeHtml(provider.apiKey) : "-"}</td>
+          <td><div class="toolbar" style="margin:0;justify-content:flex-end"><button class="btn" data-test="${escapeHtml(provider.id)}">${t("test")}</button><button class="btn" data-edit="${escapeHtml(provider.id)}">${t("edit")}</button><button class="btn primary" data-apply="${escapeHtml(provider.id)}" ${target.writable ? "" : "disabled"}>${t("apply")}</button><button class="btn" data-delete="${escapeHtml(provider.id)}">${t("delete")}</button></div></td>
+        </tr>`;
+      }).join("")}</tbody></table>`;
+    }
+
+    function renderPaths() {
+      const targets = Object.values(state?.targets || {});
+      $("#paths").innerHTML = targets.map((target) => `<div class="path-list">
+        <strong>${escapeHtml(target.label)}</strong>
+        ${target.files.map((file) => `<div class="path-row"><span class="mono">${escapeHtml(file.path)}</span><span class="pill ${file.exists ? "ok" : "warn"}">${file.exists ? t("exists") : t("missing")}</span></div>`).join("")}
+      </div>`).join("");
+    }
+
+    function renderRoles() {
+      $("#roleGrid").innerHTML = roles.map(([name, desc]) => `<div class="pill"><strong>${escapeHtml(name)}</strong><span>${escapeHtml(desc)}</span></div>`).join("");
+    }
+
+    function renderBackups() {
+      const box = $("#backupsBox");
+      if (!backups.length) {
+        box.innerHTML = `<div class="empty">${t("noBackups")}</div>`;
+        return;
+      }
+      box.innerHTML = `<div class="path-list">${backups.slice(0, 30).map((backup) => `<div class="path-row"><span class="mono">${escapeHtml(backup.relativePath)}</span><button class="btn" data-restore="${escapeHtml(backup.relativePath)}">${t("restore")}</button></div>`).join("")}</div>`;
+    }
+
+    function render() {
+      if (!state) return;
+      fillTargets();
+      renderProviders();
+      renderPaths();
+      renderBackups();
+      renderRoles();
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+    }
+
+    async function refresh() {
+      const results = await Promise.all([
+        api("/api/leocodebox/switch/status"),
+        api("/api/leocodebox/switch/backups"),
+      ]);
+      state = results[0];
+      backups = results[1].backups || [];
+      $("#statusText").textContent = `local protected · ${state.providers.length} provider`;
+      render();
+    }
+
+    function resetForm() {
+      $("#providerForm").reset();
+      $("#providerForm").elements.id.value = "";
+      message($("#formMessage"), "");
+    }
+
+    function editProvider(id) {
+      const provider = state.providers.find((item) => item.id === id);
+      if (!provider) return;
+      const form = $("#providerForm");
+      form.elements.id.value = provider.id;
+      form.elements.name.value = provider.name || "";
+      form.elements.target.value = provider.target || "codex";
+      form.elements.wireApi.value = provider.wireApi || "responses";
+      form.elements.baseUrl.value = provider.baseUrl || "";
+      form.elements.apiKey.value = "";
+      form.elements.model.value = provider.model || "";
+      form.elements.notes.value = provider.notes || "";
+      message($("#formMessage"), "API Key 留空会保留现有密钥。");
+    }
+
+    async function saveProvider(event) {
+      event.preventDefault();
+      const form = event.currentTarget;
+      const body = Object.fromEntries(new FormData(form).entries());
+      if (body.id && !body.apiKey) body.apiKey = "__KEEP__";
+      const result = await api("/api/leocodebox/switch/providers", { method: "POST", body: JSON.stringify(body) });
+      message($("#formMessage"), `${t("saved")} ${result.provider.name}`, "ok");
+      await refresh();
+    }
+
+    async function applyProvider(id) {
+      if (!window.confirm(lang() === "en" ? "Apply this provider and change the local Agent config?" : "确认应用此 Provider 并修改本机 Agent 配置？")) return;
+      const result = await api(`/api/leocodebox/switch/providers/${encodeURIComponent(id)}/apply`, { method: "POST", body: "{}" });
+      message($("#formMessage"), `${t("applied")}\n${result.changedFiles.join("\n")}`, "ok");
+      await refresh();
+    }
+
+    async function restoreBackup(relativePath) {
+      if (!window.confirm(lang() === "en" ? "Restore this backup and replace the current config file?" : "确认恢复此备份并替换当前配置文件？")) return;
+      const result = await api("/api/leocodebox/switch/backups/restore", { method: "POST", body: JSON.stringify({ relativePath }) });
+      message($("#formMessage"), `${t("restored")} ${result.restoredPath}`, "ok");
+      await refresh();
+    }
+
+    async function importCurrent() {
+      const result = await api("/api/leocodebox/switch/import-current", { method: "POST", body: "{}" });
+      message($("#formMessage"), `${t("imported")} ${result.imported.length}`, "ok");
+      await refresh();
+    }
+
+    async function importCcSwitch() {
+      const result = await api("/api/leocodebox/switch/import-cc-switch", { method: "POST", body: "{}" });
+      const skipped = (result.skipped || []).length;
+      const suffix = skipped ? (lang() === "en" ? `, ${skipped} skipped` : `，跳过 ${skipped}`) : "";
+      message($("#formMessage"), `${t("imported")} ${result.imported.length}${suffix}`, "ok");
+      await refresh();
+    }
+
+    async function deleteProvider(id) {
+      if (!window.confirm(lang() === "en" ? "Delete this provider from the switch store?" : "确认从切换器中删除此 Provider？")) return;
+      await api(`/api/leocodebox/switch/providers/${encodeURIComponent(id)}`, { method: "DELETE" });
+      message($("#formMessage"), lang() === "en" ? "Provider deleted." : "已删除 Provider。", "ok");
+      await refresh();
+    }
+
+    async function testProvider(id) {
+      message($("#formMessage"), lang() === "en" ? "Testing..." : "测试中…");
+      const result = await api(`/api/leocodebox/switch/providers/${encodeURIComponent(id)}/test`, { method: "POST", body: "{}" });
+      const latency = result.latencyMs != null ? ` (${result.latencyMs}ms)` : "";
+      message($("#formMessage"), `${result.reachable ? "✓" : "✗"} ${result.note || ""}${latency}`, result.reachable ? "ok" : "error");
+    }
+
+    async function checkUpdates() {
+      const box = $("#updatesBox");
+      box.innerHTML = `<div class="empty">checking...</div>`;
+      try {
+        const result = await api("/api/leocodebox/updates/check");
+        const updates = result.updates;
+        const rows = [
+          ["leocodebox", updates.current.version, updates.own.latest, updates.own.updateAvailable, updates.own.url, updates.own.error],
+          ["Upstream reference", updates.current.version, updates.upstream.latest, updates.upstream.updateAvailable, updates.upstream.url, updates.upstream.error],
+          ["cc-switch reference", updates.ccSwitch.referenceVersion, updates.ccSwitch.latest, updates.ccSwitch.updateAvailable, updates.ccSwitch.url, updates.ccSwitch.error],
+        ];
+        box.innerHTML = `<table><thead><tr><th>Source</th><th>Current</th><th>Latest</th><th>Status</th></tr></thead><tbody>${rows.map(([name, current, latest, available, url, error]) => `<tr>
+          <td><a href="${escapeHtml(url)}" target="_blank" rel="noreferrer">${escapeHtml(name)}</a></td>
+          <td class="mono">${escapeHtml(current || "-")}</td>
+          <td class="mono">${escapeHtml(latest || "-")}</td>
+          <td><span class="pill ${error ? "warn" : available ? "ok" : ""}">${error ? t("error") + ": " + escapeHtml(error) : available ? t("updateAvailable") : t("upToDate")}</span></td>
+        </tr>`).join("")}</tbody></table>`;
+      } catch (error) {
+        box.innerHTML = `<div class="empty">${escapeHtml(error.message)}</div>`;
+      }
+    }
+
+    document.addEventListener("click", (event) => {
+      const edit = event.target.closest("[data-edit]");
+      if (edit) editProvider(edit.dataset.edit);
+      const apply = event.target.closest("[data-apply]");
+      if (apply) applyProvider(apply.dataset.apply).catch((error) => message($("#formMessage"), error.message, "error"));
+      const restore = event.target.closest("[data-restore]");
+      if (restore) restoreBackup(restore.dataset.restore).catch((error) => message($("#formMessage"), error.message, "error"));
+      const del = event.target.closest("[data-delete]");
+      if (del) deleteProvider(del.dataset.delete).catch((error) => message($("#formMessage"), error.message, "error"));
+      const test = event.target.closest("[data-test]");
+      if (test) testProvider(test.dataset.test).catch((error) => message($("#formMessage"), error.message, "error"));
+    });
+    $("#providerForm").addEventListener("submit", (event) => saveProvider(event).catch((error) => message($("#formMessage"), error.message, "error")));
+    $("#resetForm").addEventListener("click", resetForm);
+    $("#refresh").addEventListener("click", () => refresh().catch((error) => message($("#formMessage"), error.message, "error")));
+    $("#importCurrent").addEventListener("click", () => importCurrent().catch((error) => message($("#formMessage"), error.message, "error")));
+    $("#importCcSwitch").addEventListener("click", () => importCcSwitch().catch((error) => message($("#formMessage"), error.message, "error")));
+    $("#checkUpdates").addEventListener("click", checkUpdates);
+    $("#lang").addEventListener("change", (event) => setLang(event.target.value));
+
+    setLang(lang());
+    refresh().catch((error) => {
+      $("#statusText").textContent = error.message;
+      message($("#formMessage"), error.message, "error");
+    });
+  </script>
+</body>
+</html>

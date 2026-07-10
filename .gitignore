@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build outputs (regenerated via `npm run build`)
+dist/
+dist-server/
+
+# Packaging / release artifacts (large; DMG etc.)
+release/
+.desktop-build/
+*.dmg
+*.blockmap
+
+# Local env & secrets
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.mobileprovision
+*.keychain
+
+# Local runtime data
+*.log
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
