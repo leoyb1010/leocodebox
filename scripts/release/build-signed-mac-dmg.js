@@ -13,6 +13,10 @@ const outputDmg = path.join(outputDir, `leocodebox-${packageJson.version}-mac-ar
 const outputZipName = `leocodebox-${packageJson.version}-mac-arm64.zip`;
 const outputZip = path.join(outputDir, outputZipName);
 const updateMetadataPath = path.join(outputDir, 'latest-mac.yml');
+// The previous public line used 1.36.x. Advertise one synthetic higher build
+// so those installed apps can receive the product-version reset to 1.1.3.
+// The 1.1.3 updater ignores this bridge value and future releases use normal semver.
+const updateMetadataVersion = packageJson.version === '1.1.3' ? '1.36.3' : packageJson.version;
 
 // Developer ID signing happens in a clean temporary directory. Every nested
 // Mach-O is signed explicitly because codesign --deep does not discover native
@@ -59,6 +63,10 @@ try {
   });
   run('/usr/bin/xattr', ['-cr', signedApp]);
   await writeFile(path.join(signedApp, 'Contents', 'Resources', 'app-update.yml'), appUpdateConfig);
+  if (updateMetadataVersion !== packageJson.version) {
+    run('/usr/libexec/PlistBuddy', ['-c', `Set :CFBundleVersion ${updateMetadataVersion}`, path.join(signedApp, 'Contents', 'Info.plist')]);
+    run('/usr/libexec/PlistBuddy', ['-c', `Set :CFBundleShortVersionString ${packageJson.version}`, path.join(signedApp, 'Contents', 'Info.plist')]);
+  }
   if (signIdentity) {
     run('/bin/bash', [signerPath, signedApp, signIdentity]);
     run('/usr/bin/codesign', ['--verify', '--deep', '--strict', '--verbose=2', signedApp]);
@@ -73,7 +81,7 @@ try {
   run('/usr/bin/ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', signedApp, outputZip]);
   const [zipSha512, zipStats] = await Promise.all([hashFile(outputZip), stat(outputZip)]);
   await writeFile(updateMetadataPath, [
-    `version: ${packageJson.version}`,
+    `version: ${updateMetadataVersion}`,
     'files:',
     `  - url: ${outputZipName}`,
     `    sha512: ${zipSha512}`,

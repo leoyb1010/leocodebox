@@ -11,6 +11,8 @@ type SidebarFooterProps = {
   currentVersion: string;
   onShowVersionModal: () => void;
   onShowSettings: () => void;
+  onShowLeoapi: () => void;
+  onShowFeedback: () => void;
   t: TFunction;
 };
 
@@ -22,6 +24,8 @@ export default function SidebarFooter({
   currentVersion,
   onShowVersionModal,
   onShowSettings,
+  onShowLeoapi,
+  onShowFeedback,
   t,
 }: SidebarFooterProps) {
   return (
@@ -42,18 +46,20 @@ export default function SidebarFooter({
         </button>
       )}
       <div className="grid grid-cols-3 gap-1">
-        <a
-          href="/leocodebox-feedback.html"
+        <button
+          type="button"
+          onClick={onShowFeedback}
           className="flex items-center justify-center gap-1.5 rounded-md px-1.5 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
         >
           <Bug className="h-3.5 w-3.5" />本地记录
-        </a>
-        <a
-          href="/leocodebox-switch.html"
+        </button>
+        <button
+          type="button"
+          onClick={onShowLeoapi}
           className="flex items-center justify-center gap-1.5 rounded-md px-1.5 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
         >
           <SlidersHorizontal className="h-3.5 w-3.5" />Leoapi
-        </a>
+        </button>
         <button
           className="flex items-center justify-center gap-1.5 rounded-md px-1.5 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
           onClick={onShowSettings}

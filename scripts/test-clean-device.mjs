@@ -90,7 +90,7 @@ try {
   const ready = await waitFor(readMarker);
   marker = ready.marker;
   assert.equal(ready.health.status, 'ok');
-  assert.equal(ready.health.version, '1.36.2');
+  assert.equal(ready.health.version, '1.1.3');
 
   const token = await waitFor(async () => readLocalToken(marker.pid));
   const authStatus = await fetchJson(`${marker.url}/api/auth/status`, token);

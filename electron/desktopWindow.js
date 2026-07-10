@@ -76,6 +76,12 @@ export class DesktopWindowManager {
     return this.mainWindow;
   }
 
+  showMainWindow() {
+    if (!this.mainWindow || this.mainWindow.isDestroyed()) return;
+    this.mainWindow.show();
+    this.mainWindow.focus();
+  }
+
   getTrayImage() {
     const image = nativeImage.createFromPath(this.getWindowIconPath());
     return image.resize({ width: 18, height: 18 });
@@ -142,6 +148,10 @@ export class DesktopWindowManager {
   emitSettingsCommand(command) {
     if (!this.settingsWindow || this.settingsWindow.webContents.isDestroyed()) return;
     this.settingsWindow.webContents.send('leocodebox-desktop:launcher-command', command);
+  }
+
+  emitLocalModal(tool) {
+    return this.viewHost.sendToActiveView('leocodebox-desktop:open-modal', tool);
   }
 
   syncSettingsWindowBounds() {
@@ -720,10 +730,6 @@ export class DesktopWindowManager {
         sandbox: true,
         preload: this.getPreloadPath(),
       },
-    });
-
-    this.mainWindow.once('ready-to-show', () => {
-      this.mainWindow?.show();
     });
 
     this.mainWindow.webContents.setWindowOpenHandler(({ url }) => {

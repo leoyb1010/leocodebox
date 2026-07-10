@@ -166,6 +166,13 @@ export class ViewHost {
     return true;
   }
 
+  sendToActiveView(channel, payload) {
+    const view = this.getActiveView();
+    if (!view) return false;
+    view.webContents.send(channel, payload);
+    return true;
+  }
+
   async readLocalStorageValueForOrigin(originUrl, key) {
     let targetOrigin;
     try {

@@ -79,6 +79,13 @@ if (isLocalHttpOrigin(window.location)) {
       return () => ipcRenderer.removeListener('leocodebox-desktop:update-state', listener);
     },
   });
+  contextBridge.exposeInMainWorld('leocodeboxDesktopTools', {
+    onOpenModal: (callback) => {
+      const listener = (_event, tool) => callback(tool);
+      ipcRenderer.on('leocodebox-desktop:open-modal', listener);
+      return () => ipcRenderer.removeListener('leocodebox-desktop:open-modal', listener);
+    },
+  });
 }
 
 if (window.location.protocol === 'file:') {

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useDeviceSettings } from '../../../hooks/useDeviceSettings';
@@ -50,6 +50,12 @@ function Sidebar({
   const { setCurrentProject, mcpServerStatus } = useTaskMaster() as TaskMasterSidebarContext;
   const { tasksEnabled } = useTasksSettings();
   const paletteOps = usePaletteOps();
+  const [localTool, setLocalTool] = useState<'leoapi' | 'feedback' | null>(null);
+  const closeLocalTool = useCallback(() => setLocalTool(null), []);
+
+  useEffect(() => window.leocodeboxDesktopTools?.onOpenModal((tool) => {
+    if (tool === 'leoapi' || tool === 'feedback') setLocalTool(tool);
+  }), []);
 
   const {
     isSidebarCollapsed,
@@ -212,6 +218,8 @@ function Sidebar({
         showVersionModal={showVersionModal}
         onCloseVersionModal={() => setShowVersionModal(false)}
         t={t}
+        localTool={localTool}
+        onCloseLocalTool={closeLocalTool}
       />
 
       {isSidebarCollapsed ? (
@@ -222,6 +230,8 @@ function Sidebar({
           restartRequired={restartRequired}
           onShowVersionModal={() => setShowVersionModal(true)}
           t={t}
+          onShowLeoapi={() => setLocalTool('leoapi')}
+          onShowFeedback={() => setLocalTool('feedback')}
         />
       ) : (
         <>
@@ -298,6 +308,8 @@ function Sidebar({
             currentVersion={currentVersion}
             onShowVersionModal={() => setShowVersionModal(true)}
             onShowSettings={onShowSettings}
+            onShowLeoapi={() => setLocalTool('leoapi')}
+            onShowFeedback={() => setLocalTool('feedback')}
             projectListProps={projectListProps}
             t={t}
           />

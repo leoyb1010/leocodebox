@@ -10,6 +10,7 @@ const packageJson = JSON.parse(await readFile(new URL('../../package.json', impo
 const zipName = `leocodebox-${packageJson.version}-mac-arm64.zip`;
 const zipPath = path.join(outputDir, zipName);
 const metadataPath = path.join(outputDir, 'latest-mac.yml');
+const updateMetadataVersion = packageJson.version === '1.1.3' ? '1.36.3' : packageJson.version;
 
 if (!sourceApp) {
   throw new Error('usage: finalize-notarized-mac-artifacts.js path/to/leocodebox.app');
@@ -41,7 +42,7 @@ await rm(zipPath, { force: true });
 run('/usr/bin/ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', sourceApp, zipPath]);
 const [sha512, zipStats] = await Promise.all([hashFile(zipPath), stat(zipPath)]);
 await writeFile(metadataPath, [
-  `version: ${packageJson.version}`,
+  `version: ${updateMetadataVersion}`,
   'files:',
   `  - url: ${zipName}`,
   `    sha512: ${sha512}`,

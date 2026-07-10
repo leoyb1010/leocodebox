@@ -1,4 +1,4 @@
-window.__APP_VERSION__ = '1.36.2';
+window.__APP_VERSION__ = '1.1.3';
 window.__MOCK_STATE__ = {
   localOnly: true,
   account: { connected: false, email: null, authState: 'local_only' },
@@ -375,9 +375,12 @@ window.__MOCK_STATE__ = {
 	    var refreshAction = activeRefreshable ? '<button class="icon-btn tb-action no-drag" data-cc-action="refresh-tab" title="刷新当前页面">' + icon('refresh', 16) + '</button>' : '';
 	    var accountAction = localMode ? '' : '<button class="btn sm tb-action no-drag" data-cc-action="connect" title="' + esc(authState(state) === 'expired' ? 'Reconnect your leocodebox account' : accountLabel(state)) + '"><span class="dot" style="background:' + (conn ? 'var(--ok)' : (authState(state) === 'expired' ? 'var(--warn)' : 'var(--tx3)')) + '"></span>' + esc(accountLabel(state)) + '</button>';
 	    var logoutAction = (!localMode && (conn || authState(state) === 'expired')) ? '<button class="icon-btn tb-action no-drag" data-cc-action="logout" title="Logout">' + icon('logOut', 16) + '</button>' : '';
+	    var navigation = localMode
+	      ? '<span class="tb-context">本机 Agent 工作台</span>'
+	      : '<div class="tb-tabs no-drag">' + renderTabs(state) + '</div>';
 	    return '<div class="titlebar">' +
 	      '<div class="brand"><img class="mk" src="' + esc(LOGO_URL) + '" alt=""><span>leocodebox</span></div>' +
-      '<div class="tb-tabs no-drag">' + renderTabs(state) + '</div>' +
+      navigation +
       '<span style="flex:1"></span>' +
 	      refreshAction +
 	      envActions +

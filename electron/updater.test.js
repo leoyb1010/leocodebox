@@ -5,7 +5,11 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { DesktopUpdaterController, clearUpdaterTokenEnvironment } from './updater.js';
+import {
+  DesktopUpdaterController,
+  LEGACY_UPDATE_BRIDGE_VERSION,
+  clearUpdaterTokenEnvironment,
+} from './updater.js';
 
 class FakeUpdater extends EventEmitter {
   setFeedURL(options) {
@@ -13,12 +17,12 @@ class FakeUpdater extends EventEmitter {
   }
 
   async checkForUpdates() {
-    this.emit('update-available', { version: '1.36.2', releaseName: 'Cross-device fix' });
+    this.emit('update-available', { version: '1.1.3', releaseName: 'Local agent workspace' });
   }
 
   async downloadUpdate() {
     this.emit('download-progress', { percent: 54.4 });
-    this.emit('update-downloaded', { version: '1.36.2' });
+    this.emit('update-downloaded', { version: '1.1.3' });
   }
 
   quitAndInstall() {
@@ -46,7 +50,7 @@ test('private updater requires a credential and never exposes the saved token in
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'leocodebox-updater-'));
   const updater = new FakeUpdater();
   const controller = new DesktopUpdaterController({
-    appVersion: '1.36.2',
+    appVersion: '1.1.2',
     isPackaged: true,
     settingsPath: path.join(root, 'updater.json'),
     updater,
@@ -65,7 +69,7 @@ test('private updater requires a credential and never exposes the saved token in
 
     await controller.checkForUpdates();
     assert.equal(controller.getState().status, 'available');
-    assert.equal(controller.getState().latestVersion, '1.36.2');
+    assert.equal(controller.getState().latestVersion, '1.1.3');
 
     await controller.downloadUpdate();
     assert.equal(controller.getState().status, 'downloaded');
@@ -77,6 +81,26 @@ test('private updater requires a credential and never exposes the saved token in
     });
     assert.equal(prepared, true);
     assert.equal(updater.didInstall, true);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('version reset bridge updates legacy builds without looping on 1.1.3', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'leocodebox-updater-bridge-'));
+  const updater = new FakeUpdater();
+  const controller = new DesktopUpdaterController({
+    appVersion: '1.1.3',
+    isPackaged: true,
+    settingsPath: path.join(root, 'updater.json'),
+    updater,
+    storage: fakeStorage,
+  });
+
+  try {
+    await controller.load();
+    assert.equal(await updater.isUpdateSupported({ version: LEGACY_UPDATE_BRIDGE_VERSION }), false);
+    assert.equal(await updater.isUpdateSupported({ version: '1.1.4' }), true);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

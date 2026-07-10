@@ -1,3 +1,7 @@
+import { readFile, stat } from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
+
 import Database from 'better-sqlite3';
 import crossSpawn from 'cross-spawn';
 
@@ -16,6 +20,7 @@ import {
   readOptionalString,
   writeProviderSessionActiveModelChange,
 } from '@/shared/utils.js';
+import { getOpenCodeConfigDir } from '@/shared/provider-runtime-paths.js';
 
 export const OPENCODE_FALLBACK_MODELS: ProviderModelsDefinition = {
   OPTIONS: [
@@ -308,7 +313,18 @@ const mapOpenCodeVerboseModel = (model: OpenCodeVerboseModel): ProviderModelOpti
   };
 };
 
-export const buildOpenCodeDefinitionFromIds = (ids: string[]): ProviderModelsDefinition => {
+const pickOpenCodeDefault = (
+  options: ProviderModelOption[],
+  configuredModel?: string | null,
+): string => options.find((option) => option.value === configuredModel)?.value
+  ?? options.find((option) => option.value === OPENCODE_FALLBACK_MODELS.DEFAULT)?.value
+  ?? options[0]?.value
+  ?? OPENCODE_FALLBACK_MODELS.DEFAULT;
+
+export const buildOpenCodeDefinitionFromIds = (
+  ids: string[],
+  configuredModel?: string | null,
+): ProviderModelsDefinition => {
   const options: ProviderModelOption[] = ids
     .filter(isSupportedOpenCodeModelId)
     .map((value) => ({
@@ -317,18 +333,15 @@ export const buildOpenCodeDefinitionFromIds = (ids: string[]): ProviderModelsDef
       description: descriptionForOpenCodeModelId(value),
     }));
 
-  const defaultValue = options.find((option) => option.value === OPENCODE_FALLBACK_MODELS.DEFAULT)?.value
-    ?? options[0]?.value
-    ?? OPENCODE_FALLBACK_MODELS.DEFAULT;
-
   return {
     OPTIONS: options,
-    DEFAULT: defaultValue,
+    DEFAULT: pickOpenCodeDefault(options, configuredModel),
   };
 };
 
 export const buildOpenCodeDefinitionFromVerboseModels = (
   models: OpenCodeVerboseModel[],
+  configuredModel?: string | null,
 ): ProviderModelsDefinition => {
   const options: ProviderModelOption[] = [];
   const seenValues = new Set<string>();
@@ -347,14 +360,24 @@ export const buildOpenCodeDefinitionFromVerboseModels = (
     return OPENCODE_FALLBACK_MODELS;
   }
 
-  const defaultValue = options.find((option) => option.value === OPENCODE_FALLBACK_MODELS.DEFAULT)?.value
-    ?? options[0]?.value
-    ?? OPENCODE_FALLBACK_MODELS.DEFAULT;
-
   return {
     OPTIONS: options,
-    DEFAULT: defaultValue,
+    DEFAULT: pickOpenCodeDefault(options, configuredModel),
   };
+};
+
+const getOpenCodeConfigPath = (): string => path.join(
+  getOpenCodeConfigDir(process.env, os.homedir()),
+  'opencode.json',
+);
+
+const readConfiguredOpenCodeModel = async (): Promise<string | null> => {
+  try {
+    const parsed = JSON.parse(await readFile(getOpenCodeConfigPath(), 'utf8')) as { model?: unknown };
+    return typeof parsed.model === 'string' && parsed.model.trim() ? parsed.model.trim() : null;
+  } catch {
+    return null;
+  }
 };
 
 const parseOpenCodeSessionModelValue = (rawModel: unknown): string | null => {
@@ -440,12 +463,22 @@ const runOpenCodeModelsCommand = (): Promise<string> => new Promise((resolve, re
 });
 
 export class OpenCodeProviderModels implements IProviderModels {
+  async getCacheFingerprint(): Promise<string | null> {
+    try {
+      const configStat = await stat(getOpenCodeConfigPath());
+      return `${configStat.mtimeMs}:${configStat.size}`;
+    } catch {
+      return null;
+    }
+  }
+
   async getSupportedModels(): Promise<ProviderModelsDefinition> {
     try {
+      const configuredModel = await readConfiguredOpenCodeModel();
       const stdout = await runOpenCodeModelsCommand();
       const verboseModels = parseOpenCodeVerboseModelsStdout(stdout);
       if (verboseModels.length > 0) {
-        return buildOpenCodeDefinitionFromVerboseModels(verboseModels);
+        return buildOpenCodeDefinitionFromVerboseModels(verboseModels, configuredModel);
       }
 
       const ids = parseOpenCodeModelsStdout(stdout);
@@ -453,7 +486,7 @@ export class OpenCodeProviderModels implements IProviderModels {
         return OPENCODE_FALLBACK_MODELS;
       }
 
-      return buildOpenCodeDefinitionFromIds(ids);
+      return buildOpenCodeDefinitionFromIds(ids, configuredModel);
     } catch {
       return OPENCODE_FALLBACK_MODELS;
     }

@@ -714,6 +714,7 @@ async function openLocalInDesktop() {
   const existingTab = tabs.getTab('local');
   if (existingTab && localServer.getLocalServerUrl()) {
     await desktopWindow.showTarget(await localServer.getResolvedTarget());
+    desktopWindow.showMainWindow();
     return getDesktopState();
   }
 
@@ -721,6 +722,7 @@ async function openLocalInDesktop() {
   tabs.upsertTarget(pendingTarget);
   setActiveTarget(pendingTarget);
   await desktopWindow.showLocalStartupTarget(pendingTarget, localServer.getStartupLogs());
+  desktopWindow.showMainWindow();
   desktopWindow.emitDesktopState();
 
   const target = await localServer.getResolvedTarget();
@@ -729,14 +731,8 @@ async function openLocalInDesktop() {
 }
 
 async function openSwitchInDesktop() {
-  const localTarget = await localServer.getResolvedTarget();
-  const baseUrl = localServer.getLocalServerUrl() || localTarget.url;
-  const target = {
-    kind: 'switch',
-    name: 'Leoapi 接口切换',
-    url: new URL('/leocodebox-switch.html', baseUrl).toString(),
-  };
-  await desktopWindow.showTarget(target);
+  await openLocalInDesktop();
+  desktopWindow.emitLocalModal('leoapi');
   return getDesktopState();
 }
 

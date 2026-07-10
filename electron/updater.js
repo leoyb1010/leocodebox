@@ -4,6 +4,14 @@ import path from 'node:path';
 const DEFAULT_GITHUB_OWNER = 'leoyb1010';
 const DEFAULT_GITHUB_REPO = 'leocodebox';
 const UPDATE_CHECK_TIMEOUT_MS = 45_000;
+export const VERSION_RESET_TARGET = '1.1.3';
+export const LEGACY_UPDATE_BRIDGE_VERSION = '1.36.3';
+
+function displayUpdateVersion(version, appVersion) {
+  return appVersion === VERSION_RESET_TARGET && version === LEGACY_UPDATE_BRIDGE_VERSION
+    ? VERSION_RESET_TARGET
+    : version;
+}
 
 function createInitialState(appVersion) {
   return {
@@ -80,7 +88,18 @@ export class DesktopUpdaterController {
     this.updater.autoDownload = false;
     this.updater.autoInstallOnAppQuit = true;
     this.updater.allowPrerelease = false;
+    this.updater.allowDowngrade = false;
     this.updater.logger = console;
+
+    if (this.appVersion === VERSION_RESET_TARGET) {
+      const originalIsUpdateSupported = typeof this.updater.isUpdateSupported === 'function'
+        ? this.updater.isUpdateSupported.bind(this.updater)
+        : null;
+      this.updater.isUpdateSupported = async (info) => {
+        if (info?.version === LEGACY_UPDATE_BRIDGE_VERSION) return false;
+        return originalIsUpdateSupported ? originalIsUpdateSupported(info) : true;
+      };
+    }
 
     try {
       const raw = await fs.readFile(this.settingsPath, 'utf8');
@@ -214,7 +233,7 @@ export class DesktopUpdaterController {
     this.updater.on('update-available', (info) => {
       this.setState({
         status: 'available',
-        latestVersion: info?.version || null,
+        latestVersion: displayUpdateVersion(info?.version, this.appVersion) || null,
         releaseName: info?.releaseName || null,
         releaseNotes: normalizeReleaseNotes(info?.releaseNotes),
         error: null,
@@ -223,7 +242,7 @@ export class DesktopUpdaterController {
     this.updater.on('update-not-available', (info) => {
       this.setState({
         status: 'up-to-date',
-        latestVersion: info?.version || this.appVersion,
+        latestVersion: displayUpdateVersion(info?.version, this.appVersion) || this.appVersion,
         progress: null,
         error: null,
       });
@@ -237,7 +256,7 @@ export class DesktopUpdaterController {
     this.updater.on('update-downloaded', (info) => {
       this.setState({
         status: 'downloaded',
-        latestVersion: info?.version || this.state.latestVersion,
+        latestVersion: displayUpdateVersion(info?.version, this.appVersion) || this.state.latestVersion,
         progress: 100,
         error: null,
       });

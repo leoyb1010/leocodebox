@@ -2,31 +2,54 @@
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>leocodebox</title>
     <style>
-      html, body { margin: 0; height: 100%; background: #0a0a0a; color: #fafafa; font: 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-      body { box-sizing: border-box; padding: 28px; overflow: hidden; }
-      .shell { height: 100%; display: flex; flex-direction: column; gap: 16px; }
-      .status { display: flex; flex: 0 0 auto; align-items: center; gap: 10px; color: #d4d4d4; }
-      .dot { width: 8px; height: 8px; border-radius: 50%; background: #0b60ea; box-shadow: 0 0 0 6px rgba(11, 96, 234, 0.15); }
-      pre { margin: 0; flex: 1; overflow: auto; border: 1px solid #262626; border-radius: 8px; background: #050505; color: #d4d4d4; padding: 14px; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; white-space: pre-wrap; user-select: text; }
+      :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", sans-serif; }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; height: 100%; background: #f7f7f5; color: #202124; }
+      body { display: grid; place-items: center; overflow: hidden; }
+      .shell { width: min(420px, calc(100vw - 48px)); text-align: center; }
+      .logo-wrap { position: relative; width: 74px; height: 74px; margin: 0 auto 22px; }
+      .logo { width: 74px; height: 74px; border-radius: 17px; box-shadow: 0 12px 34px rgba(24, 35, 56, .16); }
+      .pulse { position: absolute; inset: -8px; border: 1px solid rgba(46, 114, 234, .35); border-radius: 23px; animation: pulse 1.8s ease-out infinite; }
+      h1 { margin: 0; font-size: 23px; line-height: 1.2; font-weight: 650; letter-spacing: 0; }
+      #message { min-height: 22px; margin: 10px 0 20px; color: #666970; font-size: 14px; }
+      .track { height: 3px; overflow: hidden; border-radius: 2px; background: #dedfdf; }
+      .bar { width: 38%; height: 100%; border-radius: inherit; background: #2e72ea; animation: travel 1.45s ease-in-out infinite; }
+      details { margin-top: 22px; color: #777a81; font-size: 12px; text-align: left; }
+      summary { width: max-content; margin: 0 auto; cursor: pointer; user-select: none; }
+      pre { max-height: 180px; margin: 10px 0 0; overflow: auto; border: 1px solid #dedfdf; border-radius: 6px; background: #fff; padding: 10px; color: #5f6268; font: 11px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; user-select: text; }
+      @keyframes travel { 0% { transform: translateX(-110%); } 50% { transform: translateX(82%); } 100% { transform: translateX(270%); } }
+      @keyframes pulse { 0% { transform: scale(.92); opacity: 0; } 35% { opacity: 1; } 100% { transform: scale(1.15); opacity: 0; } }
+      @media (prefers-color-scheme: dark) {
+        html, body { background: #18181b; color: #f4f4f5; }
+        #message { color: #a7a7ad; }
+        .track { background: #38383e; }
+        details { color: #8d8d95; }
+        pre { border-color: #38383e; background: #202024; color: #b8b8bf; }
+        .logo { box-shadow: 0 12px 34px rgba(0, 0, 0, .35); }
+      }
+      @media (prefers-reduced-motion: reduce) { .pulse, .bar { animation-duration: 3s; } }
     </style>
   </head>
   <body>
     <main class="shell">
-      <div class="status"><span class="dot" aria-hidden="true"></span><span id="message">正在启动本地 leocodebox...</span></div>
-      <pre id="logs">正在等待服务输出...</pre>
+      <div class="logo-wrap"><span class="pulse" aria-hidden="true"></span><img class="logo" src="assets/logo-macos.png" alt=""></div>
+      <h1>leocodebox</h1>
+      <p id="message" aria-live="polite">正在准备本机 Agent 工作台…</p>
+      <div class="track" aria-hidden="true"><div class="bar"></div></div>
+      <details><summary>诊断信息</summary><pre id="logs">正在检查本机服务…</pre></details>
     </main>
     <script>
       window.leocodeboxRenderPlaceholder = function (payload) {
         var next = payload || {};
         document.title = String(next.title || 'leocodebox');
-        document.getElementById('message').textContent = String(next.message || '正在打开 leocodebox...');
+        document.getElementById('message').textContent = String(next.message || '正在打开 leocodebox…');
         document.getElementById('logs').textContent = Array.isArray(next.logs) && next.logs.length
           ? next.logs.map(String).join('\n')
-          : '正在等待服务输出...';
+          : '正在检查本机服务…';
       };
     </script>
   </body>

@@ -75,6 +75,15 @@ test('OpenCode models provider formats frontend labels from provider-prefixed id
   ]);
 });
 
+test('OpenCode models provider honors the model selected in opencode.json', () => {
+  const definition = buildOpenCodeDefinitionFromIds([
+    'opencode/free-model',
+    'leocodebox_deepseek/deepseek-v4-flash',
+  ], 'leocodebox_deepseek/deepseek-v4-flash');
+
+  assert.equal(definition.DEFAULT, 'leocodebox_deepseek/deepseek-v4-flash');
+});
+
 test('OpenCode models provider maps verbose model variants to effort options', () => {
   const models = parseOpenCodeVerboseModelsStdout(`
 opencode/deepseek-v4-flash-free

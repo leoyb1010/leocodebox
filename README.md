@@ -1,6 +1,6 @@
 # leocodebox
 
-![version](https://img.shields.io/badge/version-1.36.2-blue)
+![version](https://img.shields.io/badge/version-1.1.3-blue)
 ![platform](https://img.shields.io/badge/platform-macOS%20arm64-lightgrey)
 ![signed](https://img.shields.io/badge/signed-Developer%20ID%20%2B%20Notarized-brightgreen)
 ![license](https://img.shields.io/badge/license-AGPL--3.0-orange)
@@ -11,11 +11,11 @@
 
 ## ⬇️ 下载
 
-[![下载 DMG](https://img.shields.io/badge/下载-leocodebox%201.36.2%20(mac--arm64)-brightgreen?style=for-the-badge)](https://github.com/leoyb1010/leocodebox/releases/latest)
+[![下载 DMG](https://img.shields.io/badge/下载-leocodebox%201.1.3%20(mac--arm64)-brightgreen?style=for-the-badge)](https://github.com/leoyb1010/leocodebox/releases/latest)
 
 - **最新版本**：<https://github.com/leoyb1010/leocodebox/releases/latest>
-- **直接下载 DMG**：[leocodebox-1.36.2-mac-arm64.dmg](https://github.com/leoyb1010/leocodebox/releases/download/v1.36.2/leocodebox-1.36.2-mac-arm64.dmg)（422 MB · 仅 Apple 芯片）
-- **SHA-256**：`30e7dd635be3784f7b83ccedb534595b6500cdb5fc60c32aa58d7c2fc31b330a`
+- **直接下载 DMG**：[leocodebox-1.1.3-mac-arm64.dmg](https://github.com/leoyb1010/leocodebox/releases/download/v1.1.3/leocodebox-1.1.3-mac-arm64.dmg)（416 MB · 仅 Apple 芯片）
+- **SHA-256**：`24429ab757dab8150e5141b6184bae14198b72d212268fe6148b37f02a87d72d`
 
 已 **Developer ID 签名 + Apple 公证**：双击 DMG → 拖入「应用程序」→ 双击运行，无 Gatekeeper 警告，无需 `xattr` 去隔离。
 
@@ -34,7 +34,7 @@
 - **项目按 Agent 分类**：侧边栏项目列表按 Claude / Codex / OpenCode / Cursor / Gemini 显示彩色会话计数徽章，并过滤一次性/临时目录，只留真实项目。
 - **简体中文默认**，深色/浅色/跟随系统主题。
 - **桌面模式完全免登录**：本地能力 token 由 Electron 自动注入，只允许本机应用访问；不显示账号密码页。
-- **应用内热更新**：可在“设置 → 关于”检查、下载并重启安装。Private Release 需要每台 Mac 配置只读 GitHub Token，凭据使用 macOS 钥匙串加密保存。
+- **应用内热更新**：可在“设置 → 关于”检查、下载并重启安装。Private Release 需要每台 Mac 配置只读 GitHub Token，凭据使用 macOS 钥匙串加密保存；旧的 1.36.x 安装也可直接迁移到 1.1.3。
 - **签名 + 公证发布**：提供 Apple Developer ID 签名并经 Apple 公证的 DMG，别人下载双击即可运行，无 Gatekeeper 警告。
 
 ## 🖥️ 支持的 Agent

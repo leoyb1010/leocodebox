@@ -147,6 +147,8 @@ type SidebarContentProps = {
   currentVersion: string;
   onShowVersionModal: () => void;
   onShowSettings: () => void;
+  onShowLeoapi: () => void;
+  onShowFeedback: () => void;
   projectListProps: SidebarProjectListProps;
   t: TFunction;
 };
@@ -185,6 +187,8 @@ export default function SidebarContent({
   currentVersion,
   onShowVersionModal,
   onShowSettings,
+  onShowLeoapi,
+  onShowFeedback,
   projectListProps,
   t,
 }: SidebarContentProps) {
@@ -561,6 +565,8 @@ export default function SidebarContent({
         currentVersion={currentVersion}
         onShowVersionModal={onShowVersionModal}
         onShowSettings={onShowSettings}
+        onShowLeoapi={onShowLeoapi}
+        onShowFeedback={onShowFeedback}
         t={t}
       />
     </div>

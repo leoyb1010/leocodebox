@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { AlertTriangle, EyeOff, Trash2 } from 'lucide-react';
 import type { TFunction } from 'i18next';
+
 import { Button } from '../../../../shared/view/ui';
 import Settings from '../../../settings/view/Settings';
 import VersionUpgradeModal from '../../../version-upgrade/view';
@@ -9,6 +10,8 @@ import type { Project } from '../../../../types/app';
 import { normalizeProjectForSettings } from '../../utils/utils';
 import type { DeleteProjectConfirmation, SessionDeleteConfirmation, SettingsProject } from '../../types/types';
 import ProjectCreationWizard from '../../../project-creation-wizard';
+
+import LocalToolModal from './LocalToolModal';
 
 type SidebarModalsProps = {
   projects: Project[];
@@ -27,6 +30,8 @@ type SidebarModalsProps = {
   showVersionModal: boolean;
   onCloseVersionModal: () => void;
   t: TFunction;
+  localTool: 'leoapi' | 'feedback' | null;
+  onCloseLocalTool: () => void;
 };
 
 type TypedSettingsProps = {
@@ -59,6 +64,8 @@ export default function SidebarModals({
   showVersionModal,
   onCloseVersionModal,
   t,
+  localTool,
+  onCloseLocalTool,
 }: SidebarModalsProps) {
   // Settings expects project identity/path fields to be present for dropdown labels and local-scope MCP config.
   const settingsProjects = useMemo(
@@ -68,6 +75,14 @@ export default function SidebarModals({
 
   return (
     <>
+      {localTool && ReactDOM.createPortal(
+        <LocalToolModal
+          title={localTool === 'leoapi' ? 'Leoapi 接口切换' : '本地记录'}
+          src={localTool === 'leoapi' ? '/leocodebox-switch.html?embedded=1' : '/leocodebox-feedback.html?embedded=1'}
+          onClose={onCloseLocalTool}
+        />,
+        document.body,
+      )}
       {showNewProject &&
         ReactDOM.createPortal(
           <ProjectCreationWizard

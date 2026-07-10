@@ -711,6 +711,12 @@ body.win .titlebar {
   margin-right: 6px;
 }
 
+.tb-context {
+  color: var(--tx3);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .tb-tabs {
   display: flex;
   align-items: center;

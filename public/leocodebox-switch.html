@@ -8,6 +8,7 @@
   <link rel="icon" href="/favicon.png">
   <script>
     (() => {
+      if (new URLSearchParams(window.location.search).get("embedded") === "1") document.documentElement.dataset.embedded = "true";
       const themeMode = localStorage.getItem("themeMode") || localStorage.getItem("theme") || "system";
       const isDark = themeMode === "dark" || (themeMode === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
       document.documentElement.dataset.theme = isDark ? "dark" : "light";
@@ -98,6 +99,8 @@
     * { box-sizing: border-box; }
     html, body { min-height: 100%; }
     body { margin: 0; background: var(--bg); color: var(--text); font-size: 14px; }
+    html[data-embedded="true"] .app-shell { padding-top: 14px; }
+    html[data-embedded="true"] #backToMain { display: none; }
     button, input, select, textarea { font: inherit; letter-spacing: 0; }
     button, summary, select { cursor: pointer; }
     button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible {
@@ -673,16 +676,27 @@
     function renderProviders() {
       const target = state.targets[selectedTarget];
       const providers = state.providers.filter((provider) => provider.target === selectedTarget);
+      const nativeActive = !state.activeByTarget?.[selectedTarget];
+      const nativeAvailable = Boolean(state.nativeAvailableByTarget?.[selectedTarget]);
       $("#currentTargetTitle").textContent = target?.label || text("config");
-      $("#currentTargetMeta").textContent = `${text("count", { count: providers.length })} · ${text("select")}`;
-      if (!providers.length) {
-        $("#providerList").innerHTML = `<div class="empty-state"><strong>${text("emptyTitle")}</strong><span>${text("emptyBody")}</span></div>`;
-        return;
-      }
-      if (!providers.some((provider) => provider.id === selectedProvider)) {
+      $("#currentTargetMeta").textContent = `${providers.length + 1} 个配置 · 选择需要使用的接口`;
+      if (nativeActive) {
+        selectedProvider = "";
+      } else if (!providers.some((provider) => provider.id === selectedProvider)) {
         selectedProvider = providers.find((provider) => state.activeByTarget?.[provider.target] === provider.id)?.id || providers[0].id;
       }
-      $("#providerList").innerHTML = providers.map((provider) => {
+      const nativeCard = `<article class="provider-card${nativeActive ? " is-active is-selected" : ""}" data-card-native="${escapeHtml(selectedTarget)}">
+        <div class="drag-handle" aria-hidden="true"><img src="${icon("rotate-ccw")}" alt=""></div>
+        <div class="provider-mark" aria-hidden="true">L</div>
+        <div class="provider-info">
+          <div class="provider-title"><strong>本机原配置</strong>${nativeActive ? `<span class="state-chip">${text("active")}</span>` : ""}</div>
+          <span class="provider-url">登录授权 / CLI 原生配置</span>
+        </div>
+        <div class="card-actions">
+          ${nativeActive ? "" : `<button class="primary-button activate-button" type="button" data-restore-default="${escapeHtml(selectedTarget)}" ${nativeAvailable ? "" : "disabled"}><img class="button-icon" src="${icon("rotate-ccw")}" alt="">恢复</button>`}
+        </div>
+      </article>`;
+      const providerCards = providers.map((provider) => {
         const active = state.activeByTarget?.[provider.target] === provider.id;
         const selected = provider.id === selectedProvider;
         const providerName = escapeHtml(provider.name);
@@ -709,6 +723,7 @@
           </div>
         </article>`;
       }).join("");
+      $("#providerList").innerHTML = nativeCard + providerCards;
     }
 
     function diagnosticProvider() {
@@ -999,10 +1014,24 @@
         ? `Enable ${provider.name} for ${target?.label || provider.target}?\n\nThe following files will be backed up first:\n${files}`
         : `确认将 ${provider.name} 用于 ${target?.label || provider.target}？\n\n以下文件会先备份再修改：\n${files}`;
       if (!window.confirm(prompt)) return;
-      await api(`/api/leocodebox/switch/providers/${encodeURIComponent(id)}/apply`, { method: "POST", body: "{}" });
+      const result = await api(`/api/leocodebox/switch/providers/${encodeURIComponent(id)}/apply`, { method: "POST", body: "{}" });
+      window.parent.dispatchEvent(new CustomEvent("leocodebox-provider:applied", {
+        detail: { target: provider.target, activeModel: result.activeModel || null },
+      }));
       selectedProvider = id;
       await refresh();
       showToast(text("applied", { name: provider.name }), "ok");
+    }
+
+    async function restoreDefault(target) {
+      const label = state.targets[target]?.label || target;
+      if (!window.confirm(`恢复 ${label} 的本机原配置？\n\n当前配置会先自动备份。`)) return;
+      await api(`/api/leocodebox/switch/targets/${encodeURIComponent(target)}/restore-default`, { method: "POST", body: "{}" });
+      window.parent.dispatchEvent(new CustomEvent("leocodebox-provider:applied", {
+        detail: { target, activeModel: null },
+      }));
+      await refresh();
+      showToast(`${label} 已恢复本机原配置`, "ok");
     }
 
     async function testProvider(id) {
@@ -1084,6 +1113,8 @@
       if (remove) deleteProvider(remove.dataset.delete).catch((error) => showToast(error.message, "error"));
       const restore = event.target.closest("[data-restore]");
       if (restore) restoreBackup(restore.dataset.restore).catch((error) => showToast(error.message, "error"));
+      const restoreDefaultButton = event.target.closest("[data-restore-default]");
+      if (restoreDefaultButton) restoreDefault(restoreDefaultButton.dataset.restoreDefault).catch((error) => showToast(error.message, "error"));
       const removeEndpoint = event.target.closest("[data-remove-endpoint]");
       if (removeEndpoint) {
         const urls = Array.from(document.querySelectorAll("[data-endpoint-url]")).map((input) => input.value.trim());

@@ -4,6 +4,9 @@ declare global {
   interface Window {
     __ROUTER_BASENAME__?: string;
     leocodeboxLocal?: { enabled: boolean; authReady?: boolean };
+    leocodeboxDesktopTools?: {
+      onOpenModal: (callback: (tool: 'leoapi' | 'feedback') => void) => () => void;
+    };
     leocodeboxDesktopUpdater?: {
       getState: () => Promise<DesktopUpdateState>;
       setGithubToken: (token: string) => Promise<DesktopUpdateState>;

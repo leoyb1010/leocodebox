@@ -251,6 +251,18 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
   }, [loadProviderModels]);
 
   useEffect(() => {
+    const handleProviderApplied = (event: Event) => {
+      const detail = (event as CustomEvent<{ target?: LLMProvider; activeModel?: string | null }>).detail;
+      if (detail?.target === 'opencode' && detail.activeModel) {
+        setStoredProviderModel('opencode', detail.activeModel);
+      }
+      void loadProviderModels({ bypassCache: true });
+    };
+    window.addEventListener('leocodebox-provider:applied', handleProviderApplied);
+    return () => window.removeEventListener('leocodebox-provider:applied', handleProviderApplied);
+  }, [loadProviderModels, setStoredProviderModel]);
+
+  useEffect(() => {
     let cancelled = false;
 
     const loadCapabilities = async () => {

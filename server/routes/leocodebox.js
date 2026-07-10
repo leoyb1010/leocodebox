@@ -356,16 +356,20 @@ async function fileExists(filePath) {
   }
 }
 
-async function backupFile(filePath) {
-  if (!(await fileExists(filePath))) return null;
+function backupRelativePath(filePath) {
   const resolvedFilePath = path.resolve(filePath);
   const relativeToHome = path.relative(path.resolve(homeDir()), resolvedFilePath);
   const isInsideHome = relativeToHome
     && !relativeToHome.startsWith(`..${path.sep}`)
     && !path.isAbsolute(relativeToHome);
-  const relative = isInsideHome
+  return isInsideHome
     ? relativeToHome
     : path.join('__external__', Buffer.from(resolvedFilePath).toString('base64url'));
+}
+
+async function backupFile(filePath) {
+  if (!(await fileExists(filePath))) return null;
+  const relative = backupRelativePath(filePath);
   const backupPath = path.join(
     switchDir(),
     'backups',
@@ -380,6 +384,81 @@ async function backupFile(filePath) {
     // chmod is best-effort on filesystems that support POSIX modes.
   }
   return backupPath;
+}
+
+function defaultSnapshotPath(target) {
+  return path.join(switchDir(), 'defaults', `${target}.json`);
+}
+
+async function findEarliestBackup(filePath) {
+  const root = path.join(switchDir(), 'backups');
+  const relative = backupRelativePath(filePath);
+  let folders = [];
+  try {
+    folders = (await fs.readdir(root, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort();
+  } catch {
+    return null;
+  }
+
+  for (const folder of folders) {
+    const candidate = path.join(root, folder, relative);
+    try {
+      const [contents, stats] = await Promise.all([fs.readFile(candidate), fs.stat(candidate)]);
+      return { filePath, exists: true, contents, mode: stats.mode & 0o777 };
+    } catch {
+      // Keep looking: older backup folders may not contain every target file.
+    }
+  }
+  return null;
+}
+
+async function ensureDefaultSnapshot(target, store) {
+  const snapshotPath = defaultSnapshotPath(target);
+  if (await fileExists(snapshotPath)) return snapshotPath;
+
+  const managedBeforeMigration = Boolean(store.activeByTarget?.[target]);
+  const currentSnapshots = await captureFiles(targetConfigPaths(target));
+  const snapshots = await Promise.all(currentSnapshots.map(async (snapshot) => {
+    if (!managedBeforeMigration) return snapshot;
+    return (await findEarliestBackup(snapshot.filePath)) || snapshot;
+  }));
+  const payload = {
+    version: 1,
+    target,
+    createdAt: nowIso(),
+    files: snapshots.map((snapshot) => ({
+      path: snapshot.filePath,
+      exists: snapshot.exists,
+      mode: snapshot.mode || 0o600,
+      contents: snapshot.exists ? snapshot.contents.toString('base64') : null,
+    })),
+  };
+  await writeJsonFile(snapshotPath, payload);
+  return snapshotPath;
+}
+
+async function readDefaultSnapshot(target) {
+  const payload = await readJsonFile(defaultSnapshotPath(target), null);
+  if (!payload || payload.target !== target || !Array.isArray(payload.files)) return null;
+  const expectedPaths = new Set(targetConfigPaths(target).map((filePath) => path.resolve(filePath)));
+  const snapshots = payload.files.map((file) => ({
+    filePath: String(file.path || ''),
+    exists: Boolean(file.exists),
+    mode: Number(file.mode) || 0o600,
+    contents: file.exists ? Buffer.from(String(file.contents || ''), 'base64') : undefined,
+  })).filter((file) => file.filePath);
+  const restoredPaths = new Set(snapshots.map((snapshot) => path.resolve(snapshot.filePath)));
+  if (
+    snapshots.length !== expectedPaths.size
+    || restoredPaths.size !== expectedPaths.size
+    || [...restoredPaths].some((filePath) => !expectedPaths.has(filePath))
+  ) {
+    return null;
+  }
+  return snapshots;
 }
 
 function resolveBackupDestination(relativePath) {
@@ -1678,11 +1757,21 @@ router.get('/switch/status', async (_req, res, next) => {
   try {
     const store = await readStore();
     const activeByTarget = await detectActiveByTarget(store.providers, store.activeByTarget);
+    await Promise.all(Object.keys(activeByTarget).map((target) => (
+      TARGETS[target]?.writable ? ensureDefaultSnapshot(target, store) : Promise.resolve()
+    )));
+    const nativeAvailableByTarget = Object.fromEntries(await Promise.all(
+      Object.values(TARGETS).map(async (target) => [
+        target.id,
+        target.writable && await fileExists(defaultSnapshotPath(target.id)),
+      ]),
+    ));
     res.json({
       success: true,
       targets: configStatus(),
       presets: PRESETS,
       activeByTarget,
+      nativeAvailableByTarget,
       lastAppliedByTarget: store.activeByTarget,
       providers: store.providers.map(sanitizeProvider),
       storePath: providerStorePath(),
@@ -1717,6 +1806,7 @@ router.post('/switch/providers/:id/apply', async (req, res, next) => {
         return;
       }
 
+      await ensureDefaultSnapshot(provider.target, store);
       const changedFiles = await applyProviderTransactionally(provider, async () => {
         store.activeByTarget[provider.target] = provider.id;
         provider.lastAppliedAt = nowIso();
@@ -1728,8 +1818,48 @@ router.post('/switch/providers/:id/apply', async (req, res, next) => {
         success: true,
         provider: sanitizeProvider(provider),
         activeByTarget: store.activeByTarget,
+        activeModel: provider.target === 'opencode' && provider.model
+          ? `leocodebox_${sanitizeIdPart(provider.id)}/${provider.model}`
+          : provider.model || null,
         changedFiles,
       });
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/switch/targets/:target/restore-default', async (req, res, next) => {
+  try {
+    await withSwitchMutation(async () => {
+      const target = normalizeTarget(req.params.target);
+      if (!target || !TARGETS[target].writable) {
+        res.status(400).json({ success: false, error: 'This target does not support configuration restore.' });
+        return;
+      }
+      const snapshots = await readDefaultSnapshot(target);
+      if (!snapshots) {
+        res.status(404).json({ success: false, error: '尚未保存本机原配置。首次启用自定义接口时会自动保存。' });
+        return;
+      }
+
+      const current = await captureFiles(targetConfigPaths(target));
+      try {
+        for (const filePath of targetConfigPaths(target)) await backupFile(filePath);
+        await restoreFiles(snapshots);
+        const store = await readStore();
+        delete store.activeByTarget[target];
+        await writeStore(store);
+        res.json({
+          success: true,
+          target,
+          restoredFiles: snapshots.map((snapshot) => displayConfigPath(snapshot.filePath)),
+          activeByTarget: store.activeByTarget,
+        });
+      } catch (error) {
+        await restoreFiles(current);
+        throw error;
+      }
     });
   } catch (error) {
     next(error);

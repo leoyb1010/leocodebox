@@ -8,10 +8,10 @@ import { readProductVersion } from './productMetadata.js';
 
 test('reads the product version from the application package metadata', () => {
   const appRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'leocodebox-version-'));
-  fs.writeFileSync(path.join(appRoot, 'package.json'), JSON.stringify({ version: '1.36.2' }));
+  fs.writeFileSync(path.join(appRoot, 'package.json'), JSON.stringify({ version: '1.1.3' }));
 
   try {
-    assert.equal(readProductVersion(appRoot, '43.1.0'), '1.36.2');
+    assert.equal(readProductVersion(appRoot, '43.1.0'), '1.1.3');
   } finally {
     fs.rmSync(appRoot, { recursive: true, force: true });
   }

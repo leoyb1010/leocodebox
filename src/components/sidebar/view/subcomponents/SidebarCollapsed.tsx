@@ -8,6 +8,8 @@ type SidebarCollapsedProps = {
   updateAvailable: boolean;
   restartRequired: boolean;
   onShowVersionModal: () => void;
+  onShowLeoapi: () => void;
+  onShowFeedback: () => void;
   t: TFunction;
 };
 
@@ -17,6 +19,8 @@ export default function SidebarCollapsed({
   updateAvailable,
   restartRequired,
   onShowVersionModal,
+  onShowLeoapi,
+  onShowFeedback,
   t,
 }: SidebarCollapsedProps) {
   return (
@@ -43,24 +47,26 @@ export default function SidebarCollapsed({
         <Settings className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
       </button>
 
-      <a
-        href="/leocodebox-switch.html"
+      <button
+        type="button"
+        onClick={onShowLeoapi}
         className="group flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-accent/80"
         aria-label="Leoapi 接口切换"
         title="Leoapi 接口切换"
       >
         <SlidersHorizontal className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
-      </a>
+      </button>
 
       {/* Report Issue */}
-      <a
-        href="/leocodebox-feedback.html"
+      <button
+        type="button"
+        onClick={onShowFeedback}
         className="group flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-accent/80"
         aria-label={t('actions.reportIssue')}
         title={t('actions.reportIssue')}
       >
         <Bug className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
-      </a>
+      </button>
 
       {/* Restart-required indicator */}
       {restartRequired && (

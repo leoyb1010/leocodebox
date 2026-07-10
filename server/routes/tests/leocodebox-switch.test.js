@@ -138,6 +138,13 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
   assert.equal(opencodeConfig.model, 'leocodebox_opencode-proxy/open-model');
   assert.equal(opencodeConfig.provider['leocodebox_opencode-proxy'].options.apiKey, 'open-key');
 
+  assert.equal(activeStatus.nativeAvailableByTarget.opencode, true);
+  await post('/switch/targets/opencode/restore-default', {});
+  const restoredOpenCodeConfig = JSON.parse(await fs.readFile(path.join(home, '.config', 'opencode', 'opencode.json'), 'utf8'));
+  assert.deepEqual(restoredOpenCodeConfig, { plugin: ['keep-plugin'] });
+  activeStatus = await fetch(`${base}/switch/status`).then((response) => response.json());
+  assert.equal(activeStatus.activeByTarget.opencode, undefined);
+
   await fs.mkdir(path.join(home, '.gemini'), { recursive: true });
   const originalGeminiEnv = [
     '# Preserve this comment',
