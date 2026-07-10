@@ -1,13 +1,14 @@
-# Dependencies
+# Dependencies (anchored + nested)
 node_modules/
 
-# Build outputs (regenerated via `npm run build`)
-dist/
-dist-server/
+# Build outputs (regenerated via `npm run build`) — anchored to repo root so
+# nested source dirs like scripts/release/ are NOT ignored.
+/dist/
+/dist-server/
 
-# Packaging / release artifacts (large; DMG etc.)
-release/
-.desktop-build/
+# Packaging / release artifacts (large; DMG etc.) — anchored to repo root.
+/release/
+/.desktop-build/
 *.dmg
 *.blockmap
 
