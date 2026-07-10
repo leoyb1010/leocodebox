@@ -9,6 +9,18 @@
 
 > English: leocodebox is a local-only macOS desktop app that unifies the management of local coding-agent CLIs (Claude Code, Codex, Cursor, OpenCode) — projects, sessions, skills, MCP servers, and provider configuration — with no cloud account required.
 
+## ⬇️ 下载
+
+[![下载 DMG](https://img.shields.io/badge/⬇%20下载-leocodebox%201.36.1%20(mac--arm64)-brightgreen?style=for-the-badge)](https://github.com/leoyb1010/leocodebox/releases/latest)
+
+- **最新版本**：<https://github.com/leoyb1010/leocodebox/releases/latest>
+- **直接下载 DMG**：[leocodebox-1.36.1-mac-arm64.dmg](https://github.com/leoyb1010/leocodebox/releases/download/v1.36.1/leocodebox-1.36.1-mac-arm64.dmg)（403 MB · 仅 Apple 芯片）
+- **SHA-256**：`8ff10f07f60c5c7690c28ea6f79a217478b3e4e844d865afbc02dda9129d44db`
+
+已 **Developer ID 签名 + Apple 公证**：双击 DMG → 拖入「应用程序」→ 双击运行，无 Gatekeeper 警告，无需 `xattr` 去隔离。
+
+> ⚠️ 本仓库为**私有**，上面的下载链接需要用有本仓库访问权限的 GitHub 账号登录后才能下载。若要让任意人一键下载，需把仓库或该 Release 改为公开。
+
 ---
 
 ## ✨ 特性
