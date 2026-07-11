@@ -27,6 +27,8 @@ const MODEL_DISCOVERY_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const modelDiscoveryCache = new Map();
 const pendingModelDiscoveries = new Map();
 const pendingCliMutations = new Map();
+const cliLatestVersionCache = new Map();
+const CLI_LATEST_VERSION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 let switchMutationQueue = Promise.resolve();
 let modelCacheMutationQueue = Promise.resolve();
 
@@ -1821,23 +1823,44 @@ function runCliCommand(cmd, args, timeoutMs = 10_000) {
   });
 }
 
-async function readCliLatestVersion(tool) {
-  if (!tool.npmPackage) return null;
-  const encoded = tool.npmPackage.replace('@', '%40').replace('/', '%2F');
-  try {
+export async function readCliLatestVersion(tool, {
+  force = false,
+  now = Date.now(),
+  loadLatest = async (packageName) => {
+    const encoded = packageName.replace('@', '%40').replace('/', '%2F');
     const info = await fetchJson(`https://registry.npmjs.org/${encoded}/latest`);
     return info?.version || null;
+  },
+} = {}) {
+  if (!tool.npmPackage) return { version: null, checkedAt: null, source: 'unsupported' };
+  const cached = cliLatestVersionCache.get(tool.id);
+  if (!force && cached && now - cached.updatedAt < CLI_LATEST_VERSION_CACHE_TTL_MS) {
+    return { version: cached.version, checkedAt: new Date(cached.updatedAt).toISOString(), source: 'cache' };
+  }
+  try {
+    const version = await loadLatest(tool.npmPackage);
+    cliLatestVersionCache.set(tool.id, { version, updatedAt: now });
+    return { version, checkedAt: new Date(now).toISOString(), source: 'registry' };
   } catch {
-    return null;
+    return cached
+      ? { version: cached.version, checkedAt: new Date(cached.updatedAt).toISOString(), source: 'stale-cache' }
+      : { version: null, checkedAt: new Date(now).toISOString(), source: 'unavailable' };
   }
 }
 
-async function getCliToolStatus(tool, { checkLatest = true } = {}) {
+export function clearCliLatestVersionCache() {
+  cliLatestVersionCache.clear();
+}
+
+async function getCliToolStatus(tool, { checkLatest = true, forceLatest = false } = {}) {
   const probe = await runCliCommand(tool.cmd, ['--version'], 5000);
   const installed = probe.code !== 'ENOENT';
   const runnable = probe.ok;
   const currentVersion = runnable ? parseCliVersionText(probe.stdout || probe.stderr) : null;
-  const latestVersion = checkLatest && runnable ? await readCliLatestVersion(tool) : null;
+  const latest = checkLatest && runnable
+    ? await readCliLatestVersion(tool, { force: forceLatest })
+    : { version: null, checkedAt: null, source: 'skipped' };
+  const latestVersion = latest.version;
   const updateAvailable = Boolean(
     currentVersion && latestVersion && compareSemver(latestVersion, currentVersion) > 0,
   );
@@ -1854,6 +1877,8 @@ async function getCliToolStatus(tool, { checkLatest = true } = {}) {
     error: runnable ? null : (probe.stderr || probe.error || `${tool.cmd} could not run`).trim(),
     currentVersion,
     latestVersion,
+    latestCheckedAt: latest.checkedAt,
+    latestVersionSource: latest.source,
     updateAvailable,
     installSource: installInfo.source,
     executablePath: installInfo.executablePath,
@@ -1863,10 +1888,11 @@ async function getCliToolStatus(tool, { checkLatest = true } = {}) {
   };
 }
 
-router.get('/cli/status', async (_req, res, next) => {
+router.get('/cli/status', async (req, res, next) => {
   try {
+    const forceLatest = req.query?.refresh === '1';
     const tools = await Promise.all(
-      Object.values(CLI_TOOLS).map((tool) => getCliToolStatus(tool)),
+      Object.values(CLI_TOOLS).map((tool) => getCliToolStatus(tool, { forceLatest })),
     );
     res.json({ success: true, checkedAt: nowIso(), tools });
   } catch (error) {

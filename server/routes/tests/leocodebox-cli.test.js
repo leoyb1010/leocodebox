@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  clearCliLatestVersionCache,
   detectCliInstallSource,
+  readCliLatestVersion,
   resolveCliUpdateCommand,
   withCliMutation,
 } from '../../modules/leocodebox/leocodebox.routes.js';
@@ -42,4 +44,30 @@ test('CLI mutations reject concurrent operations for the same tool', async () =>
   assert.equal(await otherTool, 'ok');
   release('done');
   assert.equal(await first, 'done');
+});
+
+
+test('CLI registry versions are cached for a day and can be force-refreshed', async () => {
+  clearCliLatestVersionCache();
+  let loads = 0;
+  const loadLatest = async () => {
+    loads += 1;
+    return loads === 1 ? '1.2.3' : '1.2.4';
+  };
+
+  const fresh = await readCliLatestVersion(opencode, { now: 1000, loadLatest });
+  const cached = await readCliLatestVersion(opencode, { now: 2000, loadLatest });
+  const refreshed = await readCliLatestVersion(opencode, { force: true, now: 3000, loadLatest });
+
+  assert.deepEqual(fresh, {
+    version: '1.2.3',
+    checkedAt: new Date(1000).toISOString(),
+    source: 'registry',
+  });
+  assert.equal(cached.version, '1.2.3');
+  assert.equal(cached.source, 'cache');
+  assert.equal(refreshed.version, '1.2.4');
+  assert.equal(refreshed.source, 'registry');
+  assert.equal(loads, 2);
+  clearCliLatestVersionCache();
 });

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowDownToLine, ArrowUpCircle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
 
-import { authenticatedFetch } from '../../../../../utils/api';
+import { apiRequest } from '../../../../../utils/api';
 import { cn } from '../../../../../lib/utils';
 
 type CliToolStatus = {
@@ -14,6 +14,8 @@ type CliToolStatus = {
   currentVersion: string | null;
   latestVersion: string | null;
   updateAvailable: boolean;
+  latestCheckedAt?: string | null;
+  latestVersionSource?: string;
   installSource: string;
   executablePath: string | null;
   canInstall: boolean;
@@ -24,6 +26,14 @@ type CliToolStatus = {
 type CliStatusResponse = {
   success: boolean;
   tools: CliToolStatus[];
+  checkedAt?: string;
+};
+
+type CliActionResponse = {
+  success?: boolean;
+  error?: string;
+  changed?: boolean;
+  currentVersion?: string | null;
 };
 
 /**
@@ -36,15 +46,16 @@ export default function CliToolsSection() {
   const [updating, setUpdating] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [checkedAt, setCheckedAt] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (forceLatest = false) => {
     setLoading(true);
     setLoadError(null);
     try {
-      const response = await authenticatedFetch('/api/leocodebox/cli/status');
-      const data = (await response.json()) as CliStatusResponse;
+      const data = await apiRequest(`/api/leocodebox/cli/status${forceLatest ? '?refresh=1' : ''}`) as CliStatusResponse;
       if (data?.success && Array.isArray(data.tools)) {
         setTools(data.tools);
+        setCheckedAt(data.checkedAt || new Date().toISOString());
       }
     } catch (error) {
       console.error('Failed to load CLI status:', error);
@@ -55,17 +66,16 @@ export default function CliToolsSection() {
   }, []);
 
   useEffect(() => {
-    void load();
+    void load(false);
   }, [load]);
 
   const runAction = useCallback(async (tool: CliToolStatus, action: 'install' | 'update') => {
     setUpdating(tool.id);
     setMessage(null);
     try {
-      const response = await authenticatedFetch(`/api/leocodebox/cli/${tool.id}/${action}`, {
+      const data = await apiRequest(`/api/leocodebox/cli/${tool.id}/${action}`, {
         method: 'POST',
-      });
-      const data = await response.json();
+      }) as CliActionResponse;
       if (data?.success) {
         setMessage(action === 'install'
           ? `${tool.label} 已安装${data.currentVersion ? ` (${data.currentVersion})` : ''}。`
@@ -79,7 +89,7 @@ export default function CliToolsSection() {
       setMessage(`${tool.label} ${action === 'install' ? '安装' : '更新'}失败：${error instanceof Error ? error.message : '未知错误'}`);
     } finally {
       setUpdating(null);
-      void load();
+      void load(true);
     }
   }, [load]);
 
@@ -88,7 +98,7 @@ export default function CliToolsSection() {
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-sm font-medium text-foreground">本机智能体</h3>
         <button
-          onClick={() => void load()}
+          onClick={() => void load(true)}
           className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           title="刷新"
         >
@@ -96,6 +106,11 @@ export default function CliToolsSection() {
           刷新
         </button>
       </div>
+      {checkedAt && (
+        <p className="mb-2 text-[11px] text-muted-foreground">
+          版本检查：{new Date(checkedAt).toLocaleString()} · 注册表结果缓存 24 小时
+        </p>
+      )}
 
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {tools.map((tool) => (
