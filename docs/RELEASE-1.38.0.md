@@ -46,4 +46,4 @@
 - `better-sqlite3` 原生模块可在 Electron 运行时加载，应用退出后后端端口正常释放。
 - 生产依赖安全审计为 0 个漏洞。
 
-按当前发布顺序，尚未执行 DMG 生成、Developer ID 签名、Apple 公证、staple、Gatekeeper 和真实下载更新验证；这些步骤将在候选版确认后单独执行。
+正式发布必须完成 DMG 生成、Developer ID 签名、Apple 公证、staple、Gatekeeper、隔离属性启动和真实下载资产校验；未通过其中任一步骤不得更新正式 Release。
