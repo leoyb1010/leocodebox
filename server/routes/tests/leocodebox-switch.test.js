@@ -348,6 +348,47 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
   assert.deepEqual(discoveredModels.models, ['model-a', 'model-b']);
   assert.equal(discoveredModels.httpStatus, 200);
 
+  const probeCountBeforeOverrideAttempt = receivedProbes.length;
+  const ignoredOverride = await post('/switch/providers/codex-probe/models', {
+    timeoutMs: 4000,
+    baseUrl: 'http://127.0.0.1:1/credential-exfiltration',
+    apiKey: 'attacker-controlled-key',
+  });
+  assert.deepEqual(ignoredOverride.models, ['model-a', 'model-b']);
+  assert.equal(receivedProbes.length, probeCountBeforeOverrideAttempt + 1);
+  assert.equal(receivedProbes.at(-1).url, '/v1/models');
+  assert.equal(receivedProbes.at(-1).headers.authorization, 'Bearer codex-key');
+
+  for (const invalidBaseUrl of ['file:///tmp/models.json', 'not a url']) {
+    const response = await fetch(`${base}/switch/discover-models`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: 'codex', baseUrl: invalidBaseUrl, apiKey: 'draft-key' }),
+    });
+    assert.equal(response.status, 400);
+  }
+
+  const cachePath = path.join(home, '.leocodebox', 'switch', 'model-discovery-cache.json');
+  const existingCache = JSON.parse(await fs.readFile(cachePath, 'utf8'));
+  existingCache.entries['preserved-disk-only-entry'] = {
+    updatedAt: Date.now(),
+    expiresAt: Date.now() + 60_000,
+    result: { models: ['preserved-model'], latencyMs: 1, httpStatus: 200, endpoint: 'https://preserved.example/v1' },
+  };
+  await fs.writeFile(cachePath, JSON.stringify(existingCache));
+  await post('/switch/providers', {
+    id: 'second-cache-probe',
+    target: 'codex',
+    name: 'Second Cache Probe',
+    baseUrl: `${probeBaseUrl}/second/v1`,
+    apiKey: 'second-key',
+  });
+  await post('/switch/providers/second-cache-probe/models', { timeoutMs: 4000 });
+  const mergedCache = JSON.parse(await fs.readFile(cachePath, 'utf8'));
+  assert.equal(mergedCache.version, 2);
+  assert.ok(mergedCache.entries['preserved-disk-only-entry']);
+  assert.ok(Object.keys(mergedCache.entries).length >= 3);
+
   const benchmark = await post('/switch/providers/codex-probe/benchmark', {
     model: 'model-a',
     attempts: 2,

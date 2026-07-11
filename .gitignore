@@ -28,3 +28,8 @@ node_modules/
 # Editor
 .vscode/
 .idea/
+
+# Local agent/review scratch data
+/.review-*
+/.claude/settings.local.json
+/.claude/worktrees/

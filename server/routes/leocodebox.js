@@ -27,6 +27,7 @@ const MODEL_DISCOVERY_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const modelDiscoveryCache = new Map();
 const pendingModelDiscoveries = new Map();
 let switchMutationQueue = Promise.resolve();
+let modelCacheMutationQueue = Promise.resolve();
 
 const TARGETS = {
   claude: {
@@ -87,11 +88,26 @@ function providerModelCachePath() {
 }
 
 function modelDiscoveryCacheKey(provider, rawBase) {
+  const apiKeyFingerprint = crypto.createHash('sha256').update(String(provider.apiKey || '')).digest('hex').slice(0, 16);
   return crypto.createHash('sha256').update(JSON.stringify({
     target: provider.target,
     baseUrl: safeText(rawBase, 800).replace(/\/+$/, ''),
     wireApi: normalizeWireApi(provider.wireApi),
+    apiKeyFingerprint,
   })).digest('hex');
+}
+
+function isValidModelDiscoveryCacheEntry(entry, now = Date.now()) {
+  return Boolean(
+    entry
+    && typeof entry === 'object'
+    && Number.isFinite(entry.updatedAt)
+    && Number.isFinite(entry.expiresAt)
+    && entry.updatedAt > 0
+    && entry.expiresAt > now
+    && entry.result
+    && Array.isArray(entry.result.models),
+  );
 }
 
 function modelDiscoveryCacheInfo(entry, source) {
@@ -103,16 +119,34 @@ function modelDiscoveryCacheInfo(entry, source) {
 }
 
 async function loadModelDiscoveryDiskCache() {
-  const value = await readJsonFile(providerModelCachePath(), { version: 1, entries: {} });
-  return value?.version === 1 && value.entries && typeof value.entries === 'object'
-    ? value.entries
-    : {};
+  const value = await readJsonFile(providerModelCachePath(), { version: 2, entries: {} });
+  if (value?.version !== 2 || !value.entries || typeof value.entries !== 'object') return {};
+  const now = Date.now();
+  return Object.fromEntries(
+    Object.entries(value.entries).filter(([, entry]) => isValidModelDiscoveryCacheEntry(entry, now)),
+  );
+}
+
+function withModelCacheMutation(operation) {
+  const result = modelCacheMutationQueue.then(operation, operation);
+  modelCacheMutationQueue = result.then(() => undefined, () => undefined);
+  return result;
 }
 
 async function persistModelDiscoveryCache() {
-  const now = Date.now();
-  const entries = Object.fromEntries([...modelDiscoveryCache.entries()].filter(([, entry]) => entry.expiresAt > now));
-  await writeJsonFile(providerModelCachePath(), { version: 1, entries });
+  await withModelCacheMutation(async () => {
+    const now = Date.now();
+    const diskEntries = await loadModelDiscoveryDiskCache();
+    const mergedEntries = new Map(Object.entries(diskEntries));
+    for (const [key, entry] of modelDiscoveryCache.entries()) {
+      if (isValidModelDiscoveryCacheEntry(entry, now)) mergedEntries.set(key, entry);
+      else mergedEntries.delete(key);
+    }
+    const entries = Object.fromEntries(
+      [...mergedEntries.entries()].filter(([, entry]) => isValidModelDiscoveryCacheEntry(entry, now)),
+    );
+    await writeJsonFile(providerModelCachePath(), { version: 2, entries });
+  });
 }
 
 function feedbackDir() {
@@ -1278,6 +1312,23 @@ function parseBoundedInteger(value, fallback, minimum, maximum) {
   return Math.min(maximum, Math.max(minimum, parsed));
 }
 
+function validateProviderBaseUrl(rawBase) {
+  let parsed;
+  try {
+    parsed = new URL(rawBase);
+  } catch {
+    const error = new Error('请求地址不是有效 URL。');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    const error = new Error('请求地址仅支持 HTTP 或 HTTPS 协议。');
+    error.statusCode = 400;
+    throw error;
+  }
+  return parsed.toString().replace(/\/$/, '');
+}
+
 function buildModelListProbe(provider, rawBase) {
   const headers = {
     Accept: 'application/json',
@@ -1325,7 +1376,8 @@ async function discoverProviderModels(provider, options = {}) {
     error.statusCode = 400;
     throw error;
   }
-  const cacheKey = modelDiscoveryCacheKey(provider, rawBase);
+  const validatedBase = validateProviderBaseUrl(rawBase);
+  const cacheKey = modelDiscoveryCacheKey(provider, validatedBase);
   const now = Date.now();
   if (!options.bypassCache) {
     const memoryEntry = modelDiscoveryCache.get(cacheKey);
@@ -1344,7 +1396,7 @@ async function discoverProviderModels(provider, options = {}) {
 
   const request = (async () => {
     const timeoutMs = parseBoundedInteger(options.timeoutMs, 8000, 1000, 30000);
-    const probe = buildModelListProbe(provider, rawBase);
+    const probe = buildModelListProbe(provider, validatedBase);
     const startedAt = Date.now();
     const response = await fetch(probe.url, {
       method: 'GET',
@@ -1370,7 +1422,7 @@ async function discoverProviderModels(provider, options = {}) {
       models: extractModelIds(payload),
       latencyMs,
       httpStatus: response.status,
-      endpoint: rawBase,
+      endpoint: validatedBase,
     };
     const entry = {
       updatedAt: Date.now(),
@@ -2113,7 +2165,10 @@ router.post('/switch/providers/:id/models', async (req, res, next) => {
       res.status(404).json({ success: false, error: 'Provider not found.' });
       return;
     }
-    const result = await discoverProviderModels(provider, { ...req.body, bypassCache: true });
+    const result = await discoverProviderModels(provider, {
+      timeoutMs: req.body?.timeoutMs,
+      bypassCache: true,
+    });
     await withSwitchMutation(async () => {
       const latestStore = await readStore();
       const latestProvider = latestStore.providers.find((item) => item.id === req.params.id);

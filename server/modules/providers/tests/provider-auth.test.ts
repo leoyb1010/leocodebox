@@ -22,6 +22,28 @@ import { OpenCodeProviderAuth } from '../list/opencode/opencode-auth.provider.js
 
 type TestCliRunner = CliCommandRunner;
 
+const OPENCODE_ENV_CREDENTIAL_KEYS = [
+  'ANTHROPIC_API_KEY',
+  'OPENAI_API_KEY',
+  'GOOGLE_GENERATIVE_AI_API_KEY',
+  'GROQ_API_KEY',
+  'OPENROUTER_API_KEY',
+] as const;
+
+async function withCleanOpenCodeCredentialEnv<T>(operation: () => Promise<T>): Promise<T> {
+  const previous = Object.fromEntries(OPENCODE_ENV_CREDENTIAL_KEYS.map((key) => [key, process.env[key]]));
+  for (const key of OPENCODE_ENV_CREDENTIAL_KEYS) delete process.env[key];
+  try {
+    return await operation();
+  } finally {
+    for (const key of OPENCODE_ENV_CREDENTIAL_KEYS) {
+      const value = previous[key];
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
+}
+
 test('parses Claude CLI logged-in and logged-out JSON', () => {
   assert.deepEqual(
     parseClaudeCliAuthStatus('{"loggedIn":true,"authMethod":"oauth","email":"dev@example.com"}'),
@@ -78,10 +100,12 @@ test('does not treat empty nested OpenCode auth metadata as credentials', { conc
   try {
     await mkdir(root, { recursive: true });
     await writeFile(path.join(root, 'auth.json'), JSON.stringify({ openai: { oauth: {} } }));
-    const fakeSpawn = (() => ({ error: undefined, status: 0, stdout: '1.17.18' })) as unknown as TestCliRunner;
-    const status = await new OpenCodeProviderAuth(fakeSpawn).getStatus();
-    assert.equal(status.installed, true);
-    assert.equal(status.authenticated, false);
+    await withCleanOpenCodeCredentialEnv(async () => {
+      const fakeSpawn = (() => ({ error: undefined, status: 0, stdout: '1.17.18' })) as unknown as TestCliRunner;
+      const status = await new OpenCodeProviderAuth(fakeSpawn).getStatus();
+      assert.equal(status.installed, true);
+      assert.equal(status.authenticated, false);
+    });
   } finally {
     if (previousDataDir === undefined) delete process.env.OPENCODE_DATA_DIR;
     else process.env.OPENCODE_DATA_DIR = previousDataDir;
