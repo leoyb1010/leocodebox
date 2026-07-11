@@ -87,7 +87,13 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
   })));
   const status = await fetch(`${base}/switch/status`).then((response) => response.json());
   assert.equal(status.providers.filter((provider) => provider.id.startsWith('parallel-')).length, 20);
-  assert.equal(status.presets.length, 16);
+  assert.ok(status.presets.length > 0);
+  for (const preset of status.presets) {
+    assert.equal(typeof preset.id, 'string');
+    assert.ok(preset.id.length > 0);
+    assert.ok(['claude', 'codex', 'opencode', 'cursor', 'gemini', 'hermes'].includes(preset.target));
+    assert.ok(['responses', 'chat', 'messages', 'gemini'].includes(preset.wireApi));
+  }
   assert.deepEqual(
     status.presets.find((preset) => preset.id === 'xai'),
     {
@@ -308,6 +314,11 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
         };
         return;
       }
+      if (request.url === '/unauthorized/v1/models') {
+        response.writeHead(401, { 'Content-Type': 'application/json' });
+        response.end(JSON.stringify({ error: { message: 'invalid API key' } }));
+        return;
+      }
       response.writeHead(request.url === '/v1/messages' ? 400 : 200, { 'Content-Type': 'application/json' });
       response.end(request.url === '/v1/models' || request.url === '/second/v1/models'
         ? JSON.stringify({ data: [{ id: 'model-b' }, { id: 'model-a' }] })
@@ -344,6 +355,27 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
   }
   const asyncStatus = await fetch(`${base}/switch/status`).then((response) => response.json());
   assert.deepEqual(asyncStatus.providers.find((item) => item.id === 'async-discovery').discoveredModels, ['slow-model']);
+
+  releaseSlowModelProbe = null;
+  await post('/switch/providers', {
+    id: 'dedupe-probe',
+    target: 'codex',
+    name: 'Dedupe Probe',
+    baseUrl: `${probeBaseUrl}/slow/v1`,
+    apiKey: 'dedupe-key',
+  });
+  const slowProbeCountBefore = receivedProbes.filter((probe) => probe.url === '/slow/v1/models').length;
+  const firstPendingDiscovery = post('/switch/providers/dedupe-probe/models', { timeoutMs: 4000 });
+  const secondPendingDiscovery = post('/switch/providers/dedupe-probe/models', { timeoutMs: 4000 });
+  for (let attempt = 0; attempt < 20 && !releaseSlowModelProbe; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.ok(releaseSlowModelProbe, 'concurrent discoveries should share one upstream request');
+  releaseSlowModelProbe();
+  const [firstDedupeResult, secondDedupeResult] = await Promise.all([firstPendingDiscovery, secondPendingDiscovery]);
+  assert.deepEqual(firstDedupeResult.models, ['slow-model']);
+  assert.deepEqual(secondDedupeResult.models, ['slow-model']);
+  assert.equal(receivedProbes.filter((probe) => probe.url === '/slow/v1/models').length, slowProbeCountBefore + 1);
 
   await post('/switch/providers', {
     id: 'claude-probe',
@@ -464,6 +496,18 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
   assert.equal(receivedProbes.at(-1).url, '/v1/models');
   assert.equal(receivedProbes.at(-1).headers.authorization, 'Bearer codex-key');
 
+  const unauthorizedDiscovery = await fetch(`${base}/switch/discover-models`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      target: 'codex',
+      baseUrl: `${probeBaseUrl}/unauthorized/v1`,
+      apiKey: 'rejected-key',
+      bypassCache: true,
+    }),
+  });
+  assert.equal(unauthorizedDiscovery.status, 401);
+
   for (const invalidBaseUrl of ['file:///tmp/models.json', 'not a url']) {
     const response = await fetch(`${base}/switch/discover-models`, {
       method: 'POST',
@@ -480,6 +524,11 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
     expiresAt: Date.now() + 60_000,
     result: { models: ['preserved-model'], latencyMs: 1, httpStatus: 200, endpoint: 'https://preserved.example/v1' },
   };
+  existingCache.entries['expired-disk-entry'] = {
+    updatedAt: Date.now() - 120_000,
+    expiresAt: Date.now() - 60_000,
+    result: { models: ['expired-model'], latencyMs: 1, httpStatus: 200, endpoint: 'https://expired.example/v1' },
+  };
   await fs.writeFile(cachePath, JSON.stringify(existingCache));
   await post('/switch/providers', {
     id: 'second-cache-probe',
@@ -492,6 +541,7 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
   const mergedCache = JSON.parse(await fs.readFile(cachePath, 'utf8'));
   assert.equal(mergedCache.version, 2);
   assert.ok(mergedCache.entries['preserved-disk-only-entry']);
+  assert.equal(Object.hasOwn(mergedCache.entries, 'expired-disk-entry'), false);
   assert.ok(Object.keys(mergedCache.entries).length >= 3);
 
   const benchmark = await post('/switch/providers/codex-probe/benchmark', {

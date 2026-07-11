@@ -36,7 +36,7 @@
 | P1-2 缓存键加入密钥指纹 | 已完成 | SHA-256 截断指纹进入 cache key，磁盘版本为 v2。 |
 | P1-3 CLI 并发与来源识别 | 已完成 | 同工具 mutation 互斥；Homebrew/npm/pnpm/Volta/standalone 严格识别；unknown 禁止自动更新。 |
 | P1-4 Registry 类型与一致性 | 已完成 | Provider 模板已迁 TypeScript；Runtime/Manifest 双向检查；返回防御性副本。 |
-| P1-5 核心测试矩阵 | 部分完成 | 攻击路径、非法 URL、异步发现、失败写回、缓存 merge、CLI 并发/来源、Registry 错误码已覆盖；仍缺明确的上游 401、TTL 过期、switch pending 去重测试，且测试仍有 `presets.length === 16` 魔法数断言。 |
+| P1-5 核心测试矩阵 | 已完成 | 攻击路径、非法 URL、上游 401、异步发现、失败写回、缓存 merge/TTL 过期/pending 去重、CLI 并发/来源、Registry 错误码均已覆盖；Provider 模板断言已改为结构校验。 |
 | P1-6 token 移出普通 HTTP URL | 已完成 | 会话 SSE 搜索改 Authorization header；query token 仅保留 WebSocket/shell 握手。 |
 | P1-7 TaskMaster 移除 shell | 已完成 | 当前 server 源码未发现 `shell: true`。 |
 | P1-8 Provider UI 小修 | 已完成 | 模板覆盖确认、stored key 安全发现、统一 cache/status label、autoDiscover 开关均已落地。 |
@@ -95,11 +95,10 @@
 
 ## 下一批执行顺序
 
-1. 补齐 P1-5 剩余测试并删除魔法数断言；
-2. 继续 Leoapi 拆分：Feedback/Update 子路由，再拆 Provider Switch 的 store、discovery、transaction service；
-3. Sidebar archive/Star 与 Chat Composer queue/command 继续拆分并补测试；
-4. API 错误层优先迁 Projects 和 Settings；
-5. 分批清理 Workspace shell、Appearance、Browser settings 等硬编码文案；
-6. 增强跨 Provider 搜索筛选，逐步形成审计页；
-7. 有签名凭据和测试 feed 后执行真实更新桥 E2E；
-8. `.claude/worktrees` 仅在用户明确确认删除后处理。
+1. 继续 Leoapi 拆分：Feedback/Update 子路由，再拆 Provider Switch 的 store、discovery、transaction service；
+2. Sidebar archive/Star 与 Chat Composer queue/command 继续拆分并补测试；
+3. API 错误层优先迁 Projects 和 Settings；
+4. 分批清理 Workspace shell、Appearance、Browser settings 等硬编码文案；
+5. 增强跨 Provider 搜索筛选，逐步形成审计页；
+6. 有签名凭据和测试 feed 后执行真实更新桥 E2E；
+7. `.claude/worktrees` 仅在用户明确确认删除后处理。
