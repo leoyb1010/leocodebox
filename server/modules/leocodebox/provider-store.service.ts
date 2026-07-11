@@ -26,6 +26,7 @@ export type SwitchProvider = {
   category: string;
   createdAt: string;
   updatedAt: string;
+  lastAppliedAt?: string;
   source: string;
 };
 export type SwitchProviderInput = Partial<Omit<SwitchProvider, 'endpoints' | 'modelMapping'>> & {

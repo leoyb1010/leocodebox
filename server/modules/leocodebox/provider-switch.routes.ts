@@ -41,6 +41,7 @@ import {
   withSwitchMutation,
   writeStore,
 } from './provider-store.service.js';
+import type { SwitchProvider } from './provider-store.service.js';
 import {
   displayConfigPath,
   providerStorePath,
@@ -59,6 +60,14 @@ import {
 
 
 const router = express.Router();
+
+type StatusError = Error & { statusCode?: number };
+type BackupRecord = { path: string; relativePath: string; targetPath: string | null };
+
+function toNodeError(error: unknown): NodeJS.ErrnoException {
+  return error instanceof Error ? error as NodeJS.ErrnoException : new Error(String(error));
+}
+
 
 
 
@@ -101,14 +110,14 @@ router.get('/switch/status', async (_req, res, next) => {
 });
 
 
-function validateProviderDestinations(provider) {
+function validateProviderDestinations(provider: SwitchProvider): void {
   if (provider.baseUrl) validateProviderBaseUrl(provider.baseUrl);
   for (const endpoint of normalizeEndpointUrls(provider, provider, provider.baseUrl)) {
     validateProviderBaseUrl(endpoint);
   }
 }
 
-function providerCredentialDestinationFingerprint(provider) {
+function providerCredentialDestinationFingerprint(provider: SwitchProvider): string {
   const endpoints = normalizeEndpointUrls(provider, provider, provider.baseUrl)
     .map((endpoint) => validateProviderBaseUrl(endpoint))
     .sort();
@@ -120,7 +129,7 @@ function providerCredentialDestinationFingerprint(provider) {
   })).digest('hex');
 }
 
-function providerDiscoveryConfigFingerprint(provider) {
+function providerDiscoveryConfigFingerprint(provider: SwitchProvider): string {
   return crypto.createHash('sha256').update(JSON.stringify({
     target: provider.target,
     baseUrl: provider.baseUrl,
@@ -129,7 +138,7 @@ function providerDiscoveryConfigFingerprint(provider) {
   })).digest('hex');
 }
 
-function scheduleProviderModelDiscovery(provider, timeoutMs) {
+function scheduleProviderModelDiscovery(provider: SwitchProvider, timeoutMs: unknown): void {
   const providerId = provider.id;
   const expectedFingerprint = providerDiscoveryConfigFingerprint(provider);
   void discoverProviderModels(provider, { bypassCache: true, timeoutMs }).then(async (discovery) => {
@@ -182,7 +191,7 @@ router.post('/switch/providers', async (req, res, next) => {
       validateProviderDestinations(savedProvider);
       if (existing?.apiKey && savedProvider.apiKey === existing.apiKey
         && providerCredentialDestinationFingerprint(savedProvider) !== providerCredentialDestinationFingerprint(existing)) {
-        const error = new Error('修改请求地址、协议或端点时必须重新输入 API Key。');
+        const error: StatusError = new Error('修改请求地址、协议或端点时必须重新输入 API Key。');
         error.statusCode = 400;
         throw error;
       }
@@ -459,11 +468,14 @@ router.post('/switch/providers/:id/endpoints/test', async (req, res, next) => {
         res.status(404).json({ success: false, error: 'Provider not found.' });
         return;
       }
-      const requestedEndpoints = Array.isArray(req.body?.endpoints)
-        ? req.body.endpoints.map((endpoint) => safeText(typeof endpoint === 'string' ? endpoint : endpoint?.url, 800).replace(/\/+$/, '')).filter(Boolean)
+      const requestedEndpoints: string[] = Array.isArray(req.body?.endpoints)
+        ? req.body.endpoints.map((endpoint: unknown) => {
+          const value = endpoint && typeof endpoint === 'object' && 'url' in endpoint ? endpoint.url : endpoint;
+          return safeText(value, 800).replace(/\/+$/, '');
+        }).filter(Boolean)
         : provider.endpoints;
       const persistedEndpoints = new Set(normalizeEndpointUrls(provider, provider, provider.baseUrl));
-      const untrustedEndpoint = requestedEndpoints.find((endpoint) => !persistedEndpoints.has(endpoint));
+      const untrustedEndpoint = requestedEndpoints.find((endpoint: string) => !persistedEndpoints.has(endpoint));
       if (untrustedEndpoint) {
         res.status(400).json({ success: false, error: '测试新端点前必须编辑 Provider 并重新输入 API Key。' });
         return;
@@ -506,13 +518,13 @@ router.post('/switch/providers/:id/endpoints/test', async (req, res, next) => {
 router.get('/switch/backups', async (_req, res, next) => {
   try {
     const root = path.join(switchDir(), 'backups');
-    const backups = [];
-    async function walk(dir) {
-      let entries = [];
+    const backups: BackupRecord[] = [];
+    async function walk(dir: string): Promise<void> {
+      let entries: import('node:fs').Dirent[] = [];
       try {
         entries = await fs.readdir(dir, { withFileTypes: true });
       } catch (error) {
-        if (error?.code === 'ENOENT') return;
+        if (toNodeError(error).code === 'ENOENT') return;
         throw error;
       }
       for (const entry of entries) {
@@ -545,19 +557,19 @@ router.post('/switch/backups/restore', async (req, res, next) => {
       const relativePath = String(req.body?.relativePath || '').trim();
       const backupPath = path.resolve(root, relativePath);
       if (!relativePath || !backupPath.startsWith(`${root}${path.sep}`)) {
-        const error = new Error('Invalid backup path.');
+        const error: StatusError = new Error('Invalid backup path.');
         error.statusCode = 400;
         throw error;
       }
 
       const destination = resolveBackupDestination(relativePath);
       if (!destination) {
-        const error = new Error('Backup path does not include a restorable config path.');
+        const error: StatusError = new Error('Backup path does not include a restorable config path.');
         error.statusCode = 400;
         throw error;
       }
       if (!allowedConfigDestinations().has(destination)) {
-        const error = new Error('Backup destination is not a recognized local Agent config path.');
+        const error: StatusError = new Error('Backup destination is not a recognized local Agent config path.');
         error.statusCode = 400;
         throw error;
       }

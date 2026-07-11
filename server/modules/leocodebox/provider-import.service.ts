@@ -11,16 +11,39 @@ import {
   sanitizeIdPart,
   upsertProviderInStore,
 } from './provider-store.service.js';
+import type { ProviderStore, SwitchProvider, SwitchProviderInput } from './provider-store.service.js';
 import { fileExists, readJsonFile, safeText } from './provider-switch.storage.js';
 
-async function importCurrentProviders(store) {
-  const imported = [];
+type JsonRecord = Record<string, unknown>;
+type StringRecord = Record<string, string>;
+type CcSwitchRow = {
+  id: string | number;
+  app_type: string;
+  name?: string | null;
+  settings_config?: string | null;
+  notes?: string | null;
+  is_current?: number | boolean;
+};
+type ImportedProviderDraft = SwitchProviderInput & { isCurrent?: boolean };
+
+function asRecord(value: unknown): JsonRecord {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as JsonRecord : {};
+}
+
+function asStringRecord(value: unknown): StringRecord {
+  const record = asRecord(value);
+  return Object.fromEntries(Object.entries(record).map(([key, item]) => [key, typeof item === 'string' ? item : ''])) as StringRecord;
+}
+
+
+async function importCurrentProviders(store: ProviderStore): Promise<SwitchProvider[]> {
+  const imported: SwitchProvider[] = [];
 
   try {
     const [claudeSettingsPath] = targetConfigPaths('claude');
-    const claudeSettings = await readJsonFile(claudeSettingsPath, null);
-    const env = claudeSettings?.env;
-    if (env && typeof env === 'object') {
+    const claudeSettings = await readJsonFile<JsonRecord | null>(claudeSettingsPath, null);
+    const env = asStringRecord(claudeSettings?.env);
+    if (Object.keys(env).length > 0) {
       const provider = normalizeProvider({
         id: 'claude-current',
         target: 'claude',
@@ -45,21 +68,18 @@ async function importCurrentProviders(store) {
 
   try {
     const [codexAuthPath, codexConfigPath] = targetConfigPaths('codex');
-    const auth = await readJsonFile(codexAuthPath, {});
+    const auth = await readJsonFile<StringRecord>(codexAuthPath, {});
     let config = '';
     try {
       config = await fs.readFile(codexConfigPath, 'utf8');
     } catch {
       config = '';
     }
-    const parsed = config ? TOML.parse(config) : {};
+    const parsed = asRecord(config ? TOML.parse(config) : {});
     const activeProviderId = typeof parsed.model_provider === 'string' ? parsed.model_provider : '';
-    const configuredProviders = parsed.model_providers && typeof parsed.model_providers === 'object'
-      ? parsed.model_providers
-      : {};
+    const configuredProviders = asRecord(parsed.model_providers);
     const providerConfig = activeProviderId && configuredProviders[activeProviderId]
-      && typeof configuredProviders[activeProviderId] === 'object'
-      ? configuredProviders[activeProviderId]
+      ? asRecord(configuredProviders[activeProviderId])
       : null;
     const baseUrl = typeof providerConfig?.base_url === 'string' ? providerConfig.base_url : '';
     const model = typeof parsed.model === 'string' ? parsed.model : '';
@@ -105,8 +125,8 @@ async function importCurrentProviders(store) {
 
   try {
     const [opencodeConfigPath] = targetConfigPaths('opencode');
-    const opencode = await readJsonFile(opencodeConfigPath, {});
-    const configuredProviders = opencode.provider && typeof opencode.provider === 'object' ? opencode.provider : {};
+    const opencode = await readJsonFile<JsonRecord>(opencodeConfigPath, {});
+    const configuredProviders = asRecord(opencode.provider);
     const configuredModel = typeof opencode.model === 'string' ? opencode.model : '';
     const modelSeparator = configuredModel.indexOf('/');
     const activeProviderId = modelSeparator > 0 ? configuredModel.slice(0, modelSeparator) : '';
@@ -116,17 +136,18 @@ async function importCurrentProviders(store) {
       : null;
     const [fallbackProviderId, fallbackProviderConfig] = Object.entries(configuredProviders)[0] || [];
     const providerId = activeProviderConfig ? activeProviderId : fallbackProviderId;
-    const providerConfig = activeProviderConfig || fallbackProviderConfig;
-    if (providerId && providerConfig && typeof providerConfig === 'object') {
+    const providerConfig = asRecord(activeProviderConfig || fallbackProviderConfig);
+    if (providerId && Object.keys(providerConfig).length > 0) {
+      const providerOptions = asStringRecord(providerConfig.options);
       const modelFromConfig = activeProviderConfig && modelSeparator > 0
         ? configuredModel.slice(modelSeparator + 1)
-        : Object.keys(providerConfig.models || {})[0] || '';
+        : Object.keys(asRecord(providerConfig.models))[0] || '';
       const provider = normalizeProvider({
         id: 'opencode-current',
         target: 'opencode',
         name: `OpenCode 当前配置 (${providerId})`,
-        baseUrl: providerConfig.options?.baseURL || '',
-        apiKey: providerConfig.options?.apiKey || '',
+        baseUrl: providerOptions.baseURL || '',
+        apiKey: providerOptions.apiKey || '',
         model: modelFromConfig,
         wireApi: 'chat',
         category: 'imported',
@@ -165,28 +186,29 @@ async function importCurrentProviders(store) {
   return imported;
 }
 
-function chooseActiveProvider(providers, target, predicate, preferredId) {
+function chooseActiveProvider(providers: SwitchProvider[], target: string, predicate: (provider: SwitchProvider) => boolean, preferredId?: string): string | null {
   const matches = providers.filter((provider) => provider.target === target && predicate(provider));
   return matches.find((provider) => provider.id === preferredId)?.id || matches[0]?.id || null;
 }
 
-function matchesCurrentValues(provider, current) {
+function matchesCurrentValues(provider: SwitchProvider, current: { baseUrl: string; apiKey: string; model: string }): boolean {
   return safeText(provider.baseUrl, 800) === safeText(current.baseUrl, 800)
     && safeText(provider.apiKey, 4000) === safeText(current.apiKey, 4000)
     && safeText(provider.model, 200) === safeText(current.model, 200);
 }
 
-async function detectActiveByTarget(providers, lastAppliedByTarget = {}) {
-  const active = {};
+async function detectActiveByTarget(providers: SwitchProvider[], lastAppliedByTarget: Record<string, string> = {}): Promise<Record<string, string>> {
+  const active: Record<string, string> = {};
 
   try {
     const [settingsPath] = targetConfigPaths('claude');
-    const settings = await readJsonFile(settingsPath, null);
-    if (settings?.env && typeof settings.env === 'object') {
+    const settings = await readJsonFile<JsonRecord | null>(settingsPath, null);
+    const env = asStringRecord(settings?.env);
+    if (Object.keys(env).length > 0) {
       const current = {
-        baseUrl: settings.env.ANTHROPIC_BASE_URL || '',
-        apiKey: settings.env.ANTHROPIC_AUTH_TOKEN || settings.env.ANTHROPIC_API_KEY || '',
-        model: settings.env.ANTHROPIC_MODEL || settings.env.ANTHROPIC_DEFAULT_SONNET_MODEL || '',
+        baseUrl: env.ANTHROPIC_BASE_URL || '',
+        apiKey: env.ANTHROPIC_AUTH_TOKEN || env.ANTHROPIC_API_KEY || '',
+        model: env.ANTHROPIC_MODEL || env.ANTHROPIC_DEFAULT_SONNET_MODEL || '',
       };
       const match = chooseActiveProvider(
         providers,
@@ -203,7 +225,7 @@ async function detectActiveByTarget(providers, lastAppliedByTarget = {}) {
   try {
     const [authPath, configPath] = targetConfigPaths('codex');
     const [auth, config] = await Promise.all([
-      readJsonFile(authPath, {}),
+      readJsonFile<StringRecord>(authPath, {}),
       fs.readFile(configPath, 'utf8').catch(() => ''),
     ]);
     let match = chooseActiveProvider(
@@ -251,10 +273,10 @@ async function detectActiveByTarget(providers, lastAppliedByTarget = {}) {
 
   try {
     const [configPath] = targetConfigPaths('opencode');
-    const config = await readJsonFile(configPath, {});
+    const config = await readJsonFile<JsonRecord>(configPath, {});
     const match = chooseActiveProvider(providers, 'opencode', (provider) => {
       const key = `leocodebox_${sanitizeIdPart(provider.id)}`;
-      return Boolean(config.provider?.[key]) || String(config.model || '').startsWith(`${key}/`);
+      return Boolean(asRecord(config.provider)[key]) || String(config.model || '').startsWith(`${key}/`);
     }, lastAppliedByTarget.opencode);
     if (match) active.opencode = match;
   } catch {
@@ -277,17 +299,17 @@ async function detectActiveByTarget(providers, lastAppliedByTarget = {}) {
 }
 
 
-function mapCcSwitchRow(row) {
+function mapCcSwitchRow(row: CcSwitchRow): ImportedProviderDraft | null {
   const target = normalizeTarget(row.app_type);
   if (!target) return null;
 
-  let settings = {};
+  let settings: JsonRecord = {};
   try {
     settings = JSON.parse(row.settings_config || '{}');
   } catch {
     settings = {};
   }
-  const env = settings.env && typeof settings.env === 'object' ? settings.env : {};
+  const env = asStringRecord(settings.env);
 
   let baseUrl = '';
   let apiKey = '';
@@ -304,7 +326,7 @@ function mapCcSwitchRow(row) {
       haiku: env.ANTHROPIC_DEFAULT_HAIKU_MODEL || model,
     };
   } else if (target === 'codex') {
-    const auth = settings.auth && typeof settings.auth === 'object' ? settings.auth : {};
+    const auth = asStringRecord(settings.auth);
     apiKey = auth.OPENAI_API_KEY || '';
     const configText = typeof settings.config === 'string' ? settings.config : '';
     baseUrl = configText.match(/^\s*base_url\s*=\s*["']([^"']+)["']/m)?.[1] || '';
@@ -330,7 +352,7 @@ function mapCcSwitchRow(row) {
   };
 }
 
-async function importCcSwitchProviders(store) {
+async function importCcSwitchProviders(store: ProviderStore): Promise<{ dbFound: boolean; imported: SwitchProvider[]; skipped: Array<{ id: string | number; appType: string; reason: string }> }> {
   const dbPath = path.join(homeDir(), '.cc-switch', 'cc-switch.db');
   if (!(await fileExists(dbPath))) {
     return { dbFound: false, imported: [], skipped: [] };
@@ -338,15 +360,15 @@ async function importCcSwitchProviders(store) {
 
   const { default: Database } = await import('better-sqlite3');
   const db = new Database(dbPath, { readonly: true, fileMustExist: true });
-  let rows = [];
+  let rows: CcSwitchRow[] = [];
   try {
-    rows = db.prepare('SELECT id, app_type, name, settings_config, notes, is_current FROM providers').all();
+    rows = db.prepare('SELECT id, app_type, name, settings_config, notes, is_current FROM providers').all() as CcSwitchRow[];
   } finally {
     db.close();
   }
 
-  const imported = [];
-  const skipped = [];
+  const imported: SwitchProvider[] = [];
+  const skipped: Array<{ id: string | number; appType: string; reason: string }> = [];
   for (const row of rows) {
     const mapped = mapCcSwitchRow(row);
     if (!mapped) {
