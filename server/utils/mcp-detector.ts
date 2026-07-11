@@ -10,12 +10,30 @@ import { promises as fsPromises } from 'fs';
 import path from 'path';
 import os from 'os';
 
+type JsonRecord = Record<string, unknown>;
+type McpConfig = { command?: string; args?: string[]; url?: string; env?: Record<string, unknown> };
+type DetectedServer = { name: string; scope: string; projectPath?: string; config: McpConfig; type: string };
+
+function asRecord(value: unknown): JsonRecord {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as JsonRecord : {};
+}
+function asMcpConfig(value: unknown): McpConfig {
+  const record = asRecord(value);
+  return {
+    command: typeof record.command === 'string' ? record.command : undefined,
+    args: Array.isArray(record.args) ? record.args.filter((item): item is string => typeof item === 'string') : undefined,
+    url: typeof record.url === 'string' ? record.url : undefined,
+    env: asRecord(record.env),
+  };
+}
+
+
 /**
  * Check if task-master-ai MCP server is configured
  * Reads directly from Claude configuration files like claude-cli.js does
  * @returns {Promise<Object>} MCP detection result
  */
-export async function detectTaskMasterMCPServer() {
+export async function detectTaskMasterMCPServer(): Promise<Record<string, unknown>> {
     try {
         // Read Claude configuration files directly (same logic as mcp.js)
         const homeDir = os.homedir();
@@ -24,14 +42,14 @@ export async function detectTaskMasterMCPServer() {
             path.join(homeDir, '.claude', 'settings.json')
         ];
         
-        let configData = null;
-        let configPath = null;
+        let configData: JsonRecord | null = null;
+        let configPath: string | null = null;
         
         // Try to read from either config file
         for (const filepath of configPaths) {
             try {
                 const fileContent = await fsPromises.readFile(filepath, 'utf8');
-                configData = JSON.parse(fileContent);
+                configData = asRecord(JSON.parse(fileContent));
                 configPath = filepath;
                 break;
             } catch (error) {
@@ -49,16 +67,18 @@ export async function detectTaskMasterMCPServer() {
         }
 
         // Look for task-master-ai in user-scoped MCP servers
-        let taskMasterServer = null;
+        let taskMasterServer: DetectedServer | null = null;
         if (configData.mcpServers && typeof configData.mcpServers === 'object') {
-            const serverEntry = Object.entries(configData.mcpServers).find(([name, config]) => 
-                name === 'task-master-ai' || 
+            const serverEntry = Object.entries(asRecord(configData.mcpServers)).find(([name, rawConfig]) => {
+              const config = asMcpConfig(rawConfig);
+              return name === 'task-master-ai' ||
                 name.includes('task-master') ||
-                (config && config.command && config.command.includes('task-master'))
-            );
+                Boolean(config.command?.includes('task-master'));
+            });
             
             if (serverEntry) {
-                const [name, config] = serverEntry;
+                const [name, rawConfig] = serverEntry;
+                const config = asMcpConfig(rawConfig);
                 taskMasterServer = {
                     name,
                     scope: 'user',
@@ -70,16 +90,17 @@ export async function detectTaskMasterMCPServer() {
 
         // Also check project-specific MCP servers if not found globally
         if (!taskMasterServer && configData.projects) {
-            for (const [projectPath, projectConfig] of Object.entries(configData.projects)) {
+            for (const [projectPath, rawProjectConfig] of Object.entries(asRecord(configData.projects))) {
+                const projectConfig = asRecord(rawProjectConfig);
                 if (projectConfig.mcpServers && typeof projectConfig.mcpServers === 'object') {
-                    const serverEntry = Object.entries(projectConfig.mcpServers).find(([name, config]) => 
-                        name === 'task-master-ai' || 
-                        name.includes('task-master') ||
-                        (config && config.command && config.command.includes('task-master'))
-                    );
+                    const serverEntry = Object.entries(asRecord(projectConfig.mcpServers)).find(([name, rawConfig]) => {
+                        const config = asMcpConfig(rawConfig);
+                        return name === 'task-master-ai' || name.includes('task-master') || Boolean(config.command?.includes('task-master'));
+                    });
                     
                     if (serverEntry) {
-                        const [name, config] = serverEntry;
+                        const [name, rawConfig] = serverEntry;
+                        const config = asMcpConfig(rawConfig);
                         taskMasterServer = {
                             name,
                             scope: 'local',
@@ -109,7 +130,7 @@ export async function detectTaskMasterMCPServer() {
                     command: taskMasterServer.config?.command,
                     args: taskMasterServer.config?.args || [],
                     url: taskMasterServer.config?.url,
-                    envVars: hasEnvVars ? Object.keys(taskMasterServer.config.env) : [],
+                    envVars: hasEnvVars ? Object.keys(taskMasterServer.config.env || {}) : [],
                     type: taskMasterServer.type
                 }
             };
@@ -117,12 +138,13 @@ export async function detectTaskMasterMCPServer() {
             // Get list of available servers for debugging
             const availableServers = [];
             if (configData.mcpServers) {
-                availableServers.push(...Object.keys(configData.mcpServers));
+                availableServers.push(...Object.keys(asRecord(configData.mcpServers)));
             }
             if (configData.projects) {
-                for (const projectConfig of Object.values(configData.projects)) {
+                for (const rawProjectConfig of Object.values(asRecord(configData.projects))) {
+                    const projectConfig = asRecord(rawProjectConfig);
                     if (projectConfig.mcpServers) {
-                        availableServers.push(...Object.keys(projectConfig.mcpServers).map(name => `local:${name}`));
+                        availableServers.push(...Object.keys(asRecord(projectConfig.mcpServers)).map(name => `local:${name}`));
                     }
                 }
             }
@@ -139,7 +161,7 @@ export async function detectTaskMasterMCPServer() {
         console.error('Error detecting MCP server config:', error);
         return {
             hasMCPServer: false,
-            reason: `Error checking MCP config: ${error.message}`,
+            reason: `Error checking MCP config: ${error instanceof Error ? error.message : String(error)}`,
             hasConfig: false
         };
     }

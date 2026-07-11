@@ -33,16 +33,16 @@ test('unknown CLI sources cannot trigger a shadow global update', async () => {
 });
 
 test('CLI mutations reject concurrent operations for the same tool', async () => {
-  let release;
+  let release: ((value: string) => void) | undefined;
   const blocker = new Promise((resolve) => { release = resolve; });
   const first = withCliMutation('opencode', async () => blocker);
   await assert.rejects(
     withCliMutation('opencode', async () => undefined),
-    (error) => error instanceof Error && error.statusCode === 409,
+    (error) => error instanceof Error && 'statusCode' in error && error.statusCode === 409,
   );
   const otherTool = withCliMutation('codex', async () => 'ok');
   assert.equal(await otherTool, 'ok');
-  release('done');
+  release?.('done');
   assert.equal(await first, 'done');
 });
 

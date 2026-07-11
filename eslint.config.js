@@ -165,8 +165,8 @@ export default tseslint.config(
             "server/shared/provider-errors.ts",
             "server/shared/provider-runtime-paths.ts",
             "server/shared/provider-templates.ts",
-            "server/shared/network-hosts.js",
-            "server/services/notification-orchestrator.js",
+            "server/shared/network-hosts.{js,ts}",
+            "server/services/notification-orchestrator.{js,ts}",
           ], // classify shared utility files so modules can depend on them explicitly
           mode: "file",
         },
@@ -174,9 +174,9 @@ export default tseslint.config(
           type: "backend-legacy-runtime", // legacy runtime persistence modules used while providers migrate into server/modules
           pattern: [
             "server/projects.js",
-            "server/utils/runtime-paths.js",
-            "server/utils/mcp-detector.js",
-            "server/utils/taskmaster-websocket.js",
+            "server/utils/runtime-paths.{js,ts}",
+            "server/utils/mcp-detector.{js,ts}",
+            "server/utils/taskmaster-websocket.{js,ts}",
           ], // provider history loading still resolves session data through these legacy runtime files
           mode: "file",
         },

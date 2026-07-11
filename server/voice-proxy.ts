@@ -11,6 +11,11 @@
 import { Readable } from 'node:stream';
 
 import express from 'express';
+import type { Request, Response as ExpressResponse } from 'express';
+import type { Multer } from 'multer';
+
+type VoiceConfig = { baseUrl: string; apiKey: string; sttModel: string; ttsModel: string; ttsVoice: string; ttsFormat: string };
+function errorMessage(error: unknown): string { return error instanceof Error ? error.message : String(error ?? ''); }
 
 const ENV = {
   baseUrl: (process.env.VOICE_API_BASE_URL || '').replace(/\/$/, ''),
@@ -26,7 +31,7 @@ const ENV = {
  * @param {import('express').Request} req
  * @returns {{baseUrl: string, apiKey: string, sttModel: string, ttsModel: string, ttsVoice: string, ttsFormat: string}}
  */
-function resolveConfig(req) {
+function resolveConfig(req: Request): VoiceConfig {
   const h = req.headers;
   return {
     // Security: do not allow clients to control the outbound backend host.
@@ -55,9 +60,9 @@ const VOICE_TIMEOUT_MS = Number.isFinite(_parsedTimeout) && _parsedTimeout > 0
  * request open indefinitely. Aborts after VOICE_TIMEOUT_MS.
  * @param {string} url
  * @param {RequestInit} [options]
- * @returns {Promise<Response>}
+ * @returns {Promise<globalThis.Response>}
  */
-async function fetchWithTimeout(url, options = {}) {
+async function fetchWithTimeout(url: string, options: RequestInit = {}): Promise<globalThis.Response> {
   const parsed = new URL(url);
   if (!['http:', 'https:'].includes(parsed.protocol) || !isAllowedBackendUrl(parsed.origin)) {
     throw new Error('Blocked outbound voice backend URL');
@@ -77,13 +82,13 @@ async function fetchWithTimeout(url, options = {}) {
  * @param {import('express').Response} res
  * @param {Error} e
  */
-function backendError(res, e) {
-  if (e && e.name === 'AbortError') {
+function backendError(res: ExpressResponse, e: unknown) {
+  if (e instanceof Error && e.name === 'AbortError') {
     return res.status(504).json({
       error: `Voice backend timed out after ${Math.round(VOICE_TIMEOUT_MS / 1000)}s. Check your voice backend.`,
     });
   }
-  return res.status(502).json({ error: `Voice backend unreachable: ${e.message}` });
+  return res.status(502).json({ error: `Voice backend unreachable: ${errorMessage(e)}` });
 }
 
 /**
@@ -94,7 +99,7 @@ function backendError(res, e) {
  * @param {string} raw
  * @returns {boolean}
  */
-function isAllowedBackendUrl(raw) {
+function isAllowedBackendUrl(raw: string): boolean {
   let u;
   try {
     u = new URL(raw);
@@ -113,20 +118,20 @@ function isAllowedBackendUrl(raw) {
  * @param {number} status
  * @param {string} [text]
  */
-function upstreamError(res, status, text) {
+function upstreamError(res: ExpressResponse, status: number, text?: string) {
   if (status === 401 || status === 403) {
     return res.status(502).json({ error: 'Voice backend rejected the request (check the API key).' });
   }
   return res.status(status).json({ error: text || 'voice backend error' });
 }
 
-let _upload = null;
+let _upload: Multer | null = null;
 /**
  * Lazily build a memory-storage multer instance (25 MB cap) for audio uploads,
  * so multer is only imported when the voice feature is actually used.
  * @returns {Promise<import('multer').Multer>}
  */
-async function getUpload() {
+async function getUpload(): Promise<Multer> {
   if (!_upload) {
     const multer = (await import('multer')).default;
     _upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 25 * 1024 * 1024 } });
@@ -140,7 +145,7 @@ async function getUpload() {
  * @param {string} apiKey
  * @returns {Record<string, string>}
  */
-function authHeader(apiKey) {
+function authHeader(apiKey: string): Record<string, string> {
   return apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
 }
 
@@ -160,8 +165,8 @@ router.post('/transcribe', async (req, res) => {
   if (!cfg.baseUrl) return res.status(503).json({ error: 'No voice backend configured' });
   if (!isAllowedBackendUrl(cfg.baseUrl)) return res.status(400).json({ error: 'Invalid voice backend URL.' });
   const upload = await getUpload();
-  upload.single('audio')(req, res, async (err) => {
-    if (err) return res.status(400).json({ error: err.message });
+  upload.single('audio')(req, res, async (err: unknown) => {
+    if (err) return res.status(400).json({ error: errorMessage(err) });
     if (!req.file) return res.status(400).json({ error: 'No audio uploaded' });
     try {
       const fd = new FormData();
@@ -178,9 +183,9 @@ router.post('/transcribe', async (req, res) => {
       });
       const text = await r.text();
       if (!r.ok) return upstreamError(res, r.status, text);
-      let data;
-      try { data = JSON.parse(text); } catch { data = { text }; }
-      res.json({ text: data.text ?? '' });
+      let data: Record<string, unknown>;
+      try { data = JSON.parse(text) as Record<string, unknown>; } catch { data = { text }; }
+      res.json({ text: typeof data.text === 'string' ? data.text : '' });
     } catch (e) {
       backendError(res, e);
     }

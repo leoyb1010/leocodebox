@@ -1,4 +1,5 @@
 import path from 'path';
+import type { ChildProcess } from 'node:child_process';
 
 // cross-spawn: drop-in spawn with Windows .cmd/PATHEXT resolution.
 import spawn from 'cross-spawn';
@@ -6,9 +7,9 @@ import spawn from 'cross-spawn';
 import { scanPlugins, getPluginsConfig, getPluginDir } from './plugin-loader.js';
 
 // Map<pluginName, { process, port }>
-const runningPlugins = new Map();
+const runningPlugins = new Map<string, { process: ChildProcess; port: number }>();
 // Map<pluginName, Promise<port>> — in-flight start operations
-const startingPlugins = new Map();
+const startingPlugins = new Map<string, Promise<number>>();
 
 /**
  * Build the environment handed to a plugin server subprocess.
@@ -21,8 +22,8 @@ const startingPlugins = new Map();
  * resolve system DLLs, executable extensions and a temp directory. None of
  * these carry secrets, so the ones that are set get passed straight through.
  */
-function buildPluginEnv(name) {
-  const env = {
+function buildPluginEnv(name: string): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {
     PATH: process.env.PATH,
     HOME: process.env.HOME,
     NODE_ENV: process.env.NODE_ENV || 'production',
@@ -50,17 +51,17 @@ function buildPluginEnv(name) {
  * The plugin's server entry must print a JSON line with { ready: true, port: <number> }
  * to stdout within 10 seconds.
  */
-export function startPluginServer(name, pluginDir, serverEntry) {
+export function startPluginServer(name: string, pluginDir: string, serverEntry: string): Promise<number> {
   if (runningPlugins.has(name)) {
-    return Promise.resolve(runningPlugins.get(name).port);
+    return Promise.resolve(runningPlugins.get(name)!.port);
   }
 
   // Coalesce concurrent starts for the same plugin
   if (startingPlugins.has(name)) {
-    return startingPlugins.get(name);
+    return startingPlugins.get(name)!;
   }
 
-  const startPromise = new Promise((resolve, reject) => {
+  const startPromise = new Promise<number>((resolve, reject) => {
 
     const serverPath = path.join(pluginDir, serverEntry);
 
@@ -81,7 +82,7 @@ export function startPluginServer(name, pluginDir, serverEntry) {
       }
     }, 10000);
 
-    pluginProcess.stdout.on('data', (data) => {
+    pluginProcess.stdout?.on('data', (data) => {
       if (resolved) return;
       stdout += data.toString();
 
@@ -108,7 +109,7 @@ export function startPluginServer(name, pluginDir, serverEntry) {
       }
     });
 
-    pluginProcess.stderr.on('data', (data) => {
+    pluginProcess.stderr?.on('data', (data) => {
       console.warn(`[Plugin:${name}] ${data.toString().trim()}`);
     });
 
@@ -140,11 +141,11 @@ export function startPluginServer(name, pluginDir, serverEntry) {
  * Stop a plugin's server subprocess.
  * Returns a Promise that resolves when the process has fully exited.
  */
-export function stopPluginServer(name) {
+export function stopPluginServer(name: string): Promise<void> {
   const entry = runningPlugins.get(name);
   if (!entry) return Promise.resolve();
 
-  return new Promise((resolve) => {
+  return new Promise<void>((resolve) => {
     const cleanup = () => {
       clearTimeout(forceKillTimer);
       runningPlugins.delete(name);
@@ -170,22 +171,22 @@ export function stopPluginServer(name) {
 /**
  * Get the port a running plugin server is listening on.
  */
-export function getPluginPort(name) {
+export function getPluginPort(name: string): number | null {
   return runningPlugins.get(name)?.port ?? null;
 }
 
 /**
  * Check if a plugin's server is running.
  */
-export function isPluginRunning(name) {
+export function isPluginRunning(name: string): boolean {
   return runningPlugins.has(name);
 }
 
 /**
  * Stop all running plugin servers (called on host shutdown).
  */
-export function stopAllPlugins() {
-  const stops = [];
+export function stopAllPlugins(): Promise<void[]> {
+  const stops: Promise<void>[] = [];
   for (const [name] of runningPlugins) {
     stops.push(stopPluginServer(name));
   }
@@ -196,7 +197,7 @@ export function stopAllPlugins() {
  * Start servers for all enabled plugins that have a server entry.
  * Called once on host server boot.
  */
-export async function startEnabledPluginServers() {
+export async function startEnabledPluginServers(): Promise<void> {
   const plugins = scanPlugins();
   const config = getPluginsConfig();
 
@@ -210,7 +211,7 @@ export async function startEnabledPluginServers() {
     try {
       await startPluginServer(plugin.name, pluginDir, plugin.server);
     } catch (err) {
-      console.error(`[Plugins] Failed to start server for "${plugin.name}":`, err.message);
+      console.error(`[Plugins] Failed to start server for "${plugin.name}":`, err instanceof Error ? err.message : String(err));
     }
   }
 }

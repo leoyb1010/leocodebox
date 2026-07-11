@@ -2,13 +2,14 @@ import webPush from 'web-push';
 
 import { getConnection } from '../modules/database/connection.js';
 
-let cachedKeys = null;
+type VapidKeys = { publicKey: string; privateKey: string };
+let cachedKeys: VapidKeys | null = null;
 const db = getConnection();
 
-function ensureVapidKeys() {
+function ensureVapidKeys(): VapidKeys {
   if (cachedKeys) return cachedKeys;
 
-  const row = db.prepare('SELECT public_key, private_key FROM vapid_keys ORDER BY id DESC LIMIT 1').get();
+  const row = db.prepare('SELECT public_key, private_key FROM vapid_keys ORDER BY id DESC LIMIT 1').get() as { public_key: string; private_key: string } | undefined;
   if (row) {
     cachedKeys = { publicKey: row.public_key, privateKey: row.private_key };
     return cachedKeys;
@@ -20,11 +21,11 @@ function ensureVapidKeys() {
   return cachedKeys;
 }
 
-function getPublicKey() {
+function getPublicKey(): string {
   return ensureVapidKeys().publicKey;
 }
 
-function configureWebPush() {
+function configureWebPush(): void {
   const keys = ensureVapidKeys();
   webPush.setVapidDetails(
     'mailto:noreply@leocodebox.local',

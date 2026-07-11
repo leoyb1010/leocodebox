@@ -5,7 +5,7 @@ import { parseGitLogWithStats, parseGitStatusOutput } from '../modules/git/index
 
 // Builds `git status --porcelain=v1 -z` output: NUL-separated entries with a
 // trailing NUL, exactly as git emits it.
-const porcelain = (...entries) => entries.join('\0') + '\0';
+const porcelain = (...entries: string[]): string => entries.join('\0') + '\0';
 
 test('parseGitStatusOutput buckets files and reports index-side staging', () => {
   const output = porcelain(
@@ -69,7 +69,7 @@ test('parseGitStatusOutput handles empty output', () => {
 
 // Builds one `git log --pretty=format:%H%x1f%P%x1f%D%x1f%an%x1f%ae%x1f%ad%x1f%s` line.
 const US = '';
-const logLine = (hash, parents, refs, subject) =>
+const logLine = (hash: string, parents: string, refs: string, subject: string): string =>
   [hash, parents, refs, 'Alice', 'a@x.com', '2026-07-06T10:00:00+03:00', subject].join(US);
 
 test('parseGitLogWithStats parses commits with parents, refs, and shortstat lines', () => {

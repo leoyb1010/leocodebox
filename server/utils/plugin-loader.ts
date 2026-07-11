@@ -4,15 +4,38 @@ import os from 'os';
 
 import { spawn } from 'cross-spawn';
 
+
+export type PluginManifest = {
+  name: string;
+  displayName: string;
+  entry: string;
+  version?: string;
+  description?: string;
+  author?: string;
+  icon?: string;
+  type?: string;
+  slot?: string;
+  server?: string | null;
+  permissions?: string[];
+};
+export type InstalledPlugin = {
+  name: string; displayName: string; version: string; description: string; author: string; icon: string;
+  type: string; slot: string; entry: string; server: string | null; permissions: string[]; enabled: boolean;
+  dirName: string; repoUrl: string | null;
+};
+type PluginsConfig = Record<string, { enabled?: boolean; secrets?: Record<string, unknown> }>;
+type ValidationResult = { valid: boolean; error?: string };
+function errorMessage(error: unknown): string { return error instanceof Error ? error.message : String(error ?? ''); }
+
 const PLUGINS_DIR = path.join(os.homedir(), '.leocodebox', 'plugins');
 const PLUGINS_CONFIG_PATH = path.join(os.homedir(), '.leocodebox', 'plugins.json');
 const LEGACY_PLUGINS_DIR = path.join(os.homedir(), '.claude-code-ui', 'plugins');
 const LEGACY_PLUGINS_CONFIG_PATH = path.join(os.homedir(), '.claude-code-ui', 'plugins.json');
 
-const REQUIRED_MANIFEST_FIELDS = ['name', 'displayName', 'entry'];
+const REQUIRED_MANIFEST_FIELDS = ['name', 'displayName', 'entry'] as const;
 
 /** Strip embedded credentials from a repo URL before exposing it to the client. */
-function sanitizeRepoUrl(raw) {
+function sanitizeRepoUrl(raw: string): string {
   try {
     const u = new URL(raw);
     u.username = '';
@@ -26,7 +49,7 @@ function sanitizeRepoUrl(raw) {
 const ALLOWED_TYPES = ['react', 'module'];
 const ALLOWED_SLOTS = ['tab'];
 
-export function getPluginsDir() {
+export function getPluginsDir(): string {
   if (!fs.existsSync(PLUGINS_DIR)) {
     fs.mkdirSync(PLUGINS_DIR, { recursive: true });
     if (fs.existsSync(LEGACY_PLUGINS_DIR)) {
@@ -40,7 +63,7 @@ export function getPluginsDir() {
   return PLUGINS_DIR;
 }
 
-export function getPluginsConfig() {
+export function getPluginsConfig(): PluginsConfig {
   try {
     if (fs.existsSync(PLUGINS_CONFIG_PATH)) {
       return JSON.parse(fs.readFileSync(PLUGINS_CONFIG_PATH, 'utf-8'));
@@ -54,7 +77,7 @@ export function getPluginsConfig() {
   return {};
 }
 
-export function savePluginsConfig(config) {
+export function savePluginsConfig(config: PluginsConfig): void {
   const dir = path.dirname(PLUGINS_CONFIG_PATH);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
@@ -62,43 +85,44 @@ export function savePluginsConfig(config) {
   fs.writeFileSync(PLUGINS_CONFIG_PATH, JSON.stringify(config, null, 2), { mode: 0o600 });
 }
 
-export function validateManifest(manifest) {
+export function validateManifest(manifest: unknown): ValidationResult {
+  const value = manifest as Partial<PluginManifest>;
   if (!manifest || typeof manifest !== 'object') {
     return { valid: false, error: 'Manifest must be a JSON object' };
   }
 
   for (const field of REQUIRED_MANIFEST_FIELDS) {
-    if (!manifest[field] || typeof manifest[field] !== 'string') {
+    if (!value[field] || typeof value[field] !== 'string') {
       return { valid: false, error: `Missing or invalid required field: ${field}` };
     }
   }
 
   // Sanitize name — only allow alphanumeric, hyphens, underscores
-  if (!/^[a-zA-Z0-9_-]+$/.test(manifest.name)) {
+  if (!/^[a-zA-Z0-9_-]+$/.test(value.name!)) {
     return { valid: false, error: 'Plugin name must only contain letters, numbers, hyphens, and underscores' };
   }
 
-  if (manifest.type && !ALLOWED_TYPES.includes(manifest.type)) {
-    return { valid: false, error: `Invalid plugin type: ${manifest.type}. Must be one of: ${ALLOWED_TYPES.join(', ')}` };
+  if (value.type && !ALLOWED_TYPES.includes(value.type)) {
+    return { valid: false, error: `Invalid plugin type: ${value.type}. Must be one of: ${ALLOWED_TYPES.join(', ')}` };
   }
 
-  if (manifest.slot && !ALLOWED_SLOTS.includes(manifest.slot)) {
-    return { valid: false, error: `Invalid plugin slot: ${manifest.slot}. Must be one of: ${ALLOWED_SLOTS.join(', ')}` };
+  if (value.slot && !ALLOWED_SLOTS.includes(value.slot)) {
+    return { valid: false, error: `Invalid plugin slot: ${value.slot}. Must be one of: ${ALLOWED_SLOTS.join(', ')}` };
   }
 
   // Validate entry is a relative path without traversal
-  if (manifest.entry.includes('..') || path.isAbsolute(manifest.entry)) {
+  if (value.entry!.includes('..') || path.isAbsolute(value.entry!)) {
     return { valid: false, error: 'Entry must be a relative path without ".."' };
   }
 
-  if (manifest.server !== undefined && manifest.server !== null) {
-    if (typeof manifest.server !== 'string' || manifest.server.includes('..') || path.isAbsolute(manifest.server)) {
+  if (value.server !== undefined && value.server !== null) {
+    if (typeof value.server !== 'string' || value.server.includes('..') || path.isAbsolute(value.server)) {
       return { valid: false, error: 'Server entry must be a relative path string without ".."' };
     }
   }
 
-  if (manifest.permissions !== undefined) {
-    if (!Array.isArray(manifest.permissions) || !manifest.permissions.every(p => typeof p === 'string')) {
+  if (value.permissions !== undefined) {
+    if (!Array.isArray(value.permissions) || !value.permissions.every(p => typeof p === 'string')) {
       return { valid: false, error: 'Permissions must be an array of strings' };
     }
   }
@@ -109,7 +133,7 @@ export function validateManifest(manifest) {
 const BUILD_TIMEOUT_MS = 60_000;
 
 /** Run `npm run build` if the plugin's package.json declares a build script. */
-function runBuildIfNeeded(dir, packageJsonPath, onSuccess, onError) {
+function runBuildIfNeeded(dir: string, packageJsonPath: string, onSuccess: () => void, onError: (error: Error) => void): void {
   try {
     const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
     if (!pkg.scripts?.build) {
@@ -135,7 +159,7 @@ function runBuildIfNeeded(dir, packageJsonPath, onSuccess, onError) {
     onError(new Error('npm run build timed out'));
   }, BUILD_TIMEOUT_MS);
 
-  buildProcess.stderr.on('data', (data) => { stderr += data.toString(); });
+  buildProcess.stderr?.on('data', (data) => { stderr += data.toString(); });
 
   buildProcess.on('close', (code) => {
     if (settled) return;
@@ -151,14 +175,14 @@ function runBuildIfNeeded(dir, packageJsonPath, onSuccess, onError) {
     if (settled) return;
     settled = true;
     clearTimeout(timer);
-    onError(new Error(`Failed to spawn build: ${err.message}`));
+    onError(new Error(`Failed to spawn build: ${errorMessage(err)}`));
   });
 }
 
-export function scanPlugins() {
+export function scanPlugins(): InstalledPlugin[] {
   const pluginsDir = getPluginsDir();
   const config = getPluginsConfig();
-  const plugins = [];
+  const plugins: InstalledPlugin[] = [];
 
   let entries;
   try {
@@ -167,7 +191,7 @@ export function scanPlugins() {
     return plugins;
   }
 
-  const seenNames = new Set();
+  const seenNames = new Set<string>();
 
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
@@ -178,7 +202,7 @@ export function scanPlugins() {
     if (!fs.existsSync(manifestPath)) continue;
 
     try {
-      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+      const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as PluginManifest;
       const validation = validateManifest(manifest);
       if (!validation.valid) {
         console.warn(`[Plugins] Skipping ${entry.name}: ${validation.error}`);
@@ -228,21 +252,21 @@ export function scanPlugins() {
         repoUrl,
       });
     } catch (err) {
-      console.warn(`[Plugins] Failed to read manifest for ${entry.name}:`, err.message);
+      console.warn(`[Plugins] Failed to read manifest for ${entry.name}:`, errorMessage(err));
     }
   }
 
   return plugins;
 }
 
-export function getPluginDir(name) {
+export function getPluginDir(name: string): string | null {
   const plugins = scanPlugins();
   const plugin = plugins.find(p => p.name === name);
   if (!plugin) return null;
   return path.join(getPluginsDir(), plugin.dirName);
 }
 
-export function resolvePluginAssetPath(name, assetPath) {
+export function resolvePluginAssetPath(name: string, assetPath: string): string | null {
   const pluginDir = getPluginDir(name);
   if (!pluginDir) return null;
 
@@ -260,8 +284,8 @@ export function resolvePluginAssetPath(name, assetPath) {
   return realResolved;
 }
 
-export function installPluginFromGit(url) {
-  return new Promise((resolve, reject) => {
+export function installPluginFromGit(url: string): Promise<PluginManifest> {
+  return new Promise<PluginManifest>((resolve, reject) => {
     if (typeof url !== 'string' || !url.trim()) {
       return reject(new Error('Invalid URL: must be a non-empty string'));
     }
@@ -292,16 +316,16 @@ export function installPluginFromGit(url) {
     // Clone into a temp directory so scanPlugins() never sees a partially-installed plugin
     const tempDir = fs.mkdtempSync(path.join(pluginsDir, `.tmp-${repoName}-`));
 
-    const cleanupTemp = () => {
+    const cleanupTemp = (): void => {
       try { fs.rmSync(tempDir, { recursive: true, force: true }); } catch {}
     };
 
-    const finalize = (manifest) => {
+    const finalize = (manifest: PluginManifest): void => {
       try {
         fs.renameSync(tempDir, targetDir);
       } catch (err) {
         cleanupTemp();
-        return reject(new Error(`Failed to move plugin into place: ${err.message}`));
+        return reject(new Error(`Failed to move plugin into place: ${errorMessage(err)}`));
       }
       resolve(manifest);
     };
@@ -311,7 +335,7 @@ export function installPluginFromGit(url) {
     });
 
     let stderr = '';
-    gitProcess.stderr.on('data', (data) => { stderr += data.toString(); });
+    gitProcess.stderr?.on('data', (data) => { stderr += data.toString(); });
 
     gitProcess.on('close', (code) => {
       if (code !== 0) {
@@ -326,9 +350,9 @@ export function installPluginFromGit(url) {
         return reject(new Error('Cloned repository does not contain a manifest.json'));
       }
 
-      let manifest;
+      let manifest: PluginManifest;
       try {
-        manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+        manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as PluginManifest;
       } catch {
         cleanupTemp();
         return reject(new Error('manifest.json is not valid JSON'));
@@ -375,13 +399,13 @@ export function installPluginFromGit(url) {
 
     gitProcess.on('error', (err) => {
       cleanupTemp();
-      reject(new Error(`Failed to spawn git: ${err.message}`));
+      reject(new Error(`Failed to spawn git: ${errorMessage(err)}`));
     });
   });
 }
 
-export function updatePluginFromGit(name) {
-  return new Promise((resolve, reject) => {
+export function updatePluginFromGit(name: string): Promise<PluginManifest> {
+  return new Promise<PluginManifest>((resolve, reject) => {
     const pluginDir = getPluginDir(name);
     if (!pluginDir) {
       return reject(new Error(`Plugin "${name}" not found`));
@@ -394,7 +418,7 @@ export function updatePluginFromGit(name) {
     });
 
     let stderr = '';
-    gitProcess.stderr.on('data', (data) => { stderr += data.toString(); });
+    gitProcess.stderr?.on('data', (data) => { stderr += data.toString(); });
 
     gitProcess.on('close', (code) => {
       if (code !== 0) {
@@ -403,9 +427,9 @@ export function updatePluginFromGit(name) {
 
       // Re-validate manifest after update
       const manifestPath = path.join(pluginDir, 'manifest.json');
-      let manifest;
+      let manifest: PluginManifest;
       try {
-        manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8'));
+        manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf-8')) as PluginManifest;
       } catch {
         return reject(new Error('manifest.json is not valid JSON after update'));
       }
@@ -435,12 +459,12 @@ export function updatePluginFromGit(name) {
     });
 
     gitProcess.on('error', (err) => {
-      reject(new Error(`Failed to spawn git: ${err.message}`));
+      reject(new Error(`Failed to spawn git: ${errorMessage(err)}`));
     });
   });
 }
 
-export async function uninstallPlugin(name) {
+export async function uninstallPlugin(name: string): Promise<void> {
   const pluginDir = getPluginDir(name);
   if (!pluginDir) {
     throw new Error(`Plugin "${name}" not found`);
@@ -455,7 +479,7 @@ export async function uninstallPlugin(name) {
       fs.rmSync(pluginDir, { recursive: true, force: true });
       break;
     } catch (err) {
-      if (err.code === 'EBUSY' && attempt < MAX_RETRIES) {
+      if ((err as NodeJS.ErrnoException).code === 'EBUSY' && attempt < MAX_RETRIES) {
         await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
       } else {
         throw err;

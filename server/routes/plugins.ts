@@ -25,6 +25,8 @@ import {
 
 const router = express.Router();
 
+function errorMessage(error: unknown): string { return error instanceof Error ? error.message : String(error ?? ''); }
+
 // GET / — List all installed plugins (includes server running status)
 router.get('/', (req, res) => {
   try {
@@ -34,7 +36,7 @@ router.get('/', (req, res) => {
     }));
     res.json({ plugins });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to scan plugins', details: err.message });
+    res.status(500).json({ error: 'Failed to scan plugins', details: errorMessage(err) });
   }
 });
 
@@ -51,7 +53,7 @@ router.get('/:name/manifest', (req, res) => {
     }
     res.json(plugin);
   } catch (err) {
-    res.status(500).json({ error: 'Failed to read plugin manifest', details: err.message });
+    res.status(500).json({ error: 'Failed to read plugin manifest', details: errorMessage(err) });
   }
 });
 
@@ -61,7 +63,7 @@ router.get('/:name/assets/*', (req, res) => {
   if (!/^[a-zA-Z0-9_-]+$/.test(pluginName)) {
     return res.status(400).json({ error: 'Invalid plugin name' });
   }
-  const assetPath = req.params[0];
+  const assetPath = (req.params as unknown as Record<string, string>)['0'];
 
   if (!assetPath) {
     return res.status(400).json({ error: 'No asset path specified' });
@@ -124,7 +126,7 @@ router.put('/:name/enable', async (req, res) => {
           try {
             await startPluginServer(plugin.name, pluginDir, plugin.server);
           } catch (err) {
-            console.error(`[Plugins] Failed to start server for "${plugin.name}":`, err.message);
+            console.error(`[Plugins] Failed to start server for "${plugin.name}":`, errorMessage(err));
           }
         }
       } else if (!enabled && isPluginRunning(plugin.name)) {
@@ -134,7 +136,7 @@ router.put('/:name/enable', async (req, res) => {
 
     res.json({ success: true, name: req.params.name, enabled });
   } catch (err) {
-    res.status(500).json({ error: 'Failed to update plugin', details: err.message });
+    res.status(500).json({ error: 'Failed to update plugin', details: errorMessage(err) });
   }
 });
 
@@ -160,14 +162,14 @@ router.post('/install', async (req, res) => {
         try {
           await startPluginServer(manifest.name, pluginDir, manifest.server);
         } catch (err) {
-          console.error(`[Plugins] Failed to start server for "${manifest.name}":`, err.message);
+          console.error(`[Plugins] Failed to start server for "${manifest.name}":`, errorMessage(err));
         }
       }
     }
 
     res.json({ success: true, plugin: manifest });
   } catch (err) {
-    res.status(400).json({ error: 'Failed to install plugin', details: err.message });
+    res.status(400).json({ error: 'Failed to install plugin', details: errorMessage(err) });
   }
 });
 
@@ -194,21 +196,21 @@ router.post('/:name/update', async (req, res) => {
         try {
           await startPluginServer(pluginName, pluginDir, manifest.server);
         } catch (err) {
-          console.error(`[Plugins] Failed to restart server for "${pluginName}":`, err.message);
+          console.error(`[Plugins] Failed to restart server for "${pluginName}":`, errorMessage(err));
         }
       }
     }
 
     res.json({ success: true, plugin: manifest });
   } catch (err) {
-    res.status(400).json({ error: 'Failed to update plugin', details: err.message });
+    res.status(400).json({ error: 'Failed to update plugin', details: errorMessage(err) });
   }
 });
 
 // ALL /:name/rpc/* — Proxy requests to plugin's server subprocess
 router.all('/:name/rpc/*', async (req, res) => {
   const pluginName = req.params.name;
-  const rpcPath = req.params[0] || '';
+  const rpcPath = (req.params as unknown as Record<string, string>)['0'] || '';
 
   if (!/^[a-zA-Z0-9_-]+$/.test(pluginName)) {
     return res.status(400).json({ error: 'Invalid plugin name' });
@@ -229,7 +231,7 @@ router.all('/:name/rpc/*', async (req, res) => {
     try {
       port = await startPluginServer(pluginName, pluginDir, plugin.server);
     } catch (err) {
-      return res.status(503).json({ error: 'Plugin server failed to start', details: err.message });
+      return res.status(503).json({ error: 'Plugin server failed to start', details: errorMessage(err) });
     }
   }
 
@@ -238,7 +240,7 @@ router.all('/:name/rpc/*', async (req, res) => {
   const pluginConfig = config[pluginName] || {};
   const secrets = pluginConfig.secrets || {};
 
-  const headers = {
+  const headers: Record<string, string> = {
     'content-type': req.headers['content-type'] || 'application/json',
   };
 
@@ -259,13 +261,13 @@ router.all('/:name/rpc/*', async (req, res) => {
   };
 
   const proxyReq = http.request(options, (proxyRes) => {
-    res.writeHead(proxyRes.statusCode, proxyRes.headers);
+    res.writeHead(proxyRes.statusCode || 502, proxyRes.headers);
     proxyRes.pipe(res);
   });
 
   proxyReq.on('error', (err) => {
     if (!res.headersSent) {
-      res.status(502).json({ error: 'Plugin server error', details: err.message });
+      res.status(502).json({ error: 'Plugin server error', details: errorMessage(err) });
     } else {
       res.end();
     }
@@ -302,7 +304,7 @@ router.delete('/:name', async (req, res) => {
     await uninstallPlugin(pluginName);
     res.json({ success: true, name: pluginName });
   } catch (err) {
-    res.status(400).json({ error: 'Failed to uninstall plugin', details: err.message });
+    res.status(400).json({ error: 'Failed to uninstall plugin', details: errorMessage(err) });
   }
 });
 

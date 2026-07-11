@@ -1,11 +1,11 @@
 const ANSI_ESCAPE_SEQUENCE_REGEX = /\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\][^\x07]*(?:\x07|\x1B\\))/g;
 const TRAILING_URL_PUNCTUATION_REGEX = /[)\]}>.,;:!?]+$/;
 
-function stripAnsiSequences(value = '') {
+function stripAnsiSequences(value = ''): string {
     return value.replace(ANSI_ESCAPE_SEQUENCE_REGEX, '');
 }
 
-function normalizeDetectedUrl(url) {
+function normalizeDetectedUrl(url: unknown): string | null {
     if (!url || typeof url !== 'string') return null;
 
     const cleaned = url.trim().replace(TRAILING_URL_PUNCTUATION_REGEX, '');
@@ -22,7 +22,7 @@ function normalizeDetectedUrl(url) {
     }
 }
 
-function extractUrlsFromText(value = '') {
+function extractUrlsFromText(value = ''): string[] {
     const directMatches = value.match(/https?:\/\/[^\s<>"'`\\\x1b\x07]+/gi) || [];
 
     // Handle wrapped terminal URLs split across lines by terminal width.
@@ -50,7 +50,7 @@ function extractUrlsFromText(value = '') {
     return Array.from(new Set([...directMatches, ...wrappedMatches]));
 }
 
-function shouldAutoOpenUrlFromOutput(value = '') {
+function shouldAutoOpenUrlFromOutput(value = ''): boolean {
     const normalized = value.toLowerCase();
     return (
         normalized.includes('browser didn\'t open') ||

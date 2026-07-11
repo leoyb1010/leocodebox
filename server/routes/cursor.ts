@@ -6,6 +6,10 @@ import express from 'express';
 
 import { CURSOR_FALLBACK_MODELS } from '../modules/providers/list/cursor/cursor-models.provider.js';
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error ?? '');
+}
+
 const router = express.Router();
 
 // GET /api/cursor/config - Read Cursor CLI configuration.
@@ -24,7 +28,7 @@ router.get('/config', async (req, res) => {
       });
     } catch (error) {
       // Config doesn't exist or is invalid, so return the UI default shape.
-      console.log('Cursor config not found or invalid:', error.message);
+      console.log('Cursor config not found or invalid:', errorMessage(error));
 
       res.json({
         success: true,
@@ -46,7 +50,7 @@ router.get('/config', async (req, res) => {
     console.error('Error reading Cursor config:', error);
     res.status(500).json({
       error: 'Failed to read Cursor configuration',
-      details: error.message,
+      details: errorMessage(error),
     });
   }
 });

@@ -1,4 +1,5 @@
 import express from 'express';
+import type { Response } from 'express';
 
 import {
   apiKeysDb,
@@ -12,6 +13,12 @@ import { createNotificationEvent, notifyUserIfEnabled } from '../services/notifi
 import { IS_LOCAL_ONLY_AUTH } from '../middleware/auth.js';
 
 const router = express.Router();
+
+type AppPreferences = {
+  language: string; defaultProvider: string; defaultModel: string; permissionMode: string;
+  density: string; accent: string; reduceMotion: boolean;
+};
+
 
 const DEFAULT_APP_PREFERENCES = Object.freeze({
   language: 'zh-CN',
@@ -31,16 +38,16 @@ const PREFERENCE_ENUMS = Object.freeze({
   accent: new Set(['blue', 'green', 'amber']),
 });
 
-function getPreferencesKey(userId) {
+function getPreferencesKey(userId: number): string {
   return `user_preferences:${userId}`;
 }
 
-function sanitizePreferences(input, current = DEFAULT_APP_PREFERENCES) {
-  const source = input && typeof input === 'object' && !Array.isArray(input) ? input : {};
-  const result = { ...DEFAULT_APP_PREFERENCES, ...current };
+function sanitizePreferences(input: unknown, current: AppPreferences = DEFAULT_APP_PREFERENCES): AppPreferences {
+  const source: Record<string, unknown> = input && typeof input === 'object' && !Array.isArray(input) ? input as Record<string, unknown> : {};
+  const result: AppPreferences = { ...DEFAULT_APP_PREFERENCES, ...current };
 
   for (const [key, allowed] of Object.entries(PREFERENCE_ENUMS)) {
-    if (typeof source[key] === 'string' && allowed.has(source[key])) result[key] = source[key];
+    if (typeof source[key] === 'string' && allowed.has(source[key] as string)) result[key as keyof AppPreferences] = source[key] as never;
   }
   if (typeof source.defaultModel === 'string' && source.defaultModel.length <= 160) {
     result.defaultModel = source.defaultModel.trim();
@@ -49,7 +56,7 @@ function sanitizePreferences(input, current = DEFAULT_APP_PREFERENCES) {
   return result;
 }
 
-function readAppPreferences(userId) {
+function readAppPreferences(userId: number): AppPreferences {
   const stored = appConfigDb.get(getPreferencesKey(userId));
   if (!stored) return { ...DEFAULT_APP_PREFERENCES };
   try {
@@ -59,7 +66,7 @@ function readAppPreferences(userId) {
   }
 }
 
-function rejectWebPushInLocalOnly(res) {
+function rejectWebPushInLocalOnly(res: Response) {
   return res.status(404).json({ error: 'Web push notifications are disabled in local-only mode.' });
 }
 
@@ -168,7 +175,7 @@ router.patch('/api-keys/:keyId/toggle', async (req, res) => {
 router.get('/credentials', async (req, res) => {
   try {
     const { type } = req.query;
-    const credentials = credentialsDb.getCredentials(req.user.id, type || null);
+    const credentials = credentialsDb.getCredentials(req.user.id, typeof type === 'string' ? type : null);
     // Don't send the actual credential values for security
     res.json({ credentials });
   } catch (error) {

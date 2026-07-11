@@ -6,8 +6,10 @@ import path from 'path';
 import http from 'http';
 
 import express from 'express';
+import type { ErrorRequestHandler } from 'express';
 
 import { AppError } from '@/shared/utils.js';
+import { getConnectableHost } from '@/shared/network-hosts.js';
 
 import { findAppRoot, getModuleDir } from './utils/runtime-paths.js';
 import gitRoutes from './modules/git/index.js';
@@ -39,6 +41,7 @@ const __dirname = getModuleDir(import.meta.url);
 // The server source runs from /server, while the compiled output runs from /dist-server/server.
 // Resolving the app root once keeps every repo-level lookup below aligned across both layouts.
 const APP_ROOT = findAppRoot(__dirname);
+const VITE_PORT = Number.parseInt(process.env.VITE_PORT || '', 10) || 5173;
 const installMode = fs.existsSync(path.join(APP_ROOT, '.git')) ? 'git' : 'npm';
 // Version of the code that is actually running, captured once at process
 // startup. This intentionally does NOT re-read package.json per request: after
@@ -175,7 +178,7 @@ app.post('/api/system/update', authenticateToken, async (req, res) => {
         console.error('System update error:', error);
         res.status(500).json({
             success: false,
-            error: error.message
+            error: error instanceof Error ? error.message : String(error)
         });
     }
 });
@@ -216,7 +219,7 @@ app.get('*', (req, res) => {
 });
 
 // global error middleware must be last
-app.use((err, req, res, next) => {
+const globalErrorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof AppError) {
     return res.status(err.statusCode).json({
       success: false,
@@ -237,7 +240,8 @@ app.use((err, req, res, next) => {
       message: 'Internal server error',
     },
   });
-});
+};
+app.use(globalErrorHandler);
 
 
 void startServerLifecycle({ server, appRoot: APP_ROOT, installMode, runningVersion: RUNNING_VERSION });

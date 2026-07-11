@@ -9,6 +9,13 @@ import { parseFrontMatter } from '../shared/frontmatter.js';
 
 const execFileAsync = promisify(execFile);
 
+type CommandValidation = { allowed: boolean; command: string; args: string[]; error?: string };
+type BashCommandOptions = { cwd?: string; timeout?: number };
+function toNodeError(error: unknown): NodeJS.ErrnoException {
+  return error instanceof Error ? error as NodeJS.ErrnoException : new Error(String(error));
+}
+
+
 // Configuration
 const MAX_INCLUDE_DEPTH = 3;
 const BASH_TIMEOUT = 30000; // 30 seconds
@@ -32,7 +39,7 @@ const BASH_COMMAND_ALLOWLIST = [
  * @param {string} content - Raw markdown content
  * @returns {object} Parsed command with data (frontmatter) and content
  */
-export function parseCommand(content) {
+export function parseCommand(content: string): { data: Record<string, unknown>; content: string; raw: string } {
   try {
     const parsed = parseFrontMatter(content);
     return {
@@ -41,7 +48,7 @@ export function parseCommand(content) {
       raw: content
     };
   } catch (error) {
-    throw new Error(`Failed to parse command: ${error.message}`);
+    throw new Error(`Failed to parse command: ${toNodeError(error).message}`);
   }
 }
 
@@ -51,7 +58,7 @@ export function parseCommand(content) {
  * @param {string|array} args - Arguments to replace (string or array)
  * @returns {string} Content with replaced arguments
  */
-export function replaceArguments(content, args) {
+export function replaceArguments(content: string, args: string | string[]): string {
   if (!content) return content;
 
   let result = content;
@@ -79,7 +86,7 @@ export function replaceArguments(content, args) {
  * @param {string} basePath - Base directory path
  * @returns {boolean} True if path is safe
  */
-export function isPathSafe(filePath, basePath) {
+export function isPathSafe(filePath: string, basePath: string): boolean {
   const resolvedPath = path.resolve(basePath, filePath);
   const resolvedBase = path.resolve(basePath);
   const relative = path.relative(resolvedBase, resolvedPath);
@@ -97,7 +104,7 @@ export function isPathSafe(filePath, basePath) {
  * @param {number} depth - Current recursion depth
  * @returns {Promise<string>} Content with includes resolved
  */
-export async function processFileIncludes(content, basePath, depth = 0) {
+export async function processFileIncludes(content: string, basePath: string, depth = 0): Promise<string> {
   if (!content) return content;
 
   // Prevent infinite recursion
@@ -134,7 +141,7 @@ export async function processFileIncludes(content, basePath, depth = 0) {
       // Replace the @filename with the file content
       result = result.replace(fullMatch, fullMatch.startsWith(' ') ? ' ' + processedContent : processedContent);
     } catch (error) {
-      if (error.code === 'ENOENT') {
+      if (toNodeError(error).code === 'ENOENT') {
         throw new Error(`File not found: ${filename}`);
       }
       throw error;
@@ -149,7 +156,7 @@ export async function processFileIncludes(content, basePath, depth = 0) {
  * @param {string} commandString - Command string to validate
  * @returns {{ allowed: boolean, command: string, args: string[], error?: string }} Validation result
  */
-export function validateCommand(commandString) {
+export function validateCommand(commandString: string): CommandValidation {
   const trimmedCommand = commandString.trim();
   if (!trimmedCommand) {
     return { allowed: false, command: '', args: [], error: 'Empty command' };
@@ -160,7 +167,7 @@ export function validateCommand(commandString) {
 
   // Check for shell operators or control structures
   const hasOperators = parsed.some(token =>
-    typeof token === 'object' && token.op
+    typeof token === 'object' && token !== null && 'op' in token
   );
 
   if (hasOperators) {
@@ -173,7 +180,7 @@ export function validateCommand(commandString) {
   }
 
   // Extract command and args (all should be strings after validation)
-  const tokens = parsed.filter(token => typeof token === 'string');
+  const tokens = parsed.filter((token): token is string => typeof token === 'string');
 
   if (tokens.length === 0) {
     return { allowed: false, command: '', args: [], error: 'No valid command found' };
@@ -218,7 +225,7 @@ export function validateCommand(commandString) {
  * @param {string} command - Command to validate
  * @returns {boolean} True if command is allowed
  */
-export function isBashCommandAllowed(command) {
+export function isBashCommandAllowed(command: string): boolean {
   const result = validateCommand(command);
   return result.allowed;
 }
@@ -228,7 +235,7 @@ export function isBashCommandAllowed(command) {
  * @param {string} output - Raw command output
  * @returns {string} Sanitized output
  */
-export function sanitizeOutput(output) {
+export function sanitizeOutput(output: string): string {
   if (!output) return '';
 
   // Remove control characters except \t, \n, \r
@@ -249,7 +256,7 @@ export function sanitizeOutput(output) {
  * @param {object} options - Options for bash execution
  * @returns {Promise<string>} Content with bash commands executed and replaced
  */
-export async function processBashCommands(content, options = {}) {
+export async function processBashCommands(content: string, options: BashCommandOptions = {}): Promise<string> {
   if (!content) return content;
 
   const { cwd = process.cwd(), timeout = BASH_TIMEOUT } = options;
@@ -294,10 +301,11 @@ export async function processBashCommands(content, options = {}) {
       // Replace the !command with the output
       result = result.replace(fullMatch, fullMatch.startsWith('\n') ? '\n' + output : output);
     } catch (error) {
-      if (error.killed) {
+      const commandError = toNodeError(error) as NodeJS.ErrnoException & { killed?: boolean };
+      if (commandError.killed) {
         throw new Error(`Command timeout: ${commandString}`);
       }
-      throw new Error(`Command failed: ${commandString} - ${error.message}`);
+      throw new Error(`Command failed: ${commandString} - ${toNodeError(error).message}`);
     }
   }
 

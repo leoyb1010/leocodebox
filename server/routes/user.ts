@@ -8,17 +8,21 @@ import { getSystemGitConfig } from '../utils/gitConfig.js';
 
 const router = express.Router();
 
-function spawnAsync(command, args, options = {}) {
-  return new Promise((resolve, reject) => {
+type SpawnResult = { stdout: string; stderr: string };
+type SpawnError = Error & { code?: number | null; stdout?: string; stderr?: string };
+
+
+function spawnAsync(command: string, args: string[], options: Record<string, unknown> = {}): Promise<SpawnResult> {
+  return new Promise<SpawnResult>((resolve, reject) => {
     const child = spawn(command, args, { ...options, shell: false });
     let stdout = '';
     let stderr = '';
-    child.stdout.on('data', (data) => { stdout += data.toString(); });
-    child.stderr.on('data', (data) => { stderr += data.toString(); });
+    child.stdout?.on('data', (data) => { stdout += data.toString(); });
+    child.stderr?.on('data', (data) => { stderr += data.toString(); });
     child.on('error', (error) => { reject(error); });
     child.on('close', (code) => {
       if (code === 0) { resolve({ stdout, stderr }); return; }
-      const error = new Error(`Command failed: ${command} ${args.join(' ')}`);
+      const error: SpawnError = new Error(`Command failed: ${command} ${args.join(' ')}`);
       error.code = code;
       error.stdout = stdout;
       error.stderr = stderr;

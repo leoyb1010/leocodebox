@@ -10,6 +10,10 @@ import express from 'express';
 
 import { detectTaskMasterMCPServer } from '../utils/mcp-detector.js';
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error ?? '');
+}
+
 const router = express.Router();
 
 /**
@@ -24,7 +28,7 @@ router.get('/taskmaster-server', async (req, res) => {
         console.error('TaskMaster MCP detection error:', error);
         res.status(500).json({
             error: 'Failed to detect TaskMaster MCP server',
-            message: error.message
+            message: errorMessage(error)
         });
     }
 });

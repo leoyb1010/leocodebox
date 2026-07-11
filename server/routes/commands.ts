@@ -4,6 +4,7 @@ import path from "path";
 
 import express from "express";
 
+import type { LLMProvider } from '../shared/types.js';
 import { providerModelsService } from "../modules/providers/services/provider-models.service.js";
 import { parseFrontMatter } from "../shared/frontmatter.js";
 import { findAppRoot, getModuleDir } from "../utils/runtime-paths.js";
@@ -15,28 +16,37 @@ const APP_ROOT = findAppRoot(__dirname);
 
 const router = express.Router();
 
-const MODEL_PROVIDERS = ["claude", "cursor", "codex", "opencode"];
+type ModelCatalog = Awaited<ReturnType<typeof providerModelsService.getProviderModels>>['models'];
+type TokenUsage = Record<string, unknown> & { breakdown?: { input?: unknown; output?: unknown } };
+type CommandContext = { provider?: unknown; sessionId?: unknown; projectPath?: string; tokenUsage?: TokenUsage; model?: unknown };
+type BuiltInResult = { type: string; action: string; data: Record<string, unknown> };
+type BuiltInHandler = (args: string[], context: CommandContext) => Promise<BuiltInResult>;
+type CommandEntry = { name: string; path?: string; relativePath?: string; description: string; namespace: string; metadata: Record<string, unknown> };
+function toNodeError(error: unknown): NodeJS.ErrnoException { return error instanceof Error ? error as NodeJS.ErrnoException : new Error(String(error)); }
 
-const MODEL_PROVIDER_LABELS = {
+
+const MODEL_PROVIDERS: LLMProvider[] = ["claude", "cursor", "codex", "opencode"];
+
+const MODEL_PROVIDER_LABELS: Record<LLMProvider, string> = {
   claude: "Claude",
   cursor: "Cursor",
   codex: "Codex",
   opencode: "OpenCode",
 };
 
-const readModelProvider = (value) => {
+const readModelProvider = (value: unknown): LLMProvider => {
   if (typeof value !== "string") {
     return "claude";
   }
 
   const normalized = value.trim().toLowerCase();
-  return MODEL_PROVIDERS.includes(normalized) ? normalized : "claude";
+  return MODEL_PROVIDERS.includes(normalized as LLMProvider) ? normalized as LLMProvider : "claude";
 };
 
-const hasConcreteSessionId = (value) =>
+const hasConcreteSessionId = (value: unknown): value is string =>
   typeof value === "string" && value.trim().length > 0;
 
-const resolveCommandModel = async (provider, catalog, sessionId) => {
+const resolveCommandModel = async (provider: LLMProvider, catalog: ModelCatalog, sessionId: unknown): Promise<string> => {
   if (!hasConcreteSessionId(sessionId)) {
     return catalog.DEFAULT;
   }
@@ -48,7 +58,7 @@ const resolveCommandModel = async (provider, catalog, sessionId) => {
   return currentActiveModel?.model || catalog.DEFAULT;
 };
 
-export const executeModelsCommand = async (args, context) => {
+export const executeModelsCommand = async (_args: string[], context: CommandContext) => {
   const currentProvider = readModelProvider(context?.provider);
   const result = await providerModelsService.getProviderModels(currentProvider);
   const catalog = result.models;
@@ -92,8 +102,8 @@ export const executeModelsCommand = async (args, context) => {
  * @param {string} namespace - Namespace for commands (e.g., 'project', 'user')
  * @returns {Promise<Array>} Array of command objects
  */
-async function scanCommandsDirectory(dir, baseDir, namespace) {
-  const commands = [];
+async function scanCommandsDirectory(dir: string, baseDir: string, namespace: string): Promise<CommandEntry[]> {
+  const commands: CommandEntry[] = [];
 
   try {
     // Check if directory exists
@@ -141,14 +151,14 @@ async function scanCommandsDirectory(dir, baseDir, namespace) {
             metadata: frontmatter,
           });
         } catch (err) {
-          console.error(`Error parsing command file ${fullPath}:`, err.message);
+          console.error(`Error parsing command file ${fullPath}:`, toNodeError(err).message);
         }
       }
     }
   } catch (err) {
     // Directory doesn't exist or can't be accessed - this is okay
-    if (err.code !== "ENOENT" && err.code !== "EACCES") {
-      console.error(`Error scanning directory ${dir}:`, err.message);
+    if (toNodeError(err).code !== "ENOENT" && toNodeError(err).code !== "EACCES") {
+      console.error(`Error scanning directory ${dir}:`, toNodeError(err).message);
     }
   }
 
@@ -158,7 +168,7 @@ async function scanCommandsDirectory(dir, baseDir, namespace) {
 /**
  * Built-in commands that are always available
  */
-const builtInCommands = [
+const builtInCommands: CommandEntry[] = [
   {
     name: "/help",
     description: "Show help documentation for Claude Code",
@@ -201,7 +211,7 @@ const builtInCommands = [
  * Built-in command handlers
  * Each handler returns { type: 'builtin', action: string, data: any }
  */
-const builtInHandlers = {
+const builtInHandlers: Record<string, BuiltInHandler> = {
   "/help": async (args, context) => {
     const helpText = `# Claude Code Commands
 
@@ -479,7 +489,7 @@ router.post("/list", async (req, res) => {
     console.error("Error listing commands:", error);
     res.status(500).json({
       error: "Failed to list commands",
-      message: error.message,
+      message: toNodeError(error).message,
     });
   }
 });
@@ -492,7 +502,10 @@ router.post("/list", async (req, res) => {
  */
 router.post("/execute", async (req, res) => {
   try {
-    const { commandName, commandPath, args = [], context = {} } = req.body;
+    const commandName = typeof req.body?.commandName === 'string' ? req.body.commandName : '';
+    const commandPath = typeof req.body?.commandPath === 'string' ? req.body.commandPath : '';
+    const args: string[] = Array.isArray(req.body?.args) ? req.body.args.map(String) : [];
+    const context: CommandContext = req.body?.context && typeof req.body.context === 'object' ? req.body.context : {};
 
     if (!commandName) {
       return res.status(400).json({
@@ -516,7 +529,7 @@ router.post("/execute", async (req, res) => {
         );
         return res.status(500).json({
           error: "Command execution failed",
-          message: error.message,
+          message: toNodeError(error).message,
           command: commandName,
         });
       }
@@ -539,7 +552,7 @@ router.post("/execute", async (req, res) => {
       const projectBase = context?.projectPath
         ? path.resolve(path.join(context.projectPath, ".claude", "commands"))
         : null;
-      const isUnder = (base) => {
+      const isUnder = (base: string): boolean => {
         const rel = path.relative(base, resolvedPath);
         return rel !== "" && !rel.startsWith("..") && !path.isAbsolute(rel);
       };
@@ -561,7 +574,7 @@ router.post("/execute", async (req, res) => {
     processedContent = processedContent.replace(/\$ARGUMENTS/g, argsString);
 
     // Replace $1, $2, etc. with positional arguments
-    args.forEach((arg, index) => {
+    args.forEach((arg: string, index: number) => {
       const placeholder = `$${index + 1}`;
       processedContent = processedContent.replace(
         new RegExp(`\\${placeholder}\\b`, "g"),
@@ -578,7 +591,7 @@ router.post("/execute", async (req, res) => {
       hasBashCommands: processedContent.includes("!"),
     });
   } catch (error) {
-    if (error.code === "ENOENT") {
+    if (toNodeError(error).code === "ENOENT") {
       return res.status(404).json({
         error: "Command not found",
         message: `Command file not found: ${req.body.commandPath}`,
@@ -588,7 +601,7 @@ router.post("/execute", async (req, res) => {
     console.error("Error executing command:", error);
     res.status(500).json({
       error: "Failed to execute command",
-      message: error.message,
+      message: toNodeError(error).message,
     });
   }
 });

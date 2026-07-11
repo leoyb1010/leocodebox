@@ -10,12 +10,12 @@ const router = express.Router();
 type CliInstallSource = 'unknown' | 'homebrew' | 'pnpm' | 'volta' | 'npm-global' | 'app-bundled' | 'standalone' | 'not-installed';
 type CliTool = {
   id: string;
-  label: string;
+  label?: string;
   cmd: string;
   updateArgs: string[] | null;
   install?: { command: string; args: string[] };
   npmPackage: string | null;
-  docsUrl: string;
+  docsUrl?: string;
 };
 type CliCommandResult = { ok: boolean; code: string | number; stdout: string; stderr: string; error: string | null };
 type CliLatestCacheEntry = { version: string | null; updatedAt: number };

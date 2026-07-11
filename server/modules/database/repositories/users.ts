@@ -28,7 +28,7 @@ type UserGitConfig = {
 };
 
 type CreateUserResult = {
-  id: number | bigint;
+  id: number;
   username: string;
 };
 
@@ -52,7 +52,7 @@ export const userDb = {
     const result = db
       .prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)')
       .run(username, passwordHash);
-    return { id: result.lastInsertRowid, username };
+    return { id: Number(result.lastInsertRowid), username };
   },
 
   /** Returns an existing user or creates the built-in local desktop user. */
@@ -131,8 +131,8 @@ export const userDb = {
   /** Stores the user's preferred git name and email. */
   updateGitConfig(
     userId: number,
-    gitName: string,
-    gitEmail: string
+    gitName: string | null,
+    gitEmail: string | null
   ): void {
     const db = getConnection();
     db.prepare('UPDATE users SET git_name = ?, git_email = ? WHERE id = ?').run(

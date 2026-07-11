@@ -1,11 +1,11 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 
-export function getModuleDir(importMetaUrl) {
+export function getModuleDir(importMetaUrl: string): string {
   return path.dirname(fileURLToPath(importMetaUrl));
 }
 
-export function findServerRoot(startDir) {
+export function findServerRoot(startDir: string): string {
   // Source files live under /server, while compiled files live under /dist-server/server.
   // Walking up to the nearest "server" folder gives every backend module one stable anchor
   // that works in both layouts instead of relying on fragile "../.." assumptions.
@@ -24,7 +24,7 @@ export function findServerRoot(startDir) {
   return currentDir;
 }
 
-export function findAppRoot(startDir) {
+export function findAppRoot(startDir: string): string {
   const serverRoot = findServerRoot(startDir);
   const parentOfServerRoot = path.dirname(serverRoot);
 

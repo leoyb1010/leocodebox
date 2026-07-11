@@ -20,6 +20,16 @@ import os from 'os';
 
 import { findAppRoot, getModuleDir } from './utils/runtime-paths.js';
 
+
+type UpdateResult = { hasUpdate: boolean; latestVersion?: string; currentVersion?: string; error?: string };
+type SandboxAgent = 'claude' | 'codex';
+type SandboxSubcommand = 'create' | 'ls' | 'stop' | 'start' | 'rm' | 'logs' | 'help';
+type SandboxOptions = { subcommand: SandboxSubcommand; workspace: string | null; agent: SandboxAgent; name: string | null; port: number; template: string; env: string[] };
+type CliOptions = { serverPort?: string; databasePath?: string };
+type ParsedCliArgs = { command: string; options: CliOptions; remainingArgs?: string[] };
+type ProcessCommandError = Error & { stdout?: string; stderr?: string };
+function errorMessage(error: unknown): string { return error instanceof Error ? error.message : String(error ?? ''); }
+
 const __dirname = getModuleDir(import.meta.url);
 // The CLI is compiled into dist-server/server, but it still needs to read the top-level
 // package.json and .env file. Resolving the app root once keeps those lookups stable.
@@ -43,13 +53,13 @@ const colors = {
 
 // Helper to colorize text
 const c = {
-    info: (text) => `${colors.cyan}${text}${colors.reset}`,
-    ok: (text) => `${colors.green}${text}${colors.reset}`,
-    warn: (text) => `${colors.yellow}${text}${colors.reset}`,
-    error: (text) => `${colors.yellow}${text}${colors.reset}`,
-    tip: (text) => `${colors.blue}${text}${colors.reset}`,
-    bright: (text) => `${colors.bright}${text}${colors.reset}`,
-    dim: (text) => `${colors.dim}${text}${colors.reset}`,
+    info: (text: unknown) => `${colors.cyan}${text}${colors.reset}`,
+    ok: (text: unknown) => `${colors.green}${text}${colors.reset}`,
+    warn: (text: unknown) => `${colors.yellow}${text}${colors.reset}`,
+    error: (text: unknown) => `${colors.yellow}${text}${colors.reset}`,
+    tip: (text: unknown) => `${colors.blue}${text}${colors.reset}`,
+    bright: (text: unknown) => `${colors.bright}${text}${colors.reset}`,
+    dim: (text: unknown) => `${colors.dim}${text}${colors.reset}`,
 };
 
 // Load package.json for version info
@@ -61,7 +71,7 @@ const DEFAULT_DATABASE_PATH = path.join(os.homedir(), '.leocodebox', 'auth.db');
 const LEGACY_DATABASE_PATH = path.join(os.homedir(), '.cloudcli', 'auth.db');
 
 // Load environment variables from .env file if it exists
-function loadEnvFile() {
+function loadEnvFile(): void {
     try {
         const envPath = path.join(APP_ROOT, '.env');
         const envFile = fs.readFileSync(envPath, 'utf8');
@@ -80,22 +90,22 @@ function loadEnvFile() {
 }
 
 // Get the database path (same logic as db.js)
-function getDatabasePath() {
+function getDatabasePath(): string {
     loadEnvFile();
     return process.env.DATABASE_PATH || DEFAULT_DATABASE_PATH;
 }
 
-function hasPendingLegacyDatabaseMigration() {
+function hasPendingLegacyDatabaseMigration(): boolean {
     return !process.env.DATABASE_PATH && !fs.existsSync(DEFAULT_DATABASE_PATH) && fs.existsSync(LEGACY_DATABASE_PATH);
 }
 
 // Get the installation directory
-function getInstallDir() {
+function getInstallDir(): string {
     return APP_ROOT;
 }
 
 // Show status command
-function showStatus() {
+function showStatus(): void {
     console.log(`\n${c.bright('leocodebox - Status')}\n`);
     console.log(c.dim('═'.repeat(60)));
 
@@ -153,7 +163,7 @@ function showStatus() {
 }
 
 // Show help
-function showHelp() {
+function showHelp(): void {
     console.log(`
 ╔═══════════════════════════════════════════════════════════════╗
 ║              leocodebox - Command Line Tool               ║
@@ -199,12 +209,12 @@ Report Issues:
 }
 
 // Show version
-function showVersion() {
+function showVersion(): void {
     console.log(`${packageJson.version}`);
 }
 
 // Compare semver versions, returns true if v1 > v2
-function isNewerVersion(v1, v2) {
+function isNewerVersion(v1: string, v2: string): boolean {
     const parts1 = v1.split('.').map(Number);
     const parts2 = v2.split('.').map(Number);
     for (let i = 0; i < 3; i++) {
@@ -215,7 +225,7 @@ function isNewerVersion(v1, v2) {
 }
 
 // Check for updates
-async function checkForUpdates(silent = false) {
+async function checkForUpdates(silent = false): Promise<UpdateResult> {
     try {
         const currentVersion = packageJson.version;
         const token = process.env.GH_TOKEN?.trim();
@@ -234,7 +244,7 @@ async function checkForUpdates(silent = false) {
             },
         });
         if (!response.ok) throw new Error(`GitHub returned HTTP ${response.status}`);
-        const release = await response.json();
+        const release = await response.json() as { tag_name?: string; name?: string };
         const latestVersion = String(release.tag_name || release.name || currentVersion).replace(/^v/, '');
 
         if (isNewerVersion(latestVersion, currentVersion)) {
@@ -249,12 +259,12 @@ async function checkForUpdates(silent = false) {
         if (!silent) {
             console.log(`${c.warn('[WARN]')} Could not check for updates`);
         }
-        return { hasUpdate: false, error: e.message };
+        return { hasUpdate: false, error: errorMessage(e) };
     }
 }
 
 // Update the package
-async function updatePackage() {
+async function updatePackage(): Promise<void> {
     try {
         console.log(`${c.info('[INFO]')} Checking for updates...`);
 
@@ -268,43 +278,43 @@ async function updatePackage() {
         console.log(`${c.info('[INFO]')} leocodebox ${latestVersion} is available (current: ${currentVersion}).`);
         console.log(`${c.tip('[TIP]')} Open Settings > About in the desktop app to install it.`);
     } catch (e) {
-        console.error(`${c.error('[ERROR]')} Update failed: ${e.message}`);
+        console.error(`${c.error('[ERROR]')} Update failed: ${errorMessage(e)}`);
         console.log(`${c.tip('[TIP]')} Open Settings > About in the desktop app to check for updates.`);
     }
 }
 
 // ── Sandbox command ─────────────────────────────────────────
 
-const SANDBOX_TEMPLATES = {
+const SANDBOX_TEMPLATES: Record<SandboxAgent, string> = {
     claude: 'docker.io/cloudcliai/sandbox:claude-code',
     codex: 'docker.io/cloudcliai/sandbox:codex',
 };
 
-const SANDBOX_SECRETS = {
+const SANDBOX_SECRETS: Record<SandboxAgent, string> = {
     claude: 'anthropic',
     codex: 'openai',
 };
 
-function parseSandboxArgs(args) {
-    const result = {
-        subcommand: null,
+function parseSandboxArgs(args: string[]): SandboxOptions {
+    const result: SandboxOptions = {
+        subcommand: 'create',
         workspace: null,
         agent: 'claude',
         name: null,
         port: 3001,
-        template: null,
+        template: SANDBOX_TEMPLATES.claude,
         env: [],
     };
 
-    const subcommands = ['ls', 'stop', 'start', 'rm', 'logs', 'help'];
+    const subcommands: SandboxSubcommand[] = ['ls', 'stop', 'start', 'rm', 'logs', 'help'];
 
     for (let i = 0; i < args.length; i++) {
         const arg = args[i];
 
-        if (i === 0 && subcommands.includes(arg)) {
-            result.subcommand = arg;
+        if (i === 0 && subcommands.includes(arg as SandboxSubcommand)) {
+            result.subcommand = arg as SandboxSubcommand;
         } else if (arg === '--agent' || arg === '-a') {
-            result.agent = args[++i];
+            result.agent = args[++i] === 'codex' ? 'codex' : 'claude';
         } else if (arg === '--name' || arg === '-n') {
             result.name = args[++i];
         } else if (arg === '--port') {
@@ -322,10 +332,6 @@ function parseSandboxArgs(args) {
         }
     }
 
-    // Default subcommand based on what we got
-    if (!result.subcommand) {
-        result.subcommand = 'create';
-    }
 
     // Derive name from workspace path if not set
     if (!result.name && result.workspace) {
@@ -340,7 +346,7 @@ function parseSandboxArgs(args) {
     return result;
 }
 
-function showSandboxHelp() {
+function showSandboxHelp(): void {
     console.log(`
 ${c.bright('leocodebox Sandbox')} — Run leocodebox inside Docker Sandboxes
 
@@ -391,11 +397,11 @@ Advanced usage:
 `);
 }
 
-async function sandboxCommand(args) {
+async function sandboxCommand(args: string[]): Promise<void> {
     const { execFileSync, spawn: spawnProcess } = await import('child_process');
 
     // Safe execution — uses execFileSync (no shell) to prevent injection
-    const sbx = (subcmd, opts = {}) => {
+    const sbx = (subcmd: string[], opts: { inherit?: boolean } = {}): string => {
         const result = execFileSync('sbx', subcmd, {
             encoding: 'utf8',
             stdio: opts.inherit ? 'inherit' : 'pipe',
@@ -456,9 +462,9 @@ async function sandboxCommand(args) {
                 process.exit(1);
             }
             try {
-                sbx(['exec', opts.name, 'bash', '-c', 'cat /tmp/leocodebox.log'], { inherit: true });
+                sbx(['exec', opts.name!, 'bash', '-c', 'cat /tmp/leocodebox.log'], { inherit: true });
             } catch (e) {
-                console.error(`\n${c.error('❌')} Could not read logs: ${e.message || 'Is the sandbox running?'}\n`);
+                console.error(`\n${c.error('❌')} Could not read logs: ${errorMessage(e) || 'Is the sandbox running?'}\n`);
             }
             break;
 
@@ -476,18 +482,19 @@ async function sandboxCommand(args) {
             await new Promise(resolve => setTimeout(resolve, 5000));
 
             console.log(`${c.info('▶')} Launching leocodebox web server...`);
-            sbx(['exec', opts.name, 'bash', '-c', 'nohup leocodebox start --port 3001 > /tmp/leocodebox.log 2>&1 & disown']);
+            sbx(['exec', opts.name!, 'bash', '-c', 'nohup leocodebox start --port 3001 > /tmp/leocodebox.log 2>&1 & disown']);
 
             console.log(`${c.info('▶')} Forwarding port ${opts.port} → 3001...`);
             try {
-                sbx(['ports', opts.name, '--publish', `${opts.port}:3001`]);
+                sbx(['ports', opts.name!, '--publish', `${opts.port}:3001`]);
             } catch (e) {
-                const msg = e.stdout || e.stderr || e.message || '';
+                const processError = e as ProcessCommandError;
+                const msg = processError.stdout || processError.stderr || processError.message || '';
                 if (msg.includes('address already in use')) {
                     const altPort = opts.port + 1;
                     console.log(`${c.warn('⚠')}  Port ${opts.port} in use, trying ${altPort}...`);
                     try {
-                        sbx(['ports', opts.name, '--publish', `${altPort}:3001`]);
+                        sbx(['ports', opts.name!, '--publish', `${altPort}:3001`]);
                         opts.port = altPort;
                     } catch {
                         console.error(`${c.error('❌')} Ports ${opts.port} and ${altPort} both in use. Use --port to specify a free port.`);
@@ -548,12 +555,12 @@ async function sandboxCommand(args) {
             // which prevents the sandbox from auto-stopping.
             console.log(`\n${c.info('▶')} Creating sandbox ${c.bright(opts.name)}...`);
             const bgRun = spawnProcess('sbx', [
-                'run', '--template', opts.template, '--name', opts.name, opts.agent, workspace,
+                'run', '--template', opts.template, '--name', opts.name!, opts.agent, workspace,
             ], {
                 detached: true,
                 stdio: ['ignore', 'ignore', 'ignore'],
             });
-            bgRun.unref();
+            (bgRun as import('node:child_process').ChildProcess).unref();
             // Wait for sandbox to be ready
             await new Promise(resolve => setTimeout(resolve, 5000));
 
@@ -565,7 +572,7 @@ async function sandboxCommand(args) {
                     .map(e => `export ${e}`)
                     .join('\n');
                 if (exports) {
-                    sbx(['exec', opts.name, 'bash', '-c', `echo '${exports}' >> /etc/sandbox-persistent.sh`]);
+                    sbx(['exec', opts.name!, 'bash', '-c', `echo '${exports}' >> /etc/sandbox-persistent.sh`]);
                 }
                 const invalid = opts.env.filter(e => !/^\w+=.+$/.test(e));
                 if (invalid.length > 0) {
@@ -575,19 +582,20 @@ async function sandboxCommand(args) {
 
             // Step 3: Start leocodebox inside the sandbox
             console.log(`${c.info('▶')} Launching leocodebox web server...`);
-            sbx(['exec', opts.name, 'bash', '-c', 'nohup leocodebox start --port 3001 > /tmp/leocodebox.log 2>&1 & disown']);
+            sbx(['exec', opts.name!, 'bash', '-c', 'nohup leocodebox start --port 3001 > /tmp/leocodebox.log 2>&1 & disown']);
 
             // Step 4: Forward port
             console.log(`${c.info('▶')} Forwarding port ${opts.port} → 3001...`);
             try {
-                sbx(['ports', opts.name, '--publish', `${opts.port}:3001`]);
+                sbx(['ports', opts.name!, '--publish', `${opts.port}:3001`]);
             } catch (e) {
-                const msg = e.stdout || e.stderr || e.message || '';
+                const processError = e as ProcessCommandError;
+                const msg = processError.stdout || processError.stderr || processError.message || '';
                 if (msg.includes('address already in use')) {
                     const altPort = opts.port + 1;
                     console.log(`${c.warn('⚠')}  Port ${opts.port} in use, trying ${altPort}...`);
                     try {
-                        sbx(['ports', opts.name, '--publish', `${altPort}:3001`]);
+                        sbx(['ports', opts.name!, '--publish', `${altPort}:3001`]);
                         opts.port = altPort;
                     } catch {
                         console.error(`${c.error('❌')} Ports ${opts.port} and ${altPort} both in use. Use --port to specify a free port.`);
@@ -618,7 +626,7 @@ async function sandboxCommand(args) {
 // ── Server ──────────────────────────────────────────────────
 
 // Start the server
-async function startServer() {
+async function startServer(): Promise<void> {
     // Check for updates silently on startup
     checkForUpdates(true);
 
@@ -626,13 +634,13 @@ async function startServer() {
     await import('./index.js');
 }
 
-async function startBrowserUseMcp() {
+async function startBrowserUseMcp(): Promise<void> {
     await import('./browser-use-mcp.js');
 }
 
 // Parse CLI arguments
-function parseArgs(args) {
-    const parsed = { command: 'start', options: {} };
+function parseArgs(args: string[]): ParsedCliArgs {
+    const parsed: ParsedCliArgs = { command: 'start', options: {} };
 
     for (let i = 0; i < args.length; i++) {
         const arg = args[i];
@@ -662,7 +670,7 @@ function parseArgs(args) {
 }
 
 // Main CLI handler
-async function main() {
+async function main(): Promise<void> {
     const args = process.argv.slice(2);
     const { command, options, remainingArgs } = parseArgs(args);
 
@@ -712,6 +720,6 @@ async function main() {
 
 // Run the CLI
 main().catch(error => {
-    console.error('\n❌ Error:', error.message);
+    console.error('\n❌ Error:', errorMessage(error));
     process.exit(1);
 });

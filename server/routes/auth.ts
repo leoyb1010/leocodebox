@@ -15,6 +15,10 @@ import {
 const router = express.Router();
 const db = getConnection();
 
+function toNodeError(error: unknown): NodeJS.ErrnoException {
+  return error instanceof Error ? error as NodeJS.ErrnoException : new Error(String(error));
+}
+
 // Check auth status and setup requirements
 router.get('/status', async (req, res) => {
   try {
@@ -105,7 +109,7 @@ router.post('/register', async (req, res) => {
     
   } catch (error) {
     console.error('Registration error:', error);
-    if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+    if (toNodeError(error).code === 'SQLITE_CONSTRAINT_UNIQUE') {
       res.status(409).json({ error: 'Username already exists' });
     } else {
       res.status(500).json({ error: 'Internal server error' });

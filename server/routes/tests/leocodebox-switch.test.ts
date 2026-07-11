@@ -4,9 +4,35 @@ import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import type { AddressInfo } from 'node:net';
+import type { IncomingHttpHeaders } from 'node:http';
 
 import TOML from '@iarna/toml';
 import express from 'express';
+
+type ProviderJson = { id: string; baseUrl?: string; model?: string; wireApi?: string; apiKey?: string; discoveredModels?: string[]; modelDiscoveryError?: string; modelDiscovery?: { modelCount?: number; httpStatus?: number; latencyMs?: number; lastSuccessAt?: string; lastErrorAt?: string | null } };
+type PresetJson = { id: string; target: string; wireApi: string; [key: string]: unknown };
+type ProbeResultJson = { usable?: boolean; [key: string]: unknown };
+type ApiJson = {
+  activeByTarget: Record<string, string>;
+  nativeAvailableByTarget: Record<string, boolean>;
+  providers: ProviderJson[];
+  presets: PresetJson[];
+  targets: Record<string, { files: Array<{ path: string }> }>;
+  backups: Array<{ relativePath: string; targetPath: string | null }>;
+  imported: ProviderJson[];
+  results: ProbeResultJson[];
+  models: string[];
+  discovery?: string;
+  warning?: unknown;
+  successCount?: number;
+  averageLatencyMs?: number;
+  selectedBaseUrl?: string;
+  [key: string]: unknown;
+};
+type ReceivedProbe = { method?: string; url?: string; headers: IncomingHttpHeaders; body: string };
+const readApiJson = (response: globalThis.Response): Promise<ApiJson> => response.json() as Promise<ApiJson>;
+
 
 test('provider switch preserves Codex top-level semantics and serializes concurrent saves', async (t) => {
   const home = await fs.mkdtemp(path.join(os.tmpdir(), 'leocodebox-switch-test-'));
@@ -36,15 +62,15 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
   app.use(express.json());
   app.use('/api/leocodebox', router);
   const server = app.listen(0, '127.0.0.1');
-  await new Promise((resolve) => server.once('listening', resolve));
+  await new Promise<void>((resolve) => server.once('listening', resolve));
   t.after(async () => {
-    await new Promise((resolve) => server.close(resolve));
+    await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     await fs.rm(home, { recursive: true, force: true });
   });
 
-  const address = server.address();
+  const address = server.address() as AddressInfo;
   const base = `http://127.0.0.1:${address.port}/api/leocodebox`;
-  const post = async (url, body) => {
+  const post = async (url: string, body: unknown): Promise<ApiJson> => {
     const response = await fetch(`${base}${url}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -52,7 +78,7 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
     });
     const responseText = await response.text();
     assert.equal(response.status, 200, responseText);
-    return JSON.parse(responseText);
+    return JSON.parse(responseText) as ApiJson;
   };
 
   await post('/switch/providers', {
@@ -66,10 +92,10 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
   });
   await post('/switch/providers/official/apply', {});
 
-  let activeStatus = await fetch(`${base}/switch/status`).then((response) => response.json());
+  let activeStatus = await fetch(`${base}/switch/status`).then(readApiJson);
   assert.equal(activeStatus.activeByTarget.codex, 'official');
 
-  const config = TOML.parse(await fs.readFile(path.join(codexDir, 'config.toml'), 'utf8'));
+  const config = TOML.parse(await fs.readFile(path.join(codexDir, 'config.toml'), 'utf8')) as Record<string, unknown> & { profiles: { leocodebox: { model: string } } };
   assert.equal(config.approval_policy, 'on-request');
   assert.equal(config.sandbox_mode, 'workspace-write');
   assert.deepEqual(config.features, { web_search: true });
@@ -85,7 +111,7 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
     target: 'claude',
     name: `Parallel ${index}`,
   })));
-  const status = await fetch(`${base}/switch/status`).then((response) => response.json());
+  const status = await fetch(`${base}/switch/status`).then(readApiJson);
   assert.equal(status.providers.filter((provider) => provider.id.startsWith('parallel-')).length, 20);
   assert.ok(status.presets.length > 0);
   for (const preset of status.presets) {
@@ -128,7 +154,7 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
     },
   });
   await post('/switch/providers/claude-proxy/apply', {});
-  activeStatus = await fetch(`${base}/switch/status`).then((response) => response.json());
+  activeStatus = await fetch(`${base}/switch/status`).then(readApiJson);
   assert.equal(activeStatus.activeByTarget.claude, 'claude-proxy');
   const claudeSettings = JSON.parse(await fs.readFile(path.join(home, '.claude', 'settings.json'), 'utf8'));
   assert.equal(claudeSettings.theme, 'dark');
@@ -152,7 +178,7 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
     model: 'open-model',
   });
   await post('/switch/providers/opencode-proxy/apply', {});
-  activeStatus = await fetch(`${base}/switch/status`).then((response) => response.json());
+  activeStatus = await fetch(`${base}/switch/status`).then(readApiJson);
   assert.equal(activeStatus.activeByTarget.opencode, 'opencode-proxy');
   const opencodeConfig = JSON.parse(await fs.readFile(path.join(home, '.config', 'opencode', 'opencode.json'), 'utf8'));
   assert.deepEqual(opencodeConfig.plugin, ['keep-plugin']);
@@ -163,7 +189,7 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
   await post('/switch/targets/opencode/restore-default', {});
   const restoredOpenCodeConfig = JSON.parse(await fs.readFile(path.join(home, '.config', 'opencode', 'opencode.json'), 'utf8'));
   assert.deepEqual(restoredOpenCodeConfig, { plugin: ['keep-plugin'] });
-  activeStatus = await fetch(`${base}/switch/status`).then((response) => response.json());
+  activeStatus = await fetch(`${base}/switch/status`).then(readApiJson);
   assert.equal(activeStatus.activeByTarget.opencode, undefined);
 
   await fs.mkdir(path.join(home, '.gemini'), { recursive: true });
@@ -230,7 +256,7 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
     await fs.readFile(path.join(home, 'custom-claude', 'settings.json'), 'utf8'),
   );
   assert.equal(customClaudeSettings.env.ANTHROPIC_API_KEY, 'custom-key');
-  const customPathStatus = await fetch(`${base}/switch/status`).then((response) => response.json());
+  const customPathStatus = await fetch(`${base}/switch/status`).then(readApiJson);
   assert.equal(customPathStatus.targets.claude.files[0].path, '~/custom-claude/settings.json');
   assert.equal(customPathStatus.targets.codex.files[0].path, '~/custom-codex/auth.json');
   assert.equal(customPathStatus.targets.opencode.files[0].path, '~/custom-xdg/opencode/opencode.json');
@@ -250,7 +276,7 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
     model: 'external-model',
   });
   await post('/switch/providers/external-codex/apply', {});
-  const externalBackups = await fetch(`${base}/switch/backups`).then((response) => response.json());
+  const externalBackups = await fetch(`${base}/switch/backups`).then(readApiJson);
   const externalAuthBackup = externalBackups.backups.find((entry) => entry.targetPath === externalAuthPath);
   assert.ok(externalAuthBackup, 'external CODEX_HOME backup should retain its absolute destination');
   await fs.writeFile(externalAuthPath, JSON.stringify({ OPENAI_API_KEY: 'modified-after-apply' }));
@@ -273,7 +299,7 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
   assert.match(hermesConfig, /# BEGIN LEOCODEBOX SWITCH/);
   assert.match(hermesConfig, /api_key: "hermes-key"/);
 
-  const backups = await fetch(`${base}/switch/backups`).then((response) => response.json());
+  const backups = await fetch(`${base}/switch/backups`).then(readApiJson);
   assert.ok(backups.backups.some((entry) => entry.relativePath.endsWith('.claude/settings.json')));
 
   if (process.platform !== 'win32') {
@@ -295,10 +321,11 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
   });
   assert.equal(traversalResponse.status, 400);
 
-  const receivedProbes = [];
-  let releaseSlowModelProbe = null;
+  const receivedProbes: ReceivedProbe[] = [];
+  const slowProbeRelease: { current?: () => void } = {};
+  const releaseCurrentSlowProbe = (): void => slowProbeRelease.current?.();
   const probeServer = http.createServer((request, response) => {
-    const chunks = [];
+    const chunks: Buffer[] = [];
     request.on('data', (chunk) => chunks.push(chunk));
     request.on('end', () => {
       receivedProbes.push({
@@ -308,7 +335,7 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
         body: Buffer.concat(chunks).toString('utf8'),
       });
       if (request.url === '/slow/v1/models') {
-        releaseSlowModelProbe = () => {
+        slowProbeRelease.current = () => {
           response.writeHead(200, { 'Content-Type': 'application/json' });
           response.end(JSON.stringify({ data: [{ id: 'slow-model' }] }));
         };
@@ -326,9 +353,9 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
     });
   });
   probeServer.listen(0, '127.0.0.1');
-  await new Promise((resolve) => probeServer.once('listening', resolve));
-  t.after(() => new Promise((resolve) => probeServer.close(resolve)));
-  const probeAddress = probeServer.address();
+  await new Promise<void>((resolve) => probeServer.once('listening', resolve));
+  t.after(() => new Promise<void>((resolve, reject) => probeServer.close((error) => error ? reject(error) : resolve())));
+  const probeAddress = probeServer.address() as AddressInfo;
   const probeBaseUrl = `http://127.0.0.1:${probeAddress.port}`;
 
   const asyncSave = await post('/switch/providers', {
@@ -342,21 +369,21 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
   });
   assert.equal(asyncSave.discovery, 'pending');
   await post('/switch/providers', { id: 'save-while-discovering', target: 'claude', name: 'Not Blocked' });
-  for (let attempt = 0; attempt < 20 && !releaseSlowModelProbe; attempt += 1) {
+  for (let attempt = 0; attempt < 20 && !slowProbeRelease.current; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
-  assert.ok(releaseSlowModelProbe, 'background discovery should start after the save response');
-  releaseSlowModelProbe();
+  assert.ok(slowProbeRelease.current, 'background discovery should start after the save response');
+  releaseCurrentSlowProbe();
   for (let attempt = 0; attempt < 30; attempt += 1) {
-    const discoveryStatus = await fetch(`${base}/switch/status`).then((response) => response.json());
+    const discoveryStatus = await fetch(`${base}/switch/status`).then(readApiJson);
     const provider = discoveryStatus.providers.find((item) => item.id === 'async-discovery');
     if (provider?.discoveredModels?.includes('slow-model')) break;
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
-  const asyncStatus = await fetch(`${base}/switch/status`).then((response) => response.json());
-  assert.deepEqual(asyncStatus.providers.find((item) => item.id === 'async-discovery').discoveredModels, ['slow-model']);
+  const asyncStatus = await fetch(`${base}/switch/status`).then(readApiJson);
+  assert.deepEqual(asyncStatus.providers.find((item) => item.id === 'async-discovery')!.discoveredModels, ['slow-model']);
 
-  releaseSlowModelProbe = null;
+  slowProbeRelease.current = undefined;
   await post('/switch/providers', {
     id: 'dedupe-probe',
     target: 'codex',
@@ -367,11 +394,11 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
   const slowProbeCountBefore = receivedProbes.filter((probe) => probe.url === '/slow/v1/models').length;
   const firstPendingDiscovery = post('/switch/providers/dedupe-probe/models', { timeoutMs: 4000 });
   const secondPendingDiscovery = post('/switch/providers/dedupe-probe/models', { timeoutMs: 4000 });
-  for (let attempt = 0; attempt < 20 && !releaseSlowModelProbe; attempt += 1) {
+  for (let attempt = 0; attempt < 20 && !slowProbeRelease.current; attempt += 1) {
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
-  assert.ok(releaseSlowModelProbe, 'concurrent discoveries should share one upstream request');
-  releaseSlowModelProbe();
+  assert.ok(slowProbeRelease.current, 'concurrent discoveries should share one upstream request');
+  releaseCurrentSlowProbe();
   const [firstDedupeResult, secondDedupeResult] = await Promise.all([firstPendingDiscovery, secondPendingDiscovery]);
   assert.deepEqual(firstDedupeResult.models, ['slow-model']);
   assert.deepEqual(secondDedupeResult.models, ['slow-model']);
@@ -411,13 +438,13 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
   const discoveredModels = await post('/switch/providers/codex-probe/models', { timeoutMs: 4000 });
   assert.deepEqual(discoveredModels.models, ['model-a', 'model-b']);
   assert.equal(discoveredModels.httpStatus, 200);
-  const healthStatus = await fetch(`${base}/switch/status`).then((response) => response.json());
+  const healthStatus = await fetch(`${base}/switch/status`).then(readApiJson);
   const healthyProvider = healthStatus.providers.find((item) => item.id === 'codex-probe');
-  assert.equal(healthyProvider.modelDiscovery.modelCount, 2);
-  assert.equal(healthyProvider.modelDiscovery.httpStatus, 200);
-  assert.equal(Number.isFinite(healthyProvider.modelDiscovery.latencyMs), true);
-  assert.equal(typeof healthyProvider.modelDiscovery.lastSuccessAt, 'string');
-  assert.equal(healthyProvider.modelDiscovery.lastErrorAt, null);
+  assert.equal(healthyProvider!.modelDiscovery!.modelCount, 2);
+  assert.equal(healthyProvider!.modelDiscovery!.httpStatus, 200);
+  assert.equal(Number.isFinite(healthyProvider!.modelDiscovery!.latencyMs), true);
+  assert.equal(typeof healthyProvider!.modelDiscovery!.lastSuccessAt, 'string');
+  assert.equal(healthyProvider!.modelDiscovery!.lastErrorAt, null);
 
   const failedDiscoverySave = await post('/switch/providers', {
     id: 'failed-discovery',
@@ -429,16 +456,16 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
     timeoutMs: 1000,
   });
   assert.equal(failedDiscoverySave.discovery, 'pending');
-  let failedProvider = null;
+  let failedProvider: ProviderJson | undefined;
   for (let attempt = 0; attempt < 50; attempt += 1) {
-    const failedStatus = await fetch(`${base}/switch/status`).then((response) => response.json());
+    const failedStatus = await fetch(`${base}/switch/status`).then(readApiJson);
     failedProvider = failedStatus.providers.find((item) => item.id === 'failed-discovery');
     if (failedProvider?.modelDiscoveryError) break;
     await new Promise((resolve) => setTimeout(resolve, 20));
   }
-  assert.equal(typeof failedProvider.modelDiscoveryError, 'string');
-  assert.ok(failedProvider.modelDiscoveryError.length > 0);
-  assert.equal(typeof failedProvider.modelDiscovery.lastErrorAt, 'string');
+  assert.equal(typeof failedProvider!.modelDiscoveryError, 'string');
+  assert.ok((failedProvider!.modelDiscoveryError ?? '').length > 0);
+  assert.equal(typeof failedProvider!.modelDiscovery!.lastErrorAt, 'string');
 
   const destinationChangeWithStoredKey = await fetch(`${base}/switch/providers`, {
     method: 'POST',
@@ -493,8 +520,8 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
   });
   assert.deepEqual(ignoredOverride.models, ['model-a', 'model-b']);
   assert.equal(receivedProbes.length, probeCountBeforeOverrideAttempt + 1);
-  assert.equal(receivedProbes.at(-1).url, '/v1/models');
-  assert.equal(receivedProbes.at(-1).headers.authorization, 'Bearer codex-key');
+  assert.equal(receivedProbes.at(-1)!.url, '/v1/models');
+  assert.equal(receivedProbes.at(-1)!.headers.authorization, 'Bearer codex-key');
 
   const unauthorizedDiscovery = await fetch(`${base}/switch/discover-models`, {
     method: 'POST',
@@ -551,7 +578,7 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
   });
   assert.equal(benchmark.successCount, 2);
   assert.equal(benchmark.results.length, 2);
-  assert.ok(benchmark.averageLatencyMs >= 0);
+  assert.ok((benchmark.averageLatencyMs ?? -1) >= 0);
 
   await post('/switch/providers', {
     id: 'codex-probe',
@@ -593,13 +620,13 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
   const importedCurrent = await post('/switch/import-current', {});
   assert.ok(importedCurrent.imported.some((provider) => provider.id === 'codex-current'));
   assert.ok(importedCurrent.imported.some((provider) => provider.id === 'opencode-current'));
-  const importedStatus = await fetch(`${base}/switch/status`).then((response) => response.json());
+  const importedStatus = await fetch(`${base}/switch/status`).then(readApiJson);
   const importedCodex = importedStatus.providers.find((provider) => provider.id === 'codex-current');
-  assert.equal(importedCodex.baseUrl, 'https://active-codex.example/v1');
-  assert.equal(importedCodex.model, 'active-codex-model');
-  assert.equal(importedCodex.wireApi, 'chat');
+  assert.equal(importedCodex!.baseUrl, 'https://active-codex.example/v1');
+  assert.equal(importedCodex!.model, 'active-codex-model');
+  assert.equal(importedCodex!.wireApi, 'chat');
   const importedOpenCode = importedStatus.providers.find((provider) => provider.id === 'opencode-current');
-  assert.equal(importedOpenCode.baseUrl, 'https://active-opencode.example/v1');
-  assert.match(importedOpenCode.apiKey, /^acti.*-key$/);
-  assert.equal(importedOpenCode.model, 'active-opencode-model');
+  assert.equal(importedOpenCode!.baseUrl, 'https://active-opencode.example/v1');
+  assert.match(importedOpenCode!.apiKey ?? '', /^acti.*-key$/);
+  assert.equal(importedOpenCode!.model, 'active-opencode-model');
 });

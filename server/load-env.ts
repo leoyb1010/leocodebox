@@ -5,6 +5,10 @@ import path from 'path';
 
 import { findAppRoot, getModuleDir } from './utils/runtime-paths.js';
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error ?? '');
+}
+
 const __dirname = getModuleDir(import.meta.url);
 // Resolve the repo/app root via the nearest /server folder so this file keeps finding the
 // same top-level .env file from both /server/load-env.js and /dist-server/server/load-env.js.
@@ -23,7 +27,7 @@ try {
     }
   });
 } catch (e) {
-  console.error('No .env file found or error reading it:', e.message);
+  console.error('No .env file found or error reading it:', errorMessage(e));
 }
 
 // Keep the default database in a stable user-level location so rebuilding dist-server
@@ -43,7 +47,7 @@ function migrateLegacyUserDatabase() {
       }
     }
   } catch (error) {
-    console.error('Could not migrate legacy user database:', error.message);
+    console.error('Could not migrate legacy user database:', errorMessage(error));
   }
 }
 

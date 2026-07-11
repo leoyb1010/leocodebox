@@ -247,7 +247,7 @@
   },
   "lint-staged": {
     "src/**/*.{ts,tsx,js,jsx}": "eslint --max-warnings 0",
-    "server/**/*.{js,ts}": "eslint --max-warnings 0",
+    "server/**/*.{js,ts}": "eslint --max-warnings 0 --no-warn-ignored",
     "electron/**/*.js": "eslint --max-warnings 0",
     "scripts/**/*.{js,mjs,cjs}": "eslint --max-warnings 0"
   },
