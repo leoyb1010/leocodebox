@@ -1,12 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { TFunction } from 'i18next';
 
-import { api } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 import { usePaletteOps } from '../../../contexts/PaletteOpsContext';
 import type { Project, ProjectSession, LLMProvider } from '../../../types/app';
 import type { SessionActivityMap } from '../../../hooks/useSessionProtection';
 import type {
-  ArchivedProjectListItem,
   ArchivedSessionListItem,
   DeleteProjectConfirmation,
   ProjectSortOrder,
@@ -15,31 +14,18 @@ import type {
   SessionWithProvider,
 } from '../types/types';
 import {
-  clearLegacyStarredProjectIds,
   filterProjects,
   getAllSessions,
-  readLegacyStarredProjectIds,
   readProjectSortOrder,
   sortProjects,
 } from '../utils/utils';
 
 import { useConversationSearch } from './useConversationSearch';
+import { useProjectStarToggle } from './useProjectStarToggle';
+import { useSidebarArchive } from './useSidebarArchive';
 
 export type { ConversationSearchResults, SearchProgress } from './useConversationSearch';
 
-type ArchivedSessionsApiPayload = {
-  success?: boolean;
-  data?: {
-    sessions?: ArchivedSessionListItem[];
-  };
-};
-
-type ArchivedProjectsApiPayload = {
-  success?: boolean;
-  data?: {
-    projects?: ArchivedProjectListItem[];
-  };
-};
 
 type UseSidebarControllerArgs = {
   projects: Project[];
@@ -96,14 +82,7 @@ export function useSidebarController({
   const [sessionDeleteConfirmation, setSessionDeleteConfirmation] = useState<SessionDeleteConfirmation | null>(null);
   const [showVersionModal, setShowVersionModal] = useState(false);
   const [searchMode, setSearchMode] = useState<SidebarSearchMode>('projects');
-  const [archivedProjects, setArchivedProjects] = useState<ArchivedProjectListItem[]>([]);
-  const [archivedSessions, setArchivedSessions] = useState<ArchivedSessionListItem[]>([]);
-  const [isArchivedSessionsLoading, setIsArchivedSessionsLoading] = useState(false);
-  const [optimisticStarByProjectId, setOptimisticStarByProjectId] = useState<Map<string, boolean>>(new Map());
   const [loadingMoreProjects, setLoadingMoreProjects] = useState<Set<string>>(new Set());
-  const starToggleSequenceByProjectRef = useRef<Map<string, number>>(new Map());
-  const migrationStartedRef = useRef(false);
-  const onRefreshRef = useRef(onRefresh);
   const {
     conversationResults,
     isSearching,
@@ -111,6 +90,13 @@ export function useSidebarController({
     debouncedSearchQuery,
     clearConversationResults,
   } = useConversationSearch(searchFilter, searchMode);
+  const {
+    archivedProjects,
+    archivedSessions,
+    isArchivedSessionsLoading,
+    fetchArchivedSessions,
+  } = useSidebarArchive(searchMode);
+  const { toggleStarProject, isProjectStarred, projectsWithResolvedStarState } = useProjectStarToggle({ projects, t, onRefresh });
 
   const isSidebarCollapsed = !isMobile && !sidebarVisible;
   const activeSessionIds = useMemo(() => new Set(activeSessions.keys()), [activeSessions]);
@@ -186,113 +172,6 @@ export function useSidebarController({
     };
   }, []);
 
-  useEffect(() => {
-    onRefreshRef.current = onRefresh;
-  }, [onRefresh]);
-
-  const fetchArchivedSessions = useCallback(async () => {
-    setIsArchivedSessionsLoading(true);
-
-    try {
-      const [archivedProjectsResponse, archivedSessionsResponse] = await Promise.all([
-        api.archivedProjects(),
-        api.getArchivedSessions(),
-      ]);
-
-      if (!archivedProjectsResponse.ok) {
-        throw new Error(`Failed to load archived projects: ${archivedProjectsResponse.status}`);
-      }
-
-      if (!archivedSessionsResponse.ok) {
-        throw new Error(`Failed to load archived sessions: ${archivedSessionsResponse.status}`);
-      }
-
-      const archivedProjectsPayload = (await archivedProjectsResponse.json()) as ArchivedProjectsApiPayload;
-      const archivedSessionsPayload = (await archivedSessionsResponse.json()) as ArchivedSessionsApiPayload;
-      const nextProjects = Array.isArray(archivedProjectsPayload.data?.projects) ? archivedProjectsPayload.data.projects : [];
-      const archivedProjectIds = new Set(nextProjects.map((project) => project.projectId));
-      const nextStandaloneSessions = Array.isArray(archivedSessionsPayload.data?.sessions)
-        ? archivedSessionsPayload.data.sessions.filter((session) => !session.projectId || !archivedProjectIds.has(session.projectId))
-        : [];
-
-      setArchivedProjects(nextProjects);
-      setArchivedSessions(nextStandaloneSessions);
-    } catch (error) {
-      console.error('[Sidebar] Failed to load archived sessions:', error);
-    } finally {
-      setIsArchivedSessionsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (migrationStartedRef.current) {
-      return;
-    }
-
-    const legacyStarredProjectIds = readLegacyStarredProjectIds();
-    if (legacyStarredProjectIds.length === 0) {
-      return;
-    }
-
-    migrationStartedRef.current = true;
-
-    const migrateLegacyStars = async () => {
-      try {
-        await api.migrateLegacyProjectStars(legacyStarredProjectIds);
-        await onRefreshRef.current();
-      } catch (error) {
-        console.error('[Sidebar] Failed to migrate legacy starred projects:', error);
-      } finally {
-        clearLegacyStarredProjectIds();
-      }
-    };
-
-    void migrateLegacyStars();
-  }, [onRefresh]);
-
-  useEffect(() => {
-    void fetchArchivedSessions();
-  }, [fetchArchivedSessions]);
-
-  useEffect(() => {
-    if (searchMode !== 'archived') {
-      return;
-    }
-
-    // Refresh archive contents when the archived tab opens so restore actions
-    // and background synchronizer updates are reflected without a full reload.
-    void fetchArchivedSessions();
-  }, [fetchArchivedSessions, searchMode]);
-
-  useEffect(() => {
-    setOptimisticStarByProjectId((previous) => {
-      if (previous.size === 0) {
-        return previous;
-      }
-
-      const next = new Map(previous);
-      let changed = false;
-
-      for (const [projectId, optimisticValue] of previous.entries()) {
-        const project = projects.find((candidate) => candidate.projectId === projectId);
-        if (!project) {
-          next.delete(projectId);
-          changed = true;
-          continue;
-        }
-
-        if (Boolean(project.isStarred) === optimisticValue) {
-          next.delete(projectId);
-          changed = true;
-        }
-      }
-
-      return changed ? next : previous;
-    });
-  }, [projects]);
-
-  // All sidebar state keys (expanded, starred, loading, etc.) use the DB
-  // `projectId` as their identifier after the migration.
   const toggleProject = useCallback((projectId: string) => {
     setExpandedProjects((prev) => {
       const next = new Set<string>();
@@ -312,78 +191,6 @@ export function useSidebarController({
     [onSessionSelect],
   );
 
-  const resolveProjectStarState = useCallback(
-    (projectId: string): boolean => {
-      if (optimisticStarByProjectId.has(projectId)) {
-        return Boolean(optimisticStarByProjectId.get(projectId));
-      }
-
-      return projects.some((project) => project.projectId === projectId && Boolean(project.isStarred));
-    },
-    [optimisticStarByProjectId, projects],
-  );
-
-  const toggleStarProject = useCallback((projectId: string) => {
-    const previousStarState = resolveProjectStarState(projectId);
-    const optimisticStarState = !previousStarState;
-    const latestSequence = (starToggleSequenceByProjectRef.current.get(projectId) ?? 0) + 1;
-    starToggleSequenceByProjectRef.current.set(projectId, latestSequence);
-
-    setOptimisticStarByProjectId((previous) => {
-      const next = new Map(previous);
-      next.set(projectId, optimisticStarState);
-      return next;
-    });
-
-    const updateStar = async () => {
-      try {
-        const response = await api.toggleProjectStar(projectId);
-        if (!response.ok) {
-          const payload = (await response.json()) as { error?: string | { message?: string } };
-          const errorPayload = payload.error;
-          const message =
-            typeof errorPayload === 'string'
-              ? errorPayload
-              : errorPayload && typeof errorPayload === 'object' && errorPayload.message
-                ? errorPayload.message
-                : t('messages.updateProjectError');
-          throw new Error(message);
-        }
-
-        const payload = (await response.json()) as { isStarred?: boolean };
-        const isLatestSequence = starToggleSequenceByProjectRef.current.get(projectId) === latestSequence;
-        if (!isLatestSequence) {
-          return;
-        }
-
-        setOptimisticStarByProjectId((previous) => {
-          const next = new Map(previous);
-          next.set(projectId, Boolean(payload.isStarred));
-          return next;
-        });
-      } catch (error) {
-        const isLatestSequence = starToggleSequenceByProjectRef.current.get(projectId) === latestSequence;
-        if (!isLatestSequence) {
-          return;
-        }
-
-        setOptimisticStarByProjectId((previous) => {
-          const next = new Map(previous);
-          next.set(projectId, previousStarState);
-          return next;
-        });
-        console.error('[Sidebar] Failed to toggle project star:', error);
-        alert(t('messages.updateProjectError'));
-      }
-    };
-
-    void updateStar();
-  }, [resolveProjectStarState, t]);
-
-  const isProjectStarred = useCallback(
-    (projectId: string) => resolveProjectStarState(projectId),
-    [resolveProjectStarState],
-  );
 
   const getProjectSessions = useCallback((project: Project) => getAllSessions(project), []);
 
@@ -422,28 +229,7 @@ export function useSidebarController({
     }
   }, [onLoadMoreSessions, t]);
 
-  const projectsWithResolvedStarState = useMemo(() => {
-    if (optimisticStarByProjectId.size === 0) {
-      return projects;
-    }
 
-    return projects.map((project) => {
-      const optimisticStarState = optimisticStarByProjectId.get(project.projectId);
-      if (optimisticStarState === undefined) {
-        return project;
-      }
-
-      const currentStarState = Boolean(project.isStarred);
-      if (currentStarState === optimisticStarState) {
-        return project;
-      }
-
-      return {
-        ...project,
-        isStarred: optimisticStarState,
-      };
-    });
-  }, [optimisticStarByProjectId, projects]);
 
   const sortedProjects = useMemo(
     () => sortProjects(projectsWithResolvedStarState, projectSortOrder),
@@ -548,12 +334,10 @@ export function useSidebarController({
     // through the `projects` table before writing the new display name.
     async (projectId: string) => {
       try {
-        const response = await api.renameProject(projectId, editingName);
-        if (response.ok) {
-          await paletteOps.refreshProjects();
-        } else {
-          console.error('Failed to rename project');
-        }
+        await apiClient.put(`/api/projects/${encodeURIComponent(projectId)}/rename`, {
+          displayName: editingName,
+        });
+        await paletteOps.refreshProjects();
       } catch (error) {
         console.error('Error renaming project:', error);
       } finally {
@@ -596,19 +380,12 @@ export function useSidebarController({
     setSessionDeleteConfirmation(null);
 
     try {
-      const response = await api.deleteSession(sessionId, hardDelete);
-
-      if (response.ok) {
-        onSessionDelete?.(sessionId);
-        await fetchArchivedSessions();
-      } else {
-        const errorText = await response.text();
-        console.error('[Sidebar] Failed to delete session:', {
-          status: response.status,
-          error: errorText,
-        });
-        alert(t('messages.deleteSessionFailed'));
-      }
+      await apiClient.deleteQuery(
+        `/api/providers/sessions/${encodeURIComponent(sessionId)}`,
+        hardDelete ? { force: true } : undefined,
+      );
+      onSessionDelete?.(sessionId);
+      await fetchArchivedSessions();
     } catch (error) {
       console.error('[Sidebar] Error deleting session:', error);
       alert(t('messages.deleteSessionError'));
@@ -638,17 +415,11 @@ export function useSidebarController({
     setDeletingProjects((prev) => new Set([...prev, project.projectId]));
 
     try {
-      const response = await api.deleteProject(project.projectId, deleteData);
-
-      if (response.ok) {
-        onProjectDelete?.(project.projectId);
-      } else {
-        const data = (await response.json()) as { error?: string | { message?: string } };
-        const err = data.error;
-        const message =
-          typeof err === 'string' ? err : err && typeof err === 'object' && err.message ? err.message : t('messages.deleteProjectFailed');
-        alert(message);
-      }
+      await apiClient.deleteQuery(
+        `/api/projects/${encodeURIComponent(project.projectId)}`,
+        deleteData ? { force: true } : undefined,
+      );
+      onProjectDelete?.(project.projectId);
     } catch (error) {
       console.error('Error deleting project:', error);
       alert(t('messages.deleteProjectError'));
@@ -696,16 +467,7 @@ export function useSidebarController({
 
   const restoreArchivedProject = useCallback(async (projectId: string) => {
     try {
-      const response = await api.restoreProject(projectId);
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[Sidebar] Failed to restore project:', {
-          status: response.status,
-          error: errorText,
-        });
-        alert(t('messages.restoreProjectFailed', 'Failed to restore project. Please try again.'));
-        return;
-      }
+      await apiClient.post(`/api/projects/${encodeURIComponent(projectId)}/restore`);
 
       await Promise.all([
         Promise.resolve(onRefresh()),
@@ -719,16 +481,7 @@ export function useSidebarController({
 
   const restoreArchivedSession = useCallback(async (sessionId: string) => {
     try {
-      const response = await api.restoreSession(sessionId);
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('[Sidebar] Failed to restore session:', {
-          status: response.status,
-          error: errorText,
-        });
-        alert(t('messages.restoreSessionFailed', 'Failed to restore session. Please try again.'));
-        return;
-      }
+      await apiClient.post(`/api/providers/sessions/${encodeURIComponent(sessionId)}/restore`);
 
       await Promise.all([
         Promise.resolve(onRefresh()),
@@ -763,13 +516,10 @@ export function useSidebarController({
         return;
       }
       try {
-        const response = await api.renameSession(sessionId, trimmed);
-        if (response.ok) {
-          await onRefresh();
-        } else {
-          console.error('[Sidebar] Failed to rename session:', response.status);
-          alert(t('messages.renameSessionFailed'));
-        }
+        await apiClient.put(`/api/providers/sessions/${encodeURIComponent(sessionId)}`, {
+          summary: trimmed,
+        });
+        await onRefresh();
       } catch (error) {
         console.error('[Sidebar] Error renaming session:', error);
         alert(t('messages.renameSessionError'));

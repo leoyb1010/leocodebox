@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import JSZip from 'jszip';
 
-import { api } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 import type { FileTreeNode } from '../types/types';
 import type { Project } from '../../../types/app';
 
@@ -127,15 +127,10 @@ export function useFileTreeOperations({
 
     setOperationLoading(true);
     try {
-      const response = await api.renameFile(selectedProject.projectId, {
-        oldPath: renamingItem.path,
-        newName: renameValue,
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to rename');
-      }
+      await apiClient.put(
+        `/api/projects/${encodeURIComponent(selectedProject.projectId)}/files/rename`,
+        { oldPath: renamingItem.path, newName: renameValue },
+      );
 
       showToast(t('fileTree.toast.renamed', 'Renamed successfully'), 'success');
       onRefresh();
@@ -162,15 +157,10 @@ export function useFileTreeOperations({
 
     setOperationLoading(true);
     try {
-      const response = await api.deleteFile(selectedProject.projectId, {
-        path: item.path,
-        type: item.type,
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to delete');
-      }
+      await apiClient.delete(
+        `/api/projects/${encodeURIComponent(selectedProject.projectId)}/files`,
+        { path: item.path, type: item.type },
+      );
 
       showToast(
         item.type === 'directory'
@@ -213,16 +203,10 @@ export function useFileTreeOperations({
 
     setOperationLoading(true);
     try {
-      const response = await api.createFile(selectedProject.projectId, {
-        path: newItemParent,
-        type: newItemType,
-        name: newItemName,
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || 'Failed to create');
-      }
+      await apiClient.post(
+        `/api/projects/${encodeURIComponent(selectedProject.projectId)}/files/create`,
+        { path: newItemParent, type: newItemType, name: newItemName },
+      );
 
       showToast(
         newItemType === 'file'
@@ -290,11 +274,9 @@ export function useFileTreeOperations({
     if (!selectedProject) return;
 
     // Use the binary streaming endpoint so downloads preserve raw bytes.
-    const response = await api.readFileBlob(selectedProject.projectId, item.path);
-
-    if (!response.ok) {
-      throw new Error('Failed to download file');
-    }
+    const response = await apiClient.raw(
+      `/api/projects/${encodeURIComponent(selectedProject.projectId)}/files/content?path=${encodeURIComponent(item.path)}`,
+    );
 
     const blob = await response.blob();
     triggerBrowserDownload(blob, item.name);
@@ -311,10 +293,9 @@ export function useFileTreeOperations({
       const fullPath = currentPath ? `${currentPath}/${node.name}` : node.name;
 
       if (node.type === 'file') {
-        const response = await api.readFileBlob(selectedProject.projectId, node.path);
-        if (!response.ok) {
-          throw new Error(`Failed to download "${node.name}" for ZIP export`);
-        }
+        const response = await apiClient.raw(
+          `/api/projects/${encodeURIComponent(selectedProject.projectId)}/files/content?path=${encodeURIComponent(node.path)}`,
+        );
 
         // Store raw bytes in the archive so binary files stay intact.
         const fileBytes = await response.arrayBuffer();

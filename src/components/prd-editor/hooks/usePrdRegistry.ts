@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { api } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 import type { ExistingPrdFile, PrdListResponse } from '../types';
 
 type UsePrdRegistryArgs = {
@@ -27,13 +27,9 @@ export function usePrdRegistry({ projectId }: UsePrdRegistryArgs): UsePrdRegistr
     }
 
     try {
-      const response = await api.get(`/taskmaster/prd/${encodeURIComponent(projectId)}`);
-      if (!response.ok) {
-        setExistingPrds([]);
-        return;
-      }
-
-      const data = (await response.json()) as PrdListResponse;
+      const data = await apiClient.get<PrdListResponse>(
+        `/api/taskmaster/prd/${encodeURIComponent(projectId)}`,
+      );
       setExistingPrds(getPrdFiles(data));
     } catch (error) {
       console.error('Failed to fetch existing PRDs:', error);

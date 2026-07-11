@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { NavigateFunction } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
-import { api } from '../utils/api';
+import { apiClient } from '../utils/apiClient';
 import type { ServerEvent } from '../contexts/WebSocketContext';
 import type {
   AppTab,
-  LoadingProgress,
   Project,
   ProjectSession,
 } from '../types/app';
@@ -30,6 +30,8 @@ import {
   type SessionUpsertedEvent,
 } from './projectStateUtils';
 import type { SessionActivityMap } from './useSessionProtection';
+import { useProjectRealtimeEvents } from './useProjectRealtimeEvents';
+import { useProjectSessionAttention } from './useProjectSessionAttention';
 
 type UseProjectsStateArgs = {
   sessionId?: string;
@@ -52,11 +54,11 @@ export function useProjectsState({
   isMobile,
   activeSessions,
 }: UseProjectsStateArgs) {
+  const { t } = useTranslation();
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectsError, setProjectsError] = useState<string | null>(null);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [selectedSession, setSelectedSession] = useState<ProjectSession | null>(null);
-  const [attentionSessionIds, setAttentionSessionIds] = useState<Set<string>>(new Set());
   const [activeTab, setActiveTab] = useState<AppTab>(readPersistedTab);
 
   useEffect(() => {
@@ -69,11 +71,9 @@ export function useProjectsState({
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [isLoadingProjects, setIsLoadingProjects] = useState(true);
-  const [loadingProgress, setLoadingProgress] = useState<LoadingProgress | null>(null);
   const [isInputFocused, setIsInputFocused] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [settingsInitialTab, setSettingsInitialTab] = useState('agents');
-  const [externalMessageUpdate, setExternalMessageUpdate] = useState(0);
   /**
    * `newSessionTrigger` is an explicit, monotonic intent signal for user-driven
    * New Session actions.
@@ -96,69 +96,20 @@ export function useProjectsState({
    */
   const [newSessionTrigger, setNewSessionTrigger] = useState(0);
 
-  const loadingProgressTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  /**
-   * Ref mirrors for state the websocket subscription handler needs.
-   *
-   * The subscription is registered once (per `subscribe` identity) and events
-   * are dispatched synchronously outside React's render cycle, so the handler
-   * must read the latest values through refs instead of stale closures —
-   * re-subscribing on every state change would risk missing events.
-   */
-  const selectedSessionRef = useRef(selectedSession);
-  selectedSessionRef.current = selectedSession;
-  const activeSessionsRef = useRef(activeSessions);
-  activeSessionsRef.current = activeSessions;
+  const { attentionSessionIds, markSessionAttention, clearSessionAttention } = useProjectSessionAttention(
+    selectedSession,
+    sessionId,
+  );
 
-  const markSessionAttention = useCallback((targetSessionId?: string | null) => {
-    if (!targetSessionId) {
-      return;
-    }
-
-    const viewedSessionId = selectedSessionRef.current?.id ?? sessionId ?? null;
-    if (targetSessionId === viewedSessionId) {
-      return;
-    }
-
-    setAttentionSessionIds((previous) => {
-      if (previous.has(targetSessionId)) {
-        return previous;
-      }
-
-      const next = new Set(previous);
-      next.add(targetSessionId);
-      return next;
-    });
-  }, [sessionId]);
-
-  const clearSessionAttention = useCallback((targetSessionId?: string | null) => {
-    if (!targetSessionId) {
-      return;
-    }
-
-    setAttentionSessionIds((previous) => {
-      if (!previous.has(targetSessionId)) {
-        return previous;
-      }
-
-      const next = new Set(previous);
-      next.delete(targetSessionId);
-      return next;
-    });
-  }, []);
 
   const fetchProjects = useCallback(async ({ showLoadingState = true }: FetchProjectsOptions = {}) => {
     try {
       if (showLoadingState) {
         setIsLoadingProjects(true);
       }
-      const response = await api.projects();
-      if (!response.ok) {
-        throw new Error(`项目列表请求失败 (${response.status})`);
-      }
-      const projectData = (await response.json()) as Project[];
+      const projectData = await apiClient.get<Project[]>('/api/projects');
       if (!Array.isArray(projectData)) {
-        throw new Error('项目列表响应格式无效');
+        throw new Error(t('errorBoundary.invalidProjects'));
       }
       setProjectsError(null);
 
@@ -176,13 +127,13 @@ export function useProjectsState({
       });
     } catch (error) {
       console.error('Error fetching projects:', error);
-      setProjectsError(error instanceof Error ? error.message : '项目列表加载失败');
+      setProjectsError(error instanceof Error ? error.message : t('errorBoundary.projectsLoadFallback'));
     } finally {
       if (showLoadingState) {
         setIsLoadingProjects(false);
       }
     }
-  }, []);
+  }, [t]);
 
   const refreshProjectsSilently = useCallback(async () => {
     // Keep chat view stable while still syncing sidebar/session metadata in background.
@@ -266,12 +217,9 @@ export function useProjectsState({
     }
 
     try {
-      const response = await api.projectTaskmaster(projectId);
-      if (!response.ok) {
-        return;
-      }
-
-      const data = (await response.json()) as { taskmaster?: Project['taskmaster'] };
+      const data = await apiClient.get<{ taskmaster?: Project['taskmaster'] }>(
+        `/api/projects/${encodeURIComponent(projectId)}/taskmaster`,
+      );
       const taskMasterInfo = data.taskmaster;
       if (!taskMasterInfo) {
         return;
@@ -324,165 +272,18 @@ export function useProjectsState({
     }
   }, [isLoadingProjects, projects, selectedProject, sessionId]);
 
-  // Realtime sidebar updates. The backend pushes per-session deltas
-  // (`session_upserted`) instead of full project snapshots, so each event is
-  // a keyed upsert that can never clobber unrelated client state — no
-  // "suppress updates while a run is active" protection is needed anymore.
-  useEffect(() => {
-    const handleEvent = (event: ServerEvent) => {
-      if (event.kind === 'loading_progress') {
-        if (loadingProgressTimeoutRef.current) {
-          clearTimeout(loadingProgressTimeoutRef.current);
-          loadingProgressTimeoutRef.current = null;
-        }
+  const { loadingProgress, externalMessageUpdate } = useProjectRealtimeEvents({
+    subscribe,
+    navigate,
+    sessionId,
+    activeSessions,
+    selectedSession,
+    setProjects,
+    setSelectedProject,
+    setSelectedSession,
+    markSessionAttention,
+  });
 
-        setLoadingProgress(event as unknown as LoadingProgress);
-
-        if (event.phase === 'complete') {
-          loadingProgressTimeoutRef.current = setTimeout(() => {
-            setLoadingProgress(null);
-            loadingProgressTimeoutRef.current = null;
-          }, 500);
-        }
-
-        return;
-      }
-
-      const eventSessionId = typeof event.sessionId === 'string' && event.sessionId
-        ? event.sessionId
-        : null;
-      const viewedSessionId = selectedSessionRef.current?.id ?? sessionId ?? null;
-
-      if (
-        eventSessionId
-        && eventSessionId !== viewedSessionId
-        && event.kind !== 'chat_subscribed'
-        && event.kind !== 'loading_progress'
-        && event.kind !== 'session_upserted'
-        && event.kind !== 'status'
-        && event.kind !== 'stream_end'
-        && event.kind !== 'permission_cancelled'
-        && event.kind !== 'websocket_reconnected'
-      ) {
-        markSessionAttention(eventSessionId);
-      }
-
-      if (event.kind !== 'session_upserted') {
-        return;
-      }
-
-      const upsert = event as SessionUpsertedEvent;
-      if (!upsert.sessionId || !upsert.session) {
-        return;
-      }
-
-      // The transcript of the currently viewed session changed on disk while
-      // no run is active here (e.g. edited from another client or the CLI):
-      // signal the chat view to reload its messages.
-      const currentSelectedSession = selectedSessionRef.current;
-      if (
-        currentSelectedSession
-        && upsert.sessionId === currentSelectedSession.id
-        && !activeSessionsRef.current.has(upsert.sessionId)
-      ) {
-        setExternalMessageUpdate((prev) => prev + 1);
-      } else {
-        markSessionAttention(upsert.sessionId);
-      }
-
-      setProjects((previousProjects) => {
-        const targetProjectId = upsert.project?.projectId;
-        const existingProject = previousProjects.find((project) =>
-          targetProjectId ? project.projectId === targetProjectId : getProjectSessions(project).some((session) => session.id === upsert.sessionId),
-        );
-
-        if (!existingProject) {
-          // First session of a project this client has never seen: create the
-          // project entry from the event payload.
-          if (!upsert.project) {
-            return previousProjects;
-          }
-
-          const newProject: Project = {
-            projectId: upsert.project.projectId,
-            path: upsert.project.path,
-            fullPath: upsert.project.fullPath,
-            displayName: upsert.project.displayName,
-            isStarred: upsert.project.isStarred,
-            sessions: [],
-            sessionMeta: { hasMore: false, total: 0 },
-          } as Project;
-
-          return [...previousProjects, upsertSessionIntoProject(newProject, upsert)];
-        }
-
-        const updatedProject = upsertSessionIntoProject(existingProject, upsert);
-        if (updatedProject === existingProject) {
-          return previousProjects;
-        }
-
-        return previousProjects.map((project) =>
-          project.projectId === existingProject.projectId ? updatedProject : project,
-        );
-      });
-
-      // Keep the selected project reference in sync with the upsert.
-      setSelectedProject((previousProject) => {
-        if (!previousProject) {
-          return previousProject;
-        }
-        const matches = upsert.project
-          ? previousProject.projectId === upsert.project.projectId
-          : getProjectSessions(previousProject).some((session) => session.id === upsert.sessionId);
-        if (!matches) {
-          return previousProject;
-        }
-        const updated = upsertSessionIntoProject(previousProject, upsert);
-        return updated === previousProject ? previousProject : updated;
-      });
-
-      const aliasedSelectedSessionId =
-        typeof upsert.providerSessionId === 'string' && upsert.providerSessionId !== upsert.sessionId
-          ? upsert.providerSessionId
-          : null;
-      if (!aliasedSelectedSessionId) {
-        return;
-      }
-
-      const normalizedSelectedSession: ProjectSession = {
-        ...upsert.session,
-        id: upsert.sessionId,
-        __provider: upsert.provider,
-        __projectId: upsert.project?.projectId ?? currentSelectedSession?.__projectId,
-      };
-
-      setSelectedSession((previousSession) => {
-        if (previousSession?.id !== aliasedSelectedSessionId) {
-          return previousSession;
-        }
-
-        return {
-          ...previousSession,
-          ...normalizedSelectedSession,
-        };
-      });
-
-      if (sessionId === aliasedSelectedSessionId) {
-        navigate(`/session/${upsert.sessionId}`);
-      }
-    };
-
-    return subscribe(handleEvent);
-  }, [markSessionAttention, navigate, sessionId, subscribe]);
-
-  useEffect(() => {
-    return () => {
-      if (loadingProgressTimeoutRef.current) {
-        clearTimeout(loadingProgressTimeoutRef.current);
-        loadingProgressTimeoutRef.current = null;
-      }
-    };
-  }, []);
 
   useEffect(() => {
     clearSessionAttention(selectedSession?.id ?? sessionId ?? null);
@@ -611,8 +412,7 @@ export function useProjectsState({
 
   const handleSidebarRefresh = useCallback(async () => {
     try {
-      const response = await api.projects();
-      const freshProjects = (await response.json()) as Project[];
+      const freshProjects = await apiClient.get<Project[]>('/api/projects');
       const projectsWithTaskMaster = mergeTaskMasterCache(freshProjects, projects);
       const mergedProjects = mergeExpandedSessionPages(projects, projectsWithTaskMaster);
 
@@ -669,24 +469,10 @@ export function useProjectsState({
       return;
     }
 
-    const response = await api.projectSessions(projectId, {
-      limit: 20,
-      offset: loadedCount,
-    });
-
-    if (!response.ok) {
-      const payload = (await response.json().catch(() => ({}))) as { error?: string | { message?: string } };
-      const errorPayload = payload.error;
-      const message =
-        typeof errorPayload === 'string'
-          ? errorPayload
-          : errorPayload && typeof errorPayload === 'object' && errorPayload.message
-            ? errorPayload.message
-            : `Failed to load more sessions for project ${projectId}`;
-      throw new Error(message);
-    }
-
-    const sessionsPage = (await response.json()) as ProjectSessionPage;
+    const sessionsPage = await apiClient.get<ProjectSessionPage>(
+      `/api/projects/${encodeURIComponent(projectId)}/sessions`,
+      { limit: 20, offset: loadedCount },
+    );
 
     let mergedProjectForSelection: Project | null = null;
     setProjects((previousProjects) =>

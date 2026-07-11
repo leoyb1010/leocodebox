@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { authenticatedFetch } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 
 type GitConfigResponse = {
   gitName?: string;
@@ -29,12 +29,7 @@ export function useGitSettings() {
   const loadGitConfig = useCallback(async () => {
     try {
       setIsLoading(true);
-      const response = await authenticatedFetch('/api/user/git-config');
-      if (!response.ok) {
-        return;
-      }
-
-      const data = await response.json() as GitConfigResponse;
+      const data = await apiClient.get<GitConfigResponse>('/api/user/git-config');
       setGitName(data.gitName || '');
       setGitEmail(data.gitEmail || '');
     } catch (error) {
@@ -47,24 +42,12 @@ export function useGitSettings() {
   const saveGitConfig = useCallback(async () => {
     try {
       setIsSaving(true);
-      const response = await authenticatedFetch('/api/user/git-config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gitName, gitEmail }),
-      });
-
-      if (response.ok) {
-        setSaveStatus('success');
-        clearStatusTimerRef.current = window.setTimeout(() => {
-          setSaveStatus(null);
-          clearStatusTimerRef.current = null;
-        }, 3000);
-        return;
-      }
-
-      const data = await response.json() as GitConfigResponse;
-      console.error('Failed to save git config:', data.error);
-      setSaveStatus('error');
+      await apiClient.post<GitConfigResponse>('/api/user/git-config', { gitName, gitEmail });
+      setSaveStatus('success');
+      clearStatusTimerRef.current = window.setTimeout(() => {
+        setSaveStatus(null);
+        clearStatusTimerRef.current = null;
+      }, 3000);
     } catch (error) {
       console.error('Error saving git config:', error);
       setSaveStatus('error');

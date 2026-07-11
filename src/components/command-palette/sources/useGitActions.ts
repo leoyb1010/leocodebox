@@ -1,13 +1,9 @@
 import { useCallback } from 'react';
 
-import { authenticatedFetch } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 
 async function postGit(path: string, body: Record<string, unknown>) {
-  const res = await authenticatedFetch(path, {
-    method: 'POST',
-    body: JSON.stringify(body),
-  });
-  return res.json();
+  return apiClient.post(path, body);
 }
 
 export function useGitActions(projectId: string | undefined) {

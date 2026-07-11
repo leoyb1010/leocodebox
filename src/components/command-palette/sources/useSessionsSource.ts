@@ -1,4 +1,4 @@
-import { authenticatedFetch } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 import type { LLMProvider, ProjectSession } from '../../../types/app';
 
 import { useApiSource } from './useApiSource';
@@ -19,7 +19,7 @@ export function useSessionsSource(projectId: string | undefined, enabled: boolea
     deps: [projectId],
     fetcher: (signal) => {
       const params = new URLSearchParams({ limit: '50', offset: '0' });
-      return authenticatedFetch(
+      return apiClient.raw(
         `/api/projects/${encodeURIComponent(projectId!)}/sessions?${params.toString()}`,
         { signal },
       );

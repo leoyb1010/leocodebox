@@ -16,7 +16,7 @@ import {
 
 import { cn } from '../../../lib/utils';
 import { Badge, Button } from '../../../shared/view/ui';
-import { authenticatedFetch } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 import type { SettingsMainTab } from '../../settings/types/types';
 
 type BrowserUseStatus = {
@@ -56,14 +56,6 @@ type BrowserUsePanelProps = {
   isVisible: boolean;
   onShowSettings?: (tab?: SettingsMainTab) => void;
 };
-
-async function readJson<T>(response: Response): Promise<T> {
-  const data = await response.json();
-  if (!response.ok || data.success === false) {
-    throw new Error(data.error || data.details || `Request failed (${response.status})`);
-  }
-  return data as T;
-}
 
 function formatRelativeTime(value: string | null): string {
   if (!value) return 'Never';
@@ -159,12 +151,10 @@ export default function BrowserUsePanel({ isVisible, onShowSettings }: BrowserUs
   const refresh = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      const [statusResponse, sessionsResponse] = await Promise.all([
-        authenticatedFetch('/api/browser-use/status'),
-        authenticatedFetch('/api/browser-use/sessions'),
+      const [statusData, sessionsData] = await Promise.all([
+        apiClient.get<{ data: BrowserUseStatus }>('/api/browser-use/status'),
+        apiClient.get<{ data: { sessions: BrowserUseSession[] } }>('/api/browser-use/sessions'),
       ]);
-      const statusData = await readJson<{ data: BrowserUseStatus }>(statusResponse);
-      const sessionsData = await readJson<{ data: { sessions: BrowserUseSession[] } }>(sessionsResponse);
       const nextSessions = sessionsData.data.sessions;
       setStatus(statusData.data);
       setSessions(nextSessions);
@@ -201,22 +191,19 @@ export default function BrowserUsePanel({ isVisible, onShowSettings }: BrowserUs
 
   const stopSession = () => runAction(async () => {
     if (!selectedSession) return;
-    const response = await authenticatedFetch(`/api/browser-use/sessions/${selectedSession.id}/stop`, { method: 'POST' });
-    await readJson(response);
+    await apiClient.post(`/api/browser-use/sessions/${encodeURIComponent(selectedSession.id)}/stop`);
   });
 
   const deleteSession = () => runAction(async () => {
     if (!selectedSession) return;
-    const response = await authenticatedFetch(`/api/browser-use/sessions/${selectedSession.id}`, { method: 'DELETE' });
-    await readJson(response);
+    await apiClient.delete(`/api/browser-use/sessions/${encodeURIComponent(selectedSession.id)}`);
     setIsFullscreen(false);
   });
 
   const installBrowserBinaries = () => runAction(async () => {
     setIsInstalling(true);
     try {
-      const response = await authenticatedFetch('/api/browser-use/runtime/install', { method: 'POST' });
-      await readJson(response);
+      await apiClient.post('/api/browser-use/runtime/install');
     } finally {
       setIsInstalling(false);
     }

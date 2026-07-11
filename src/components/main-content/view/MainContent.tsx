@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import type { MainContentProps } from '../types/types';
 import { useTaskMaster } from '../../../contexts/TaskMasterContext';
@@ -6,7 +7,7 @@ import { usePaletteOpsRegister } from '../../../contexts/PaletteOpsContext';
 import { useTasksSettings } from '../../../contexts/TasksSettingsContext';
 import { useUiPreferences } from '../../../hooks/useUiPreferences';
 import { useFileOpenResolver } from '../../../hooks/useFileOpenResolver';
-import { authenticatedFetch } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 import { useEditorSidebar } from '../../code-editor/hooks/useEditorSidebar';
 import type { Project } from '../../../types/app';
 
@@ -22,10 +23,16 @@ const StandaloneShell = React.lazy(() => import('../../standalone-shell/view/Sta
 const GitPanel = React.lazy(() => import('../../git-panel/view/GitPanel'));
 const PluginTabContent = React.lazy(() => import('../../plugins/view/PluginTabContent'));
 const BrowserUsePanel = React.lazy(() => import('../../browser-use/view/BrowserUsePanel'));
+const ConversationAuditPanel = React.lazy(() => import('../../conversation-audit/view/ConversationAuditPanel'));
 const EditorSidebar = React.lazy(() => import('../../code-editor/view/EditorSidebar'));
 const TaskMasterPanel = React.lazy(() => import('../../task-master/view/TaskMasterPanel'));
 
-const panelFallback = <div className="flex h-full items-center justify-center text-sm text-muted-foreground">正在加载工作区…</div>;
+function PanelFallback() {
+  const { t } = useTranslation();
+  return <div className="flex h-full items-center justify-center text-sm text-muted-foreground">{t('workspaceRuntime.loadingWorkspace')}</div>;
+}
+
+const panelFallback = <PanelFallback />;
 
 type TaskMasterContextValue = {
   currentProject?: Project | null;
@@ -106,9 +113,10 @@ function MainContent({
 
   const loadBrowserUseSettings = useCallback(async () => {
     try {
-      const response = await authenticatedFetch('/api/browser-use/settings');
-      const data = await response.json();
-      setBrowserUseEnabled(Boolean(response.ok && data?.success !== false && data?.data?.settings?.enabled));
+      const data = await apiClient.get<{ success?: boolean; data?: { settings?: { enabled?: boolean } } }>(
+        '/api/browser-use/settings',
+      );
+      setBrowserUseEnabled(Boolean(data.success !== false && data.data?.settings?.enabled));
     } catch {
       setBrowserUseEnabled(false);
     }
@@ -242,6 +250,16 @@ function MainContent({
               <React.Suspense fallback={panelFallback}>
                 <BrowserUsePanel isVisible={activeTab === 'browser'} onShowSettings={onShowSettings} />
               </React.Suspense>
+              </ErrorBoundary>
+            </div>
+          )}
+
+          {activeTab === 'audit' && (
+            <div className="h-full overflow-hidden">
+              <ErrorBoundary showDetails>
+                <React.Suspense fallback={panelFallback}>
+                  <ConversationAuditPanel />
+                </React.Suspense>
               </ErrorBoundary>
             </div>
           )}

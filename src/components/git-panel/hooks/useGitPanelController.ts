@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { DEFAULT_BRANCH, RECENT_COMMITS_LIMIT } from '../constants/constants';
 import type {
-  GitApiErrorResponse,
   GitBranchesResponse,
   GitCommitSummary,
   GitCommitsResponse,
@@ -12,13 +11,13 @@ import type {
   GitGenerateMessageResponse,
   GitOperationResponse,
   GitPanelController,
-  GitRemoteStatus,
   GitStatusResponse,
   UseGitPanelControllerOptions,
 } from '../types/types';
 import { gitGet, gitPost, isAbortError } from '../utils/gitApiClient';
 import { getAllChangedFiles } from '../utils/gitPanelUtils';
 
+import { useGitRemoteOperations } from './useGitRemoteOperations';
 import { useSelectedProvider } from './useSelectedProvider';
 
 export function useGitPanelController({
@@ -33,14 +32,9 @@ export function useGitPanelController({
   const [branches, setBranches] = useState<string[]>([]);
   const [recentCommits, setRecentCommits] = useState<GitCommitSummary[]>([]);
   const [commitDiffs, setCommitDiffs] = useState<GitDiffMap>({});
-  const [remoteStatus, setRemoteStatus] = useState<GitRemoteStatus | null>(null);
   const [localBranches, setLocalBranches] = useState<string[]>([]);
   const [remoteBranches, setRemoteBranches] = useState<string[]>([]);
   const [isCreatingBranch, setIsCreatingBranch] = useState(false);
-  const [isFetching, setIsFetching] = useState(false);
-  const [isPulling, setIsPulling] = useState(false);
-  const [isPushing, setIsPushing] = useState(false);
-  const [isPublishing, setIsPublishing] = useState(false);
   const [isCreatingInitialCommit, setIsCreatingInitialCommit] = useState(false);
   const [operationError, setOperationError] = useState<string | null>(null);
 
@@ -169,27 +163,25 @@ export function useGitPanelController({
     }
   }, [selectedProject]);
 
-  const fetchRemoteStatus = useCallback(async () => {
-    if (!selectedProject) {
-      return;
-    }
 
-    try {
-      const data = await gitGet<GitRemoteStatus | GitApiErrorResponse>('remote-status', {
-        project: selectedProject.projectId,
-      });
-
-      if (!data.error) {
-        setRemoteStatus(data as GitRemoteStatus);
-        return;
-      }
-
-      setRemoteStatus(null);
-    } catch (error) {
-      console.error('Error fetching remote status:', error);
-      setRemoteStatus(null);
-    }
-  }, [selectedProject]);
+  const {
+    remoteStatus,
+    isFetching,
+    isPulling,
+    isPushing,
+    isPublishing,
+    fetchRemoteStatus,
+    handleFetch,
+    handlePull,
+    handlePush,
+    handlePublish,
+  } = useGitRemoteOperations({
+    selectedProject,
+    currentBranch,
+    fetchGitStatus,
+    fetchBranches,
+    setOperationError,
+  });
 
   const switchBranch = useCallback(
     async (branchName: string) => {
@@ -271,103 +263,6 @@ export function useGitPanelController({
     [fetchBranches, selectedProject],
   );
 
-  const handleFetch = useCallback(async () => {
-    if (!selectedProject) {
-      return;
-    }
-
-    setIsFetching(true);
-    try {
-      const data = await gitPost<GitOperationResponse>('fetch', {
-          project: selectedProject.projectId,
-        });
-      if (data.success) {
-        void fetchGitStatus();
-        void fetchRemoteStatus();
-        void fetchBranches();
-        return;
-      }
-
-      setOperationError(data.error ?? 'Fetch failed');
-    } catch (error) {
-      setOperationError(error instanceof Error ? error.message : 'Fetch failed');
-    } finally {
-      setIsFetching(false);
-    }
-  }, [fetchBranches, fetchGitStatus, fetchRemoteStatus, selectedProject]);
-
-  const handlePull = useCallback(async () => {
-    if (!selectedProject) {
-      return;
-    }
-
-    setIsPulling(true);
-    try {
-      const data = await gitPost<GitOperationResponse>('pull', {
-          project: selectedProject.projectId,
-        });
-      if (data.success) {
-        void fetchGitStatus();
-        void fetchRemoteStatus();
-        return;
-      }
-
-      setOperationError(data.error ?? 'Pull failed');
-    } catch (error) {
-      setOperationError(error instanceof Error ? error.message : 'Pull failed');
-    } finally {
-      setIsPulling(false);
-    }
-  }, [fetchGitStatus, fetchRemoteStatus, selectedProject]);
-
-  const handlePush = useCallback(async () => {
-    if (!selectedProject) {
-      return;
-    }
-
-    setIsPushing(true);
-    try {
-      const data = await gitPost<GitOperationResponse>('push', {
-          project: selectedProject.projectId,
-        });
-      if (data.success) {
-        void fetchGitStatus();
-        void fetchRemoteStatus();
-        return;
-      }
-
-      setOperationError(data.error ?? 'Push failed');
-    } catch (error) {
-      setOperationError(error instanceof Error ? error.message : 'Push failed');
-    } finally {
-      setIsPushing(false);
-    }
-  }, [fetchGitStatus, fetchRemoteStatus, selectedProject]);
-
-  const handlePublish = useCallback(async () => {
-    if (!selectedProject) {
-      return;
-    }
-
-    setIsPublishing(true);
-    try {
-      const data = await gitPost<GitOperationResponse>('publish', {
-        project: selectedProject.projectId,
-        branch: currentBranch,
-      });
-      if (data.success) {
-        void fetchGitStatus();
-        void fetchRemoteStatus();
-        return;
-      }
-
-      console.error('Publish failed:', data.error);
-    } catch (error) {
-      console.error('Error publishing branch:', error);
-    } finally {
-      setIsPublishing(false);
-    }
-  }, [currentBranch, fetchGitStatus, fetchRemoteStatus, selectedProject]);
 
   const discardChanges = useCallback(
     async (filePath: string) => {
@@ -643,7 +538,6 @@ export function useGitPanelController({
     setLocalBranches([]);
     setRemoteBranches([]);
     setGitStatus(null);
-    setRemoteStatus(null);
     setGitDiff({});
     setRecentCommits([]);
     setCommitDiffs({});

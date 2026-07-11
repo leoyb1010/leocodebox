@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import DOMPurify from 'dompurify';
 
-import { authenticatedFetch } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 
 type Props = {
   pluginName: string;
@@ -62,11 +62,8 @@ export default function PluginIcon({ pluginName, iconFile, className }: Props) {
 
   useEffect(() => {
     if (!url || svgCache.has(url)) return;
-    authenticatedFetch(url)
-      .then((r) => {
-        if (!r.ok) return;
-        return r.text();
-      })
+    apiClient.raw(url)
+      .then((r) => r.text())
       .then((text) => {
         if (!text) return;
         const sanitized = sanitizeSvg(text);

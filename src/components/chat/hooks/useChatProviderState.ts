@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { authenticatedFetch } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 import type { PendingPermissionRequest, PermissionMode } from '../types/types';
 import type {
   ProjectSession,
@@ -201,14 +201,10 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
     try {
       const results = await Promise.all(
         PROVIDERS.map(async (p) => {
-          const params = new URLSearchParams();
-          if (options.bypassCache) {
-            params.set('bypassCache', 'true');
-          }
-
-          const queryString = params.toString();
-          const response = await authenticatedFetch(`/api/providers/${p}/models${queryString ? `?${queryString}` : ''}`);
-          const body = (await response.json()) as ProviderModelsApiResponse;
+          const body = await apiClient.get<ProviderModelsApiResponse>(
+            `/api/providers/${p}/models`,
+            options.bypassCache ? { bypassCache: true } : undefined,
+          );
           if (!body.success || !body.data?.models || !body.data?.cache) {
             return null;
           }
@@ -267,8 +263,9 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
 
     const loadCapabilities = async () => {
       try {
-        const response = await authenticatedFetch('/api/providers/capabilities');
-        const body = (await response.json()) as ProviderCapabilitiesApiResponse;
+        const body = await apiClient.get<ProviderCapabilitiesApiResponse>(
+          '/api/providers/capabilities',
+        );
         if (cancelled || !body.success || !Array.isArray(body.data?.providers)) {
           return;
         }
@@ -504,8 +501,7 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
       return;
     }
 
-    authenticatedFetch('/api/cursor/config')
-      .then((response) => response.json())
+    apiClient.get<{ success?: boolean; config?: { model?: { modelId?: string } } }>('/api/cursor/config')
       .then((data) => {
         if (!data.success || !data.config?.model?.modelId) {
           return;
@@ -563,16 +559,12 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
       };
     }
 
-    const response = await authenticatedFetch(
+    const body = await apiClient.post<ChangeActiveModelApiResponse>(
       `/api/providers/${targetProvider}/sessions/${encodeURIComponent(normalizedSessionId)}/active-model`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ model }),
-      },
+      { model },
     );
 
-    const body = (await response.json()) as ChangeActiveModelApiResponse;
-    if (!response.ok || !body.success || !body.data?.supported) {
+    if (!body.success || !body.data?.supported) {
       throw new Error('Unable to change the active model for this session.');
     }
 

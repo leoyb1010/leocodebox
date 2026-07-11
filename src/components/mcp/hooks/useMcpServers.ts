@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { authenticatedFetch } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 import { MCP_GLOBAL_SUPPORTED_TRANSPORTS, MCP_PROVIDER_NAMES, MCP_SUPPORTED_SCOPES } from '../constants';
 import type {
   ApiResponse,
@@ -54,8 +54,6 @@ const mcpServersCache = new Map<string, McpServersCacheEntry>();
 
 // Settings users often switch between provider tabs repeatedly. A short module
 // cache prevents those tab switches from refetching every project config file.
-
-const toResponseJson = async <T>(response: Response): Promise<T> => response.json() as Promise<T>;
 
 const getApiErrorMessage = (payload: unknown, fallback: string): string => {
   if (!payload || typeof payload !== 'object') {
@@ -145,15 +143,12 @@ const fetchProviderScopeServers = async (
   scope: McpScope,
   project?: ProjectTarget,
 ): Promise<ProviderMcpServer[]> => {
-  const params = new URLSearchParams({ scope });
-  if (project?.path) {
-    params.set('workspacePath', project.path);
-  }
+  const data = await apiClient.get<ApiResponse<ProviderMcpServerResponse>>(
+    `/api/providers/${provider}/mcp/servers`,
+    { scope, workspacePath: project?.path },
+  );
 
-  const response = await authenticatedFetch(`/api/providers/${provider}/mcp/servers?${params.toString()}`);
-  const data = await toResponseJson<ApiResponse<ProviderMcpServerResponse>>(response);
-
-  if (!response.ok || !data.success) {
+  if (!data.success) {
     throw new Error(getApiErrorMessage(data, `Failed to load ${provider} MCP servers`));
   }
 
@@ -164,18 +159,12 @@ const deleteProviderServer = async (
   provider: McpProvider,
   server: ProviderMcpServer,
 ): Promise<void> => {
-  const params = new URLSearchParams({ scope: server.scope });
-  if (server.workspacePath) {
-    params.set('workspacePath', server.workspacePath);
-  }
-
-  const response = await authenticatedFetch(
-    `/api/providers/${provider}/mcp/servers/${encodeURIComponent(server.name)}?${params.toString()}`,
-    { method: 'DELETE' },
+  const data = await apiClient.deleteQuery<ApiResponse<{ removed: boolean }>>(
+    `/api/providers/${provider}/mcp/servers/${encodeURIComponent(server.name)}`,
+    { scope: server.scope, workspacePath: server.workspacePath },
   );
-  const data = await toResponseJson<ApiResponse<{ removed: boolean }>>(response);
 
-  if (!response.ok || !data.success) {
+  if (!data.success) {
     throw new Error(getApiErrorMessage(data, 'Failed to delete MCP server'));
   }
 };
@@ -184,13 +173,12 @@ const saveProviderServer = async (
   provider: McpProvider,
   payload: UpsertProviderMcpServerPayload,
 ): Promise<void> => {
-  const response = await authenticatedFetch(`/api/providers/${provider}/mcp/servers`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-  const data = await toResponseJson<ApiResponse<{ server: ProviderMcpServer }>>(response);
+  const data = await apiClient.post<ApiResponse<{ server: ProviderMcpServer }>>(
+    `/api/providers/${provider}/mcp/servers`,
+    payload,
+  );
 
-  if (!response.ok || !data.success) {
+  if (!data.success) {
     throw new Error(getApiErrorMessage(data, 'Failed to save MCP server'));
   }
 };
@@ -198,13 +186,12 @@ const saveProviderServer = async (
 const saveGlobalServer = async (
   payload: UpsertProviderMcpServerPayload,
 ): Promise<GlobalMcpServerResult[]> => {
-  const response = await authenticatedFetch('/api/providers/mcp/servers/global', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-  const data = await toResponseJson<ApiResponse<GlobalMcpServerResponse>>(response);
+  const data = await apiClient.post<ApiResponse<GlobalMcpServerResponse>>(
+    '/api/providers/mcp/servers/global',
+    payload,
+  );
 
-  if (!response.ok || !data.success) {
+  if (!data.success) {
     throw new Error(getApiErrorMessage(data, 'Failed to save MCP server to all providers'));
   }
 

@@ -5,19 +5,16 @@ import type {
   FormEvent,
   KeyboardEvent,
   MouseEvent,
+  MutableRefObject,
   SetStateAction,
   TouchEvent,
 } from 'react';
 
-import { authenticatedFetch } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 import type { MarkSessionProcessing } from '../../../hooks/useSessionProtection';
 import { grantClaudeToolPermission } from '../utils/chatPermissions';
 import {
-  clearQueuedMessage,
-  readQueuedMessage,
   safeLocalStorage,
-  writeQueuedMessage,
-  type QueuedSendOptions,
 } from '../utils/chatStorage';
 import type {
   ChatMessage,
@@ -25,14 +22,24 @@ import type {
   PermissionMode,
   SessionEstablishedContext,
 } from '../types/types';
-import type { Project, ProjectSession, LLMProvider, ProviderModelsCacheInfo } from '../../../types/app';
-import { escapeRegExp } from '../utils/chatFormatting';
+import type { Project, ProjectSession, LLMProvider } from '../../../types/app';
 
 import { useFileMentions } from './useFileMentions';
 import { useChatImageAttachments } from './useChatImageAttachments';
 import { useChatTextareaLayout } from './useChatTextareaLayout';
 import { getNotificationSessionSummary, useChatSendOptions } from './useChatSendOptions';
-import { type SlashCommand, useSlashCommands } from './useSlashCommands';
+import type { SlashCommand } from './useSlashCommands';
+import { useChatCommands } from './useChatCommands';
+export type {
+  CommandModalKind,
+  CommandModalPayload,
+  CostCommandData,
+  HelpCommandData,
+  ModelCommandData,
+  StatusCommandData,
+} from './useChatCommands';
+import { useQueuedChatDraft } from './useQueuedChatDraft';
+export type { QueuedDraft } from './useQueuedChatDraft';
 
 interface UseChatComposerStateArgs {
   selectedProject: Project | null;
@@ -75,99 +82,11 @@ interface MentionableFile {
   path: string;
 }
 
-interface CommandExecutionResult {
-  type: 'builtin' | 'custom';
-  action?: string;
-  data?: any;
-  content?: string;
-  hasBashCommands?: boolean;
-  hasFileIncludes?: boolean;
-}
 
-export type ModelCommandData = {
-  current?: {
-    provider?: string;
-    providerLabel?: string;
-    model?: string;
-  };
-  available?: Partial<Record<LLMProvider, string[]>>;
-  availableModels?: string[];
-  availableOptions?: Array<{
-    value: string;
-    label?: string;
-    description?: string;
-  }>;
-  defaultModel?: string;
-  cache?: ProviderModelsCacheInfo;
-};
 
-export type CostCommandData = {
-  tokenUsage?: {
-    used?: number;
-    total?: number;
-  };
-  tokenBreakdown?: {
-    input?: number;
-    output?: number;
-  };
-  provider?: string;
-  model?: string;
-};
-
-export type StatusCommandData = {
-  version?: string;
-  packageName?: string;
-  uptime?: string;
-  model?: string;
-  provider?: string;
-  nodeVersion?: string;
-  platform?: string;
-  pid?: number;
-  memoryUsage?: {
-    rssMb?: number;
-    heapUsedMb?: number;
-    heapTotalMb?: number;
-  };
-};
-
-export type HelpCommandData = {
-  content?: string;
-  format?: string;
-  commands?: Array<{
-    name: string;
-    description?: string;
-    namespace?: string;
-  }>;
-};
-
-export type CommandModalKind = 'help' | 'models' | 'cost' | 'status';
-
-export type CommandModalPayload = {
-  kind: CommandModalKind;
-  data: HelpCommandData | ModelCommandData | CostCommandData | StatusCommandData;
-};
-
-const createFakeSubmitEvent = () => {
-  return { preventDefault: () => undefined } as unknown as FormEvent<HTMLFormElement>;
-};
-
-export type QueuedDraft = {
-  content: string;
-  images: File[];
-  /**
-   * Send options snapshotted at queue time. Persisted with the draft so the
-   * app-level auto-send can dispatch the message with the right model and
-   * permission settings while another session is being viewed.
-   */
-  options?: QueuedSendOptions;
-};
-
-const restoreQueuedDraft = (sessionKey: string): QueuedDraft | null => {
-  const saved = readQueuedMessage(sessionKey);
-  // Image attachments can't survive a reload; only text and options persist.
-  return saved ? { content: saved.content, images: [], options: saved.options } : null;
-};
-
+const createFakeSubmitEvent = () => ({
+  preventDefault: () => undefined,
+}) as unknown as FormEvent<HTMLFormElement>;
 
 
 export function useChatComposerState({
@@ -228,7 +147,6 @@ export function useChatComposerState({
     syncInputOverlayScroll,
     handleInputFocusChange,
   } = useChatTextareaLayout({ input, onInputFocusChange });
-  const [commandModalPayload, setCommandModalPayload] = useState<CommandModalPayload | null>(null);
 
   const handleSubmitRef = useRef<
     ((event: FormEvent<HTMLFormElement> | MouseEvent | TouchEvent | KeyboardEvent<HTMLTextAreaElement>) => Promise<void>) | null
@@ -239,219 +157,20 @@ export function useChatComposerState({
   // to currentSessionId for a just-established session that hasn't been
   // handed back to the parent's `selectedSession` prop yet.
   const sessionKey = selectedSession?.id || currentSessionId || null;
-
-  const [queuedDraft, setQueuedDraft] = useState<QueuedDraft | null>(() => {
-    if (typeof window === 'undefined' || !sessionKey) {
-      return null;
-    }
-    return restoreQueuedDraft(sessionKey);
+  const { queuedDraft, queueDraft, editQueuedDraft, deleteQueuedDraft } = useQueuedChatDraft({
+    sessionKey,
+    isLoading,
+    setInput,
+    inputValueRef,
+    setAttachedImages,
+    textareaRef,
+    handleSubmitRef: handleSubmitRef as MutableRefObject<((event: FormEvent<HTMLFormElement>) => Promise<void>) | null>,
   });
-  // Which session the in-memory `queuedDraft` belongs to. On a session switch
-  // there is one commit where `sessionKey` already points at the new session
-  // while `queuedDraft` still holds the old session's draft; the persistence
-  // effect must not write across that gap.
-  const queuedDraftSessionRef = useRef<string | null>(sessionKey);
-
-  const handleBuiltInCommand = useCallback(
-    (result: CommandExecutionResult) => {
-      const { action, data } = result;
-      switch (action) {
-        case 'help':
-          setCommandModalPayload({
-            kind: 'help',
-            data: (data || {}) as HelpCommandData,
-          });
-          break;
-
-        case 'models':
-          setCommandModalPayload({
-            kind: 'models',
-            data: (data || {}) as ModelCommandData,
-          });
-          break;
-
-        case 'cost': {
-          setCommandModalPayload({
-            kind: 'cost',
-            data: (data || {}) as CostCommandData,
-          });
-          break;
-        }
-
-        case 'status': {
-          setCommandModalPayload({
-            kind: 'status',
-            data: (data || {}) as StatusCommandData,
-          });
-          break;
-        }
-
-        case 'memory':
-          if (data.error) {
-            addMessage({
-              type: 'assistant',
-              content: `Warning: ${data.message}`,
-              timestamp: Date.now(),
-            });
-          } else {
-            addMessage({
-              type: 'assistant',
-              content: `${data.message}\n\nPath: \`${data.path}\``,
-              timestamp: Date.now(),
-            });
-            if (data.exists && onFileOpen) {
-              onFileOpen(data.path);
-            }
-          }
-          break;
-
-        case 'config':
-          onShowSettings?.();
-          break;
-
-        default:
-          console.warn('Unknown built-in command action:', action);
-      }
-    },
-    [onFileOpen, onShowSettings, addMessage],
-  );
-
-  const closeCommandModal = useCallback(() => {
-    setCommandModalPayload(null);
-  }, []);
-
-  const handleCustomCommand = useCallback(async (result: CommandExecutionResult) => {
-    const { content, hasBashCommands } = result;
-
-    if (hasBashCommands) {
-      const confirmed = window.confirm(
-        'This command contains bash commands that will be executed. Do you want to proceed?',
-      );
-      if (!confirmed) {
-        addMessage({
-          type: 'assistant',
-          content: 'Command execution cancelled',
-          timestamp: Date.now(),
-        });
-        return;
-      }
-    }
-
-    const commandContent = content || '';
-    setInput(commandContent);
-    inputValueRef.current = commandContent;
-
-    // Defer submit to next tick so the command text is reflected in UI before dispatching.
-    setTimeout(() => {
-      if (handleSubmitRef.current) {
-        handleSubmitRef.current(createFakeSubmitEvent());
-      }
-    }, 0);
-  }, [addMessage]);
-
-  const executeCommand = useCallback(
-    async (command: SlashCommand, rawInput?: string, options?: { preserveInput?: boolean }) => {
-      if (!command || !selectedProject) {
-        return;
-      }
-
-      try {
-        const effectiveInput = rawInput ?? input;
-        const commandMatch = effectiveInput.match(new RegExp(`${escapeRegExp(command.name)}\\s*(.*)`));
-        const args =
-          commandMatch && commandMatch[1] ? commandMatch[1].trim().split(/\s+/) : [];
-
-        // The `/api/commands/execute` context sends `projectId` now instead of
-        // a folder-derived project name; the path is still included verbatim.
-        const context = {
-          projectPath: selectedProject.fullPath || selectedProject.path,
-          projectId: selectedProject.projectId,
-          sessionId: currentSessionId,
-          provider,
-          model: provider === 'cursor'
-            ? cursorModel
-            : provider === 'codex'
-              ? codexModel
-              : provider === 'opencode'
-                  ? opencodeModel
-                  : claudeModel,
-          tokenUsage: tokenBudget,
-        };
-
-        const response = await authenticatedFetch('/api/commands/execute', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            commandName: command.name,
-            commandPath: command.path,
-            args,
-            context,
-          }),
-        });
-
-        if (!response.ok) {
-          let errorMessage = `Failed to execute command (${response.status})`;
-          try {
-            const errorData = await response.json();
-            errorMessage = errorData?.message || errorData?.error || errorMessage;
-          } catch {
-            // Ignore JSON parse failures and use fallback message.
-          }
-          throw new Error(errorMessage);
-        }
-
-        const result = (await response.json()) as CommandExecutionResult;
-        if (result.type === 'builtin') {
-          handleBuiltInCommand(result);
-          if (!options?.preserveInput) {
-            setInput('');
-            inputValueRef.current = '';
-          }
-        } else if (result.type === 'custom') {
-          await handleCustomCommand(result);
-        }
-      } catch (error) {
-        const message = error instanceof Error ? error.message : 'Unknown error';
-        console.error('Error executing command:', error);
-        addMessage({
-          type: 'assistant',
-          content: `Error executing command: ${message}`,
-          timestamp: Date.now(),
-        });
-      }
-    },
-    [
-      claudeModel,
-      codexModel,
-      currentSessionId,
-      cursorModel,
-      opencodeModel,
-      handleBuiltInCommand,
-      handleCustomCommand,
-      input,
-      provider,
-      selectedProject,
-      addMessage,
-      tokenBudget,
-    ],
-  );
-
-  const showCostModal = useCallback(() => {
-    executeCommand(
-      {
-        name: '/cost',
-        description: 'Display token usage information',
-        namespace: 'builtin',
-        metadata: { type: 'builtin' },
-      } as SlashCommand,
-      '/cost',
-      { preserveInput: true },
-    );
-  }, [executeCommand]);
-
   const {
+    commandModalPayload,
+    closeCommandModal,
+    executeCommand,
+    showCostModal,
     slashCommands,
     slashCommandsCount,
     filteredCommands,
@@ -464,14 +183,29 @@ export function useChatComposerState({
     handleToggleCommandMenu,
     handleCommandInputChange,
     handleCommandMenuKeyDown,
-  } = useSlashCommands({
+  } = useChatCommands({
     selectedProject,
+    currentSessionId,
     provider,
+    cursorModel,
+    claudeModel,
+    codexModel,
+    opencodeModel,
+    tokenBudget,
     input,
     setInput,
+    inputValueRef,
     textareaRef,
-    onExecuteCommand: executeCommand,
+    handleSubmitRef: handleSubmitRef as MutableRefObject<((event: FormEvent<HTMLFormElement>) => Promise<void>) | null>,
+    addMessage,
+    onFileOpen,
+    onShowSettings,
   });
+
+
+
+
+
 
   const {
     showFileDropdown,
@@ -514,8 +248,7 @@ export function useChatComposerState({
       // It's auto-flushed (re-running this same function) once the turn ends,
       // so it still goes through slash-command interception, image upload, etc.
       if (isLoading) {
-        queuedDraftSessionRef.current = sessionKey;
-        setQueuedDraft({
+        queueDraft({
           content: currentInput,
           images: attachedImages,
           options: buildSendOptions(currentInput),
@@ -570,18 +303,13 @@ export function useChatComposerState({
         });
 
         try {
-          const response = await authenticatedFetch('/api/assets/images', {
+          const response = await apiClient.raw('/api/assets/images', {
             method: 'POST',
             headers: {},
             body: formData,
           });
-
-          if (!response.ok) {
-            throw new Error('Failed to upload images');
-          }
-
-          const result = await response.json();
-          uploadedImages = result.images;
+          const result = await response.json() as { images?: unknown[] };
+          uploadedImages = result.images || [];
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Unknown error';
           console.error('Image upload failed:', error);
@@ -604,17 +332,10 @@ export function useChatComposerState({
       let targetSessionId = selectedSession?.id || currentSessionId || null;
       if (!targetSessionId) {
         try {
-          const response = await authenticatedFetch('/api/providers/sessions', {
-            method: 'POST',
-            body: JSON.stringify({
-              provider,
-              projectPath: resolvedProjectPath,
-            }),
-          });
-          if (!response.ok) {
-            throw new Error(`Failed to create session (${response.status})`);
-          }
-          const body = await response.json();
+          const body = await apiClient.post<{ data?: { sessionId?: string } }>(
+            '/api/providers/sessions',
+            { provider, projectPath: resolvedProjectPath },
+          );
           targetSessionId = body?.data?.sessionId || null;
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Unknown error';
@@ -694,12 +415,12 @@ export function useChatComposerState({
       onSessionProcessing,
       onSessionEstablished,
       provider,
+      queueDraft,
       resetCommandMenuState,
       resetImageAttachments,
       scrollToBottom,
       selectedProject,
       sendMessage,
-      sessionKey,
       addMessage,
       setIsUserScrolledUp,
       slashCommands,
@@ -709,66 +430,6 @@ export function useChatComposerState({
   useEffect(() => {
     handleSubmitRef.current = handleSubmit;
   }, [handleSubmit]);
-
-  // Once the in-flight turn ends, replay the queued draft through the normal
-  // submit path (slash commands, image upload, etc. all still apply).
-  const wasLoadingRef = useRef(isLoading);
-  const flushSessionKeyRef = useRef(sessionKey);
-  useEffect(() => {
-    const wasLoading = wasLoadingRef.current;
-    wasLoadingRef.current = isLoading;
-
-    // A session switch changes which session `isLoading` describes, so this
-    // transition says nothing about the queued draft's own session. Never
-    // flush across it — the swap effect below replaces `queuedDraft` with the
-    // new session's saved draft right after this.
-    if (flushSessionKeyRef.current !== sessionKey) {
-      flushSessionKeyRef.current = sessionKey;
-      return;
-    }
-
-    if (isLoading || !queuedDraft) {
-      return;
-    }
-
-    // Turn just ended in this session: flush immediately. Otherwise this is a
-    // saved draft restored into an apparently idle session — hold it briefly
-    // so the `chat_subscribed` ack can flip `isLoading` if a run is actually
-    // still live (the cleanup below cancels the send in that case).
-    const delay = wasLoading ? 0 : 750;
-    const timer = setTimeout(() => {
-      // The saved key is the claim ticket shared with the app-level auto-send
-      // (which handles sessions that finish while not viewed). If it's gone,
-      // the message was already dispatched — don't send it twice.
-      if (sessionKey && !readQueuedMessage(sessionKey)) {
-        setQueuedDraft(null);
-        return;
-      }
-      setQueuedDraft(null);
-      setInput(queuedDraft.content);
-      inputValueRef.current = queuedDraft.content;
-      setAttachedImages(queuedDraft.images);
-      setTimeout(() => {
-        handleSubmitRef.current?.(createFakeSubmitEvent());
-      }, 0);
-    }, delay);
-    return () => clearTimeout(timer);
-  }, [isLoading, queuedDraft, sessionKey, setAttachedImages, setInput]);
-
-  const editQueuedDraft = useCallback(() => {
-    if (!queuedDraft) {
-      return;
-    }
-    setQueuedDraft(null);
-    setInput(queuedDraft.content);
-    inputValueRef.current = queuedDraft.content;
-    setAttachedImages(queuedDraft.images);
-    textareaRef.current?.focus();
-  }, [queuedDraft, setAttachedImages, textareaRef]);
-
-  const deleteQueuedDraft = useCallback(() => {
-    setQueuedDraft(null);
-  }, []);
 
   // A voice transcript either fills the input (to edit before sending) or, when the
   // user tapped "stop and send", is submitted straight away. Mirror the value into
@@ -808,32 +469,6 @@ export function useChatComposerState({
     }
   }, [input, selectedProjectId]);
 
-  // Persist the queued draft under its session's key. Must be defined BEFORE
-  // the swap effect below: on a session switch there is one commit where
-  // `sessionKey` already points at the new session while `queuedDraft` (and
-  // the owner ref) still describe the old one — the ref mismatch makes this
-  // effect skip that commit instead of writing/clearing across sessions.
-  useEffect(() => {
-    if (!sessionKey || queuedDraftSessionRef.current !== sessionKey) {
-      return;
-    }
-    if (queuedDraft?.content) {
-      writeQueuedMessage(sessionKey, { content: queuedDraft.content, options: queuedDraft.options });
-    } else {
-      clearQueuedMessage(sessionKey);
-    }
-  }, [queuedDraft, sessionKey]);
-
-  // Switching sessions swaps in that session's queued draft (image
-  // attachments can't survive a reload, so only text and options restore).
-  useEffect(() => {
-    queuedDraftSessionRef.current = sessionKey;
-    if (!sessionKey) {
-      setQueuedDraft(null);
-      return;
-    }
-    setQueuedDraft(restoreQueuedDraft(sessionKey));
-  }, [sessionKey]);
 
   const handleInputChange = useCallback(
     (event: ChangeEvent<HTMLTextAreaElement>) => {

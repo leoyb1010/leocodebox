@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 
-import { authenticatedFetch } from '../utils/api';
+import { apiClient } from '../utils/apiClient';
 
 export type Plugin = {
   name: string;
@@ -49,21 +49,9 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
 
   const refreshPlugins = useCallback(async () => {
     try {
-      const res = await authenticatedFetch('/api/plugins');
-      if (res.ok) {
-        const data = await res.json();
-        setPlugins(data.plugins || []);
-        setPluginsError(null);
-      } else {
-        let errorMessage = `Failed to fetch plugins (${res.status})`;
-        try {
-          const data = await res.json();
-          errorMessage = data.details || data.error || errorMessage;
-        } catch {
-          errorMessage = res.statusText || errorMessage;
-        }
-        setPluginsError(errorMessage);
-      }
+      const data = await apiClient.get<{ plugins?: Plugin[] }>('/api/plugins');
+      setPlugins(data.plugins || []);
+      setPluginsError(null);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to fetch plugins';
       setPluginsError(message);
@@ -79,16 +67,9 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
 
   const installPlugin = useCallback(async (url: string) => {
     try {
-      const res = await authenticatedFetch('/api/plugins/install', {
-        method: 'POST',
-        body: JSON.stringify({ url }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        await refreshPlugins();
-        return { success: true };
-      }
-      return { success: false, error: data.details || data.error || 'Install failed' };
+      await apiClient.post('/api/plugins/install', { url });
+      await refreshPlugins();
+      return { success: true };
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : 'Install failed' };
     }
@@ -96,15 +77,9 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
 
   const uninstallPlugin = useCallback(async (name: string) => {
     try {
-      const res = await authenticatedFetch(`/api/plugins/${encodeURIComponent(name)}`, {
-        method: 'DELETE',
-      });
-      const data = await res.json();
-      if (res.ok) {
-        await refreshPlugins();
-        return { success: true };
-      }
-      return { success: false, error: data.details || data.error || 'Uninstall failed' };
+      await apiClient.delete(`/api/plugins/${encodeURIComponent(name)}`);
+      await refreshPlugins();
+      return { success: true };
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : 'Uninstall failed' };
     }
@@ -112,15 +87,9 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
 
   const updatePlugin = useCallback(async (name: string) => {
     try {
-      const res = await authenticatedFetch(`/api/plugins/${encodeURIComponent(name)}/update`, {
-        method: 'POST',
-      });
-      const data = await res.json();
-      if (res.ok) {
-        await refreshPlugins();
-        return { success: true };
-      }
-      return { success: false, error: data.details || data.error || 'Update failed' };
+      await apiClient.post(`/api/plugins/${encodeURIComponent(name)}/update`);
+      await refreshPlugins();
+      return { success: true };
     } catch (err) {
       return { success: false, error: err instanceof Error ? err.message : 'Update failed' };
     }
@@ -128,21 +97,7 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
 
   const togglePlugin = useCallback(async (name: string, enabled: boolean): Promise<{ success: boolean; error: string | null }> => {
     try {
-      const res = await authenticatedFetch(`/api/plugins/${encodeURIComponent(name)}/enable`, {
-        method: 'PUT',
-        body: JSON.stringify({ enabled }),
-      });
-      if (!res.ok) {
-        let errorMessage = `Toggle failed (${res.status})`;
-        try {
-          const data = await res.json();
-          errorMessage = data.details || data.error || errorMessage;
-        } catch {
-          // response body wasn't JSON, use status text
-          errorMessage = res.statusText || errorMessage;
-        }
-        return { success: false, error: errorMessage };
-      }
+      await apiClient.put(`/api/plugins/${encodeURIComponent(name)}/enable`, { enabled });
       await refreshPlugins();
       return { success: true, error: null };
     } catch (err) {

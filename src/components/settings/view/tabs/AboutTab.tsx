@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   CheckCircle2,
   Download,
@@ -15,23 +16,24 @@ import { useVersionCheck } from '../../../../hooks/useVersionCheck';
 
 const OWNER_URL = 'https://github.com/leoyb1010';
 
-function updateStatusText(state: DesktopUpdateState | null) {
-  if (!window.leocodeboxDesktopUpdater) return '浏览器模式不支持桌面应用更新';
+function updateStatusText(state: DesktopUpdateState | null, t: (key: string, options?: Record<string, unknown>) => string) {
+  if (!window.leocodeboxDesktopUpdater) return t('about.browserUnsupported');
   switch (state?.status) {
-    case 'authentication-required': return '需要配置 GitHub 更新凭据';
-    case 'checking': return '正在检查更新...';
-    case 'available': return `发现新版本 v${state.latestVersion}`;
-    case 'downloading': return `正在下载${state.progress === null ? '' : ` ${state.progress}%`}`;
-    case 'downloaded': return `v${state.latestVersion} 已下载，等待安装`;
-    case 'installing': return '正在停止本地服务并安装更新...';
-    case 'up-to-date': return '当前已是最新版本';
-    case 'development-build': return '开发构建不执行自动更新';
-    case 'error': return '更新检查失败';
-    default: return state?.configured ? '已启用应用内更新' : '尚未配置应用内更新';
+    case 'authentication-required': return t('about.authRequired');
+    case 'checking': return t('about.checking');
+    case 'available': return t('about.available', { version: state.latestVersion });
+    case 'downloading': return t('about.downloading', { progress: state.progress === null ? '' : ` ${state.progress}%` });
+    case 'downloaded': return t('about.downloaded', { version: state.latestVersion });
+    case 'installing': return t('about.installing');
+    case 'up-to-date': return t('about.upToDate');
+    case 'development-build': return t('about.development');
+    case 'error': return t('about.error');
+    default: return state?.configured ? t('about.enabled') : t('about.notConfigured');
   }
 }
 
 export default function AboutTab() {
+  const { t } = useTranslation('settings');
   const {
     currentVersion,
     desktopUpdate,
@@ -84,15 +86,15 @@ export default function AboutTab() {
               v{currentVersion}
             </span>
           </div>
-          <p className="mt-0.5 text-sm text-muted-foreground">本地多智能体开发工作台</p>
+          <p className="mt-0.5 text-sm text-muted-foreground">{t('about.description')}</p>
         </div>
       </div>
 
       <section className="border-y border-border/60 py-5">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h3 className="text-sm font-medium text-foreground">应用内更新</h3>
-            <p aria-live="polite" className="mt-1 text-xs text-muted-foreground">{updateStatusText(desktopUpdate)}</p>
+            <h3 className="text-sm font-medium text-foreground">{t('about.updates')}</h3>
+            <p aria-live="polite" className="mt-1 text-xs text-muted-foreground">{updateStatusText(desktopUpdate, t)}</p>
           </div>
           {desktopUpdate?.status === 'up-to-date' && <CheckCircle2 className="h-5 w-5 text-emerald-600" />}
         </div>
@@ -100,7 +102,7 @@ export default function AboutTab() {
         {window.leocodeboxDesktopUpdater && desktopUpdate?.credentialRequired && !desktopUpdate.configured && (
           <div className="mt-4 space-y-2">
             <label className="text-xs font-medium text-foreground" htmlFor="github-update-token">
-              GitHub 仓库只读令牌
+              {t('about.tokenLabel')}
             </label>
             <div className="flex gap-2">
               <div className="relative min-w-0 flex-1">
@@ -110,7 +112,7 @@ export default function AboutTab() {
                   type="password"
                   value={token}
                   onChange={(event) => setToken(event.target.value)}
-                  placeholder="需授予 leocodebox 仓库 Contents 只读权限"
+                  placeholder={t('about.tokenPlaceholder')}
                   autoComplete="off"
                   className="h-9 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-ring"
                 />
@@ -121,11 +123,11 @@ export default function AboutTab() {
                 onClick={() => void saveToken()}
                 className="h-9 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground disabled:opacity-50"
               >
-                {savingToken ? '保存中' : '保存并检查'}
+                {savingToken ? t('about.saving') : t('about.saveCheck')}
               </button>
             </div>
             <p className="text-[11px] leading-5 text-muted-foreground">
-              仓库为 Private，凭据会通过 macOS 钥匙串加密保存，不会进入项目、日志或安装包。
+              {t('about.privateNote')}
             </p>
           </div>
         )}
@@ -133,7 +135,7 @@ export default function AboutTab() {
         {desktopUpdate?.progress !== null && desktopUpdate?.status === 'downloading' && (
           <div
             role="progressbar"
-            aria-label="更新下载进度"
+            aria-label={t('about.progress')}
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={desktopUpdate.progress}
@@ -158,7 +160,7 @@ export default function AboutTab() {
               {desktopUpdate?.status === 'checking'
                 ? <LoaderCircle className="h-4 w-4 animate-spin" />
                 : <RefreshCw className="h-4 w-4" />}
-              检查更新
+              {t('about.check')}
             </button>
             {desktopUpdate?.status === 'available' && (
               <button
@@ -166,7 +168,7 @@ export default function AboutTab() {
                 onClick={() => void runAction(downloadUpdate)}
                 className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground"
               >
-                <Download className="h-4 w-4" />下载更新
+                <Download className="h-4 w-4" />{t('about.download')}
               </button>
             )}
             {desktopUpdate?.status === 'downloaded' && (
@@ -175,7 +177,7 @@ export default function AboutTab() {
                 onClick={() => void runAction(installUpdate)}
                 className="inline-flex h-9 items-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground"
               >
-                <RotateCcw className="h-4 w-4" />重启并安装
+                <RotateCcw className="h-4 w-4" />{t('about.restartInstall')}
               </button>
             )}
             {desktopUpdate?.configured && desktopUpdate.credentialRequired && (
@@ -185,7 +187,7 @@ export default function AboutTab() {
                 onClick={() => void runAction(() => setGithubToken(''))}
                 className="inline-flex h-9 items-center gap-2 rounded-md px-3 text-sm text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50"
               >
-                <Trash2 className="h-4 w-4" />移除更新凭据
+                <Trash2 className="h-4 w-4" />{t('about.removeCredential')}
               </button>
             )}
           </div>
@@ -193,7 +195,7 @@ export default function AboutTab() {
       </section>
 
       <div className="text-sm text-muted-foreground">
-        <p>所有 Agent CLI、会话、配置与凭据均在本机运行和保存，不依赖 leocodebox 云端账户。</p>
+        <p>{t('about.localData')}</p>
       </div>
 
       <a
@@ -208,7 +210,7 @@ export default function AboutTab() {
 
       <div className="flex gap-4 text-xs text-muted-foreground/70">
         <a href="/LICENSE" target="_blank" rel="noopener noreferrer" className="hover:text-foreground">LICENSE</a>
-        <a href="/NOTICE" target="_blank" rel="noopener noreferrer" className="hover:text-foreground">NOTICE 与第三方声明</a>
+        <a href="/NOTICE" target="_blank" rel="noopener noreferrer" className="hover:text-foreground">{t('about.notice')}</a>
       </div>
     </div>
   );

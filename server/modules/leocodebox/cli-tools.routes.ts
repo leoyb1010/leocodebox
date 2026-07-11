@@ -6,8 +6,29 @@ import express from 'express';
 import { compareSemver, fetchJson } from './version-network.utils.js';
 
 const router = express.Router();
-const pendingCliMutations = new Map();
-const cliLatestVersionCache = new Map();
+
+type CliInstallSource = 'unknown' | 'homebrew' | 'pnpm' | 'volta' | 'npm-global' | 'app-bundled' | 'standalone' | 'not-installed';
+type CliTool = {
+  id: string;
+  label: string;
+  cmd: string;
+  updateArgs: string[] | null;
+  install?: { command: string; args: string[] };
+  npmPackage: string | null;
+  docsUrl: string;
+};
+type CliCommandResult = { ok: boolean; code: string | number; stdout: string; stderr: string; error: string | null };
+type CliLatestCacheEntry = { version: string | null; updatedAt: number };
+type CliLatestResult = { version: string | null; checkedAt: string | null; source: string };
+type CliLatestOptions = { force?: boolean; now?: number; loadLatest?: (packageName: string) => Promise<string | null> };
+type StatusError = Error & { statusCode?: number };
+
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
+const pendingCliMutations = new Map<string, Promise<unknown>>();
+const cliLatestVersionCache = new Map<string, CliLatestCacheEntry>();
 const CLI_LATEST_VERSION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
@@ -16,7 +37,7 @@ const CLI_LATEST_VERSION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 const CLI_VERSION_TOKEN = /(?<![\d.])(\d+\.\d+[A-Za-z0-9.+_-]*)/;
 
-const CLI_TOOLS = {
+const CLI_TOOLS: Record<string, CliTool> = {
   claude: {
     id: 'claude',
     label: 'Claude Code',
@@ -72,13 +93,13 @@ const CLI_TOOLS = {
   },
 };
 
-function parseCliVersionText(output) {
+function parseCliVersionText(output: unknown): string | null {
   if (!output) return null;
   const match = String(output).match(CLI_VERSION_TOKEN);
   return match ? match[1] : null;
 }
 
-export async function resolveExecutablePath(command) {
+export async function resolveExecutablePath(command: string): Promise<string | null> {
   const result = await runCliCommand('which', [command], 5000);
   if (!result.ok) return null;
   const executablePath = result.stdout.trim().split(/\r?\n/)[0];
@@ -90,7 +111,7 @@ export async function resolveExecutablePath(command) {
   }
 }
 
-export async function detectCliInstallSource(tool, resolvePath = resolveExecutablePath) {
+export async function detectCliInstallSource(tool: CliTool, resolvePath: (command: string) => Promise<string | null> = resolveExecutablePath): Promise<{ source: CliInstallSource; executablePath: string | null }> {
   const executablePath = await resolvePath(tool.cmd);
   if (!executablePath) return { source: 'unknown', executablePath: null };
   const normalized = executablePath.replaceAll('\\', '/');
@@ -115,12 +136,12 @@ export async function detectCliInstallSource(tool, resolvePath = resolveExecutab
   return { source: 'unknown', executablePath };
 }
 
-export async function resolveCliUpdateCommand(tool, source) {
+export async function resolveCliUpdateCommand(tool: CliTool, source: CliInstallSource): Promise<{ command: string; args: string[] } | null> {
   if (source === 'npm-global' && tool.npmPackage) {
     return { command: 'npm', args: ['install', '--global', `${tool.npmPackage}@latest`] };
   }
   if (source === 'homebrew') {
-    const formulaById = { opencode: 'opencode' };
+    const formulaById: Record<string, string> = { opencode: 'opencode' };
     const formula = formulaById[tool.id];
     if (formula) return { command: 'brew', args: ['upgrade', formula] };
   }
@@ -136,9 +157,9 @@ export async function resolveCliUpdateCommand(tool, source) {
   return null;
 }
 
-export async function withCliMutation(toolId, operation) {
+export async function withCliMutation<T>(toolId: string, operation: () => Promise<T> | T): Promise<T> {
   if (pendingCliMutations.has(toolId)) {
-    const error = new Error(`CLI operation already in progress for ${toolId}.`);
+    const error: StatusError = new Error(`CLI operation already in progress for ${toolId}.`);
     error.statusCode = 409;
     throw error;
   }
@@ -151,8 +172,8 @@ export async function withCliMutation(toolId, operation) {
   }
 }
 
-function runCliCommand(cmd, args, timeoutMs = 10_000) {
-  return new Promise((resolve) => {
+function runCliCommand(cmd: string, args: string[], timeoutMs = 10_000): Promise<CliCommandResult> {
+  return new Promise<CliCommandResult>((resolve) => {
     execFile(cmd, args, { timeout: timeoutMs, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 }, (error, stdout, stderr) => {
       resolve({
         ok: !error,
@@ -165,13 +186,13 @@ function runCliCommand(cmd, args, timeoutMs = 10_000) {
   });
 }
 
-export async function readCliLatestVersion(tool, {
+export async function readCliLatestVersion(tool: CliTool, {
   force = false,
   now = Date.now(),
-  loadLatest = async (packageName) => {
+  loadLatest = async (packageName: string) => {
     const encoded = packageName.replace('@', '%40').replace('/', '%2F');
-    const info = await fetchJson(`https://registry.npmjs.org/${encoded}/latest`);
-    return info?.version || null;
+    const info = await fetchJson(`https://registry.npmjs.org/${encoded}/latest`) as { version?: string };
+    return info.version || null;
   },
 } = {}) {
   if (!tool.npmPackage) return { version: null, checkedAt: null, source: 'unsupported' };
@@ -190,11 +211,11 @@ export async function readCliLatestVersion(tool, {
   }
 }
 
-export function clearCliLatestVersionCache() {
+export function clearCliLatestVersionCache(): void {
   cliLatestVersionCache.clear();
 }
 
-async function getCliToolStatus(tool, { checkLatest = true, forceLatest = false } = {}) {
+async function getCliToolStatus(tool: CliTool, { checkLatest = true, forceLatest = false }: { checkLatest?: boolean; forceLatest?: boolean } = {}) {
   const probe = await runCliCommand(tool.cmd, ['--version'], 5000);
   const installed = probe.code !== 'ENOENT';
   const runnable = probe.ok;
@@ -206,7 +227,7 @@ async function getCliToolStatus(tool, { checkLatest = true, forceLatest = false 
   const updateAvailable = Boolean(
     currentVersion && latestVersion && compareSemver(latestVersion, currentVersion) > 0,
   );
-  const installInfo = installed
+  const installInfo: { source: CliInstallSource; executablePath: string | null } = installed
     ? await detectCliInstallSource(tool)
     : { source: 'not-installed', executablePath: null };
   const updateCommand = runnable ? await resolveCliUpdateCommand(tool, installInfo.source) : null;
@@ -257,14 +278,15 @@ router.post('/:id/install', async (req, res, next) => {
       res.status(409).json({ success: false, error: `${tool.label} 没有经过验证的一键安装方式。` });
       return;
     }
+    const install = tool.install;
     const payload = await withCliMutation(tool.id, async () => {
       const before = await getCliToolStatus(tool, { checkLatest: false });
       if (before.installed) {
-        const error = new Error(`${tool.label} 已安装。`);
+        const error: StatusError = new Error(`${tool.label} 已安装。`);
         error.statusCode = 409;
         throw error;
       }
-      const result = await runCliCommand(tool.install.command, tool.install.args, 300_000);
+      const result = await runCliCommand(install.command, install.args, 300_000);
       const after = await getCliToolStatus(tool, { checkLatest: false });
       return {
         success: result.ok && after.installed,
@@ -295,13 +317,13 @@ router.post('/:id/update', async (req, res, next) => {
     const payload = await withCliMutation(tool.id, async () => {
       const before = await getCliToolStatus(tool, { checkLatest: false });
       if (!before.installed) {
-        const error = new Error(`${tool.label} CLI is not installed.`);
+        const error: StatusError = new Error(`${tool.label} CLI is not installed.`);
         error.statusCode = 409;
         throw error;
       }
-      const updateCommand = await resolveCliUpdateCommand(tool, before.installSource);
+      const updateCommand = await resolveCliUpdateCommand(tool, before.installSource as CliInstallSource);
       if (!updateCommand) {
-        const error = new Error(`${tool.label} 的安装来源为 ${before.installSource}，无法安全自动更新。`);
+        const error: StatusError = new Error(`${tool.label} 的安装来源为 ${before.installSource}，无法安全自动更新。`);
         error.statusCode = 409;
         throw error;
       }

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
-import { api } from '../utils/api';
+import { apiClient } from '../utils/apiClient';
 
 const TasksSettingsContext = createContext({
   tasksEnabled: true,
@@ -41,23 +41,16 @@ export const TasksSettingsProvider = ({ children }) => {
   useEffect(() => {
     const checkInstallation = async () => {
       try {
-        const response = await api.get('/taskmaster/installation-status');
-        if (response.ok) {
-          const data = await response.json();
-          setInstallationStatus(data);
-          setIsTaskMasterInstalled(data.installation?.isInstalled || false);
-          setIsTaskMasterReady(data.isReady || false);
-          
-          // If TaskMaster is not installed and user hasn't explicitly enabled tasks,
-          // disable tasks automatically
-          const userEnabledTasks = localStorage.getItem('tasks-enabled');
-          if (!data.installation?.isInstalled && !userEnabledTasks) {
-            setTasksEnabled(false);
-          }
-        } else {
-          console.error('Failed to check TaskMaster installation status');
-          setIsTaskMasterInstalled(false);
-          setIsTaskMasterReady(false);
+        const data = await apiClient.get('/api/taskmaster/installation-status');
+        setInstallationStatus(data);
+        setIsTaskMasterInstalled(data.installation?.isInstalled || false);
+        setIsTaskMasterReady(data.isReady || false);
+
+        // If TaskMaster is not installed and user hasn't explicitly enabled tasks,
+        // disable tasks automatically
+        const userEnabledTasks = localStorage.getItem('tasks-enabled');
+        if (!data.installation?.isInstalled && !userEnabledTasks) {
+          setTasksEnabled(false);
         }
       } catch (error) {
         console.error('Error checking TaskMaster installation:', error);

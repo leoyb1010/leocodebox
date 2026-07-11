@@ -147,5 +147,14 @@
     "deleteAllData": "Удалить все данные навсегда",
     "allConversationsDeleted": "Проект будет убран из боковой панели. Ваши файлы, воспоминания и данные сеансов сохранятся.",
     "cannotUndo": "Вы сможете добавить проект позже."
+  },
+  "localUi": {
+    "updateTo": "Update to v{{version}}",
+    "localLog": "Local log",
+    "settings": "Settings",
+    "localMode": "Local mode",
+    "leoapiSwitch": "Leoapi endpoint switcher",
+    "loadingSettings": "Loading settings…",
+    "close": "Close"
   }
 }

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { useTheme } from '../../../contexts/ThemeContext';
-import { authenticatedFetch } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 import { setNotificationSoundEnabled } from '../../../utils/notificationSound';
 import { useProviderAuthStatus } from '../../provider-auth/hooks/useProviderAuthStatus';
 import {
@@ -90,8 +90,6 @@ const readCodeEditorSettings = (): CodeEditorSettingsState => ({
   lineNumbers: localStorage.getItem('codeEditorLineNumbers') !== 'false',
   fontSize: localStorage.getItem('codeEditorFontSize') ?? DEFAULT_CODE_EDITOR_SETTINGS.fontSize,
 });
-
-const toResponseJson = async <T>(response: Response): Promise<T> => response.json() as Promise<T>;
 
 const createEmptyClaudePermissions = (): ClaudePermissionsState => ({
   allowedTools: [],
@@ -198,17 +196,14 @@ export function useSettingsController({ isOpen, initialTab }: UseSettingsControl
       setCodexPermissionMode(toCodexPermissionMode(savedCodexSettings.permissionMode));
 
       try {
-        const notificationResponse = await authenticatedFetch('/api/settings/notification-preferences');
-        if (notificationResponse.ok) {
-          const notificationData = await toResponseJson<NotificationPreferencesResponse>(notificationResponse);
-          if (notificationData.success && notificationData.preferences) {
-            setNotificationPreferences(normalizeNotificationPreferences(notificationData.preferences));
-          } else {
-            setNotificationPreferences(createDefaultNotificationPreferences());
-          }
-        } else {
-          setNotificationPreferences(createDefaultNotificationPreferences());
-        }
+        const notificationData = await apiClient.get<NotificationPreferencesResponse>(
+          '/api/settings/notification-preferences',
+        );
+        setNotificationPreferences(
+          notificationData.success && notificationData.preferences
+            ? normalizeNotificationPreferences(notificationData.preferences)
+            : createDefaultNotificationPreferences(),
+        );
       } catch {
         setNotificationPreferences(createDefaultNotificationPreferences());
       }
@@ -269,13 +264,10 @@ export function useSettingsController({ isOpen, initialTab }: UseSettingsControl
         lastUpdated: now,
       }));
 
-      const notificationResponse = await authenticatedFetch('/api/settings/notification-preferences', {
-        method: 'PUT',
-        body: JSON.stringify(notificationPreferences),
-      });
-      if (!notificationResponse.ok) {
-        throw new Error('Failed to save notification preferences');
-      }
+      await apiClient.put<NotificationPreferencesResponse>(
+        '/api/settings/notification-preferences',
+        notificationPreferences,
+      );
 
       setSaveStatus('success');
     } catch (error) {

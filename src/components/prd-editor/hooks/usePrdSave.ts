@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { authenticatedFetch } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 import type { ExistingPrdFile, SavePrdInput, SavePrdResult } from '../types';
 import { ensurePrdExtension } from '../utils/fileName';
 
@@ -61,24 +61,10 @@ export function usePrdSave({
       setSaving(true);
 
       try {
-        const response = await authenticatedFetch(`/api/taskmaster/prd/${encodeURIComponent(projectId)}`, {
-          method: 'POST',
-          body: JSON.stringify({
-            fileName: finalFileName,
-            content,
-          }),
+        await apiClient.post(`/api/taskmaster/prd/${encodeURIComponent(projectId)}`, {
+          fileName: finalFileName,
+          content,
         });
-
-        if (!response.ok) {
-          const fallbackMessage = `Save failed: ${response.status}`;
-
-          try {
-            const errorData = (await response.json()) as { message?: string };
-            return { status: 'failed', message: errorData.message || fallbackMessage };
-          } catch {
-            return { status: 'failed', message: fallbackMessage };
-          }
-        }
 
         if (saveSuccessTimeoutRef.current) {
           clearTimeout(saveSuccessTimeoutRef.current);

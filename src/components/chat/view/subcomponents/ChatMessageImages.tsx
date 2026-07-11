@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
-import { authenticatedFetch } from '../../../../utils/api';
+import { apiClient } from '../../../../utils/apiClient';
 import type { ChatImage } from '../../types/types';
 
 type ChatMessageImagesProps = {
@@ -50,10 +50,7 @@ function useChatImageSrc(image: ChatImage, projectId?: string | null): { src: st
       setFailed(false);
       for (const url of candidateUrls) {
         try {
-          const response = await authenticatedFetch(url, { signal: controller.signal });
-          if (!response.ok) {
-            continue;
-          }
+          const response = await apiClient.raw(url, { signal: controller.signal });
           const blob = await response.blob();
           objectUrl = URL.createObjectURL(blob);
           setSrc(objectUrl);

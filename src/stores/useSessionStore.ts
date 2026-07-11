@@ -9,7 +9,7 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 
-import { authenticatedFetch } from '../utils/api';
+import { apiClient } from '../utils/apiClient';
 import type { LLMProvider } from '../types/app';
 
 // ─── NormalizedMessage (mirrors server/adapters/types.js) ────────────────────
@@ -486,13 +486,7 @@ export function useSessionStore() {
 
       const qs = params.toString();
       const url = `/api/providers/sessions/${encodeURIComponent(sessionId)}/messages${qs ? `?${qs}` : ''}`;
-      const response = await authenticatedFetch(url);
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const body = await response.json();
+      const body = await apiClient.get<Record<string, any>>(url);
       const data = body?.data ?? body;
       const messages: NormalizedMessage[] = data.messages || [];
 
@@ -548,9 +542,7 @@ export function useSessionStore() {
     const url = `/api/providers/sessions/${encodeURIComponent(sessionId)}/messages${qs ? `?${qs}` : ''}`;
 
     try {
-      const response = await authenticatedFetch(url);
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const body = await response.json();
+      const body = await apiClient.get<Record<string, any>>(url);
       const data = body?.data ?? body;
       const olderMessages: NormalizedMessage[] = data.messages || [];
 
@@ -623,10 +615,7 @@ export function useSessionStore() {
     const fetchTicket = ++slot._fetchSeq;
     try {
       const url = `/api/providers/sessions/${encodeURIComponent(sessionId)}/messages`;
-      const response = await authenticatedFetch(url);
-
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-      const body = await response.json();
+      const body = await apiClient.get<Record<string, any>>(url);
       const data = body?.data ?? body;
 
       // A later-started fetch already applied: applying this stale transcript

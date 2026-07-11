@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 
-import { api } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 import type { LLMProvider } from '../../../types/app';
 
 export type SessionMessageMatch = {
@@ -52,7 +52,7 @@ export function useSessionMessageSearch(
       searchAbortRef.current = controller;
       const accumulated: SessionMessageMatch[] = [];
 
-      void api.streamConversationSearch(trimmed, {
+      void apiClient.streamConversationSearch(trimmed, {
         result: (eventData: string) => {
           if (seq !== seqRef.current) { controller.abort(); return; }
           try {

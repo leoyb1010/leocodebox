@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { authenticatedFetch } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 import type {
   ApiResponse,
   ProviderSkill,
@@ -33,8 +33,6 @@ const SKILL_SCOPE_ORDER: Record<SkillsScope, number> = {
   admin: 4,
   system: 5,
 };
-
-const toResponseJson = async <T>(response: Response): Promise<T> => response.json() as Promise<T>;
 
 const getApiErrorMessage = (payload: unknown, fallback: string): string => {
   if (!payload || typeof payload !== 'object') {
@@ -165,16 +163,11 @@ const fetchProviderSkills = async (
   provider: SkillsProvider,
   project?: ProjectTarget,
 ): Promise<ProviderSkill[]> => {
-  const params = new URLSearchParams();
-  if (project?.path) {
-    params.set('workspacePath', project.path);
-  }
-
-  const response = await authenticatedFetch(
-    `/api/providers/${provider}/skills${params.toString() ? `?${params.toString()}` : ''}`,
+  const data = await apiClient.get<ApiResponse<ProviderSkillsResponse>>(
+    `/api/providers/${provider}/skills`,
+    { workspacePath: project?.path },
   );
-  const data = await toResponseJson<ApiResponse<ProviderSkillsResponse>>(response);
-  if (!response.ok || !data.success) {
+  if (!data.success) {
     throw new Error(getApiErrorMessage(data, `Failed to load ${provider} skills`));
   }
 
@@ -185,12 +178,11 @@ const saveProviderSkills = async (
   provider: SkillsProvider,
   payload: ProviderSkillCreatePayload,
 ): Promise<ProviderSkill[]> => {
-  const response = await authenticatedFetch(`/api/providers/${provider}/skills`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-  const data = await toResponseJson<ApiResponse<ProviderSkillsResponse>>(response);
-  if (!response.ok || !data.success) {
+  const data = await apiClient.post<ApiResponse<ProviderSkillsResponse>>(
+    `/api/providers/${provider}/skills`,
+    payload,
+  );
+  if (!data.success) {
     throw new Error(getApiErrorMessage(data, 'Failed to save skills'));
   }
 

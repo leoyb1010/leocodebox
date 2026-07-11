@@ -1,7 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { IS_PLATFORM } from '../../../constants/config';
-import { api } from '../../../utils/api';
+import { ApiError } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 import { AUTH_ERROR_MESSAGES, AUTH_TOKEN_STORAGE_KEY } from '../constants';
 import type {
   AuthContextValue,
@@ -12,7 +14,7 @@ import type {
   AuthUserPayload,
   OnboardingStatusPayload,
 } from '../types';
-import { parseJsonSafely, resolveApiErrorMessage } from '../utils';
+import { resolveApiErrorMessage } from '../utils';
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 const IS_LOCAL_DESKTOP = typeof window !== 'undefined' && window.leocodeboxLocal?.enabled === true;
@@ -38,6 +40,7 @@ export function useAuth(): AuthContextValue {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
+  const { t } = useTranslation('auth');
   const [user, setUser] = useState<AuthUser | null>(() => (
     IS_LOCAL_DESKTOP && IS_LOCAL_AUTH_READY ? { username: 'local-user' } : null
   ));
@@ -47,7 +50,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(true);
   const [error, setError] = useState<string | null>(() => (
     IS_LOCAL_DESKTOP && !IS_LOCAL_AUTH_READY
-      ? '本地服务认证初始化失败。请完全退出 leocodebox 后重新打开。'
+      ? t('localDesktop.localAuthInitFailed')
       : null
   ));
 
@@ -65,12 +68,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const checkOnboardingStatus = useCallback(async () => {
     try {
-      const response = await api.user.onboardingStatus();
-      if (!response.ok) {
-        return;
-      }
-
-      const payload = await parseJsonSafely<OnboardingStatusPayload>(response);
+      const payload = await apiClient.get<OnboardingStatusPayload>(
+        '/api/user/onboarding-status',
+      );
       setHasCompletedOnboarding(Boolean(payload?.hasCompletedOnboarding));
     } catch (caughtError) {
       console.error('Error checking onboarding status:', caughtError);
@@ -88,8 +88,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setIsLoading(true);
       setError(null);
 
-      const statusResponse = await api.auth.status();
-      const statusPayload = await parseJsonSafely<AuthStatusPayload>(statusResponse);
+      const statusPayload = await apiClient.get<AuthStatusPayload>('/api/auth/status');
 
       if (statusPayload?.needsSetup) {
         setNeedsSetup(true);
@@ -102,13 +101,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return;
       }
 
-      const userResponse = await api.auth.user();
-      if (!userResponse.ok) {
-        clearSession();
-        return;
-      }
-
-      const userPayload = await parseJsonSafely<AuthUserPayload>(userResponse);
+      const userPayload = await apiClient.get<AuthUserPayload>('/api/auth/user');
       if (!userPayload?.user) {
         clearSession();
         return;
@@ -118,7 +111,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       await checkOnboardingStatus();
     } catch (caughtError) {
       console.error('[Auth] Auth status check failed:', caughtError);
-      setError(AUTH_ERROR_MESSAGES.authStatusCheckFailed);
+      if (caughtError instanceof ApiError && caughtError.status === 401) {
+        clearSession();
+      } else {
+        setError(AUTH_ERROR_MESSAGES.authStatusCheckFailed);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -128,7 +125,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (IS_LOCAL_DESKTOP) {
       if (!IS_LOCAL_AUTH_READY) {
         setUser(null);
-        setError('本地服务认证初始化失败。请完全退出 leocodebox 后重新打开。');
+        setError(t('localDesktop.localAuthInitFailed'));
         setIsLoading(false);
         return;
       }
@@ -149,16 +146,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
 
     void checkAuthStatus();
-  }, [checkAuthStatus, checkOnboardingStatus]);
+  }, [checkAuthStatus, checkOnboardingStatus, t]);
 
   const login = useCallback<AuthContextValue['login']>(
     async (username, password) => {
       try {
         setError(null);
-        const response = await api.auth.login(username, password);
-        const payload = await parseJsonSafely<AuthSessionPayload>(response);
+        const payload = await apiClient.post<AuthSessionPayload>('/api/auth/login', { username, password });
 
-        if (!response.ok || !payload?.token || !payload.user) {
+        if (!payload?.token || !payload.user) {
           const message = resolveApiErrorMessage(payload, AUTH_ERROR_MESSAGES.loginFailed);
           setError(message);
           return { success: false, error: message };
@@ -170,8 +166,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return { success: true };
       } catch (caughtError) {
         console.error('Login error:', caughtError);
-        setError(AUTH_ERROR_MESSAGES.networkError);
-        return { success: false, error: AUTH_ERROR_MESSAGES.networkError };
+        const message = caughtError instanceof ApiError
+          ? resolveApiErrorMessage(caughtError.payload, caughtError.message || AUTH_ERROR_MESSAGES.loginFailed)
+          : AUTH_ERROR_MESSAGES.networkError;
+        setError(message);
+        return { success: false, error: message };
       }
     },
     [checkOnboardingStatus, setSession],
@@ -181,10 +180,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     async (username, password) => {
       try {
         setError(null);
-        const response = await api.auth.register(username, password);
-        const payload = await parseJsonSafely<AuthSessionPayload>(response);
+        const payload = await apiClient.post<AuthSessionPayload>('/api/auth/register', { username, password });
 
-        if (!response.ok || !payload?.token || !payload.user) {
+        if (!payload?.token || !payload.user) {
           const message = resolveApiErrorMessage(payload, AUTH_ERROR_MESSAGES.registrationFailed);
           setError(message);
           return { success: false, error: message };
@@ -196,8 +194,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return { success: true };
       } catch (caughtError) {
         console.error('Registration error:', caughtError);
-        setError(AUTH_ERROR_MESSAGES.networkError);
-        return { success: false, error: AUTH_ERROR_MESSAGES.networkError };
+        const message = caughtError instanceof ApiError
+          ? resolveApiErrorMessage(caughtError.payload, caughtError.message || AUTH_ERROR_MESSAGES.registrationFailed)
+          : AUTH_ERROR_MESSAGES.networkError;
+        setError(message);
+        return { success: false, error: message };
       }
     },
     [checkOnboardingStatus, setSession],
@@ -209,7 +210,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     clearSession();
 
     if (tokenToInvalidate) {
-      void api.auth.logout().catch((caughtError: unknown) => {
+      void apiClient.post('/api/auth/logout').catch((caughtError: unknown) => {
         console.error('Logout endpoint error:', caughtError);
       });
     }

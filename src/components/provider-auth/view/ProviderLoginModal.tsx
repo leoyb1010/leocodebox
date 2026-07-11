@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 import { X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { DEFAULT_PROJECT_FOR_EMPTY_SHELL, IS_PLATFORM } from '../../../constants/config';
 import type { LLMProvider } from '../../../types/app';
@@ -63,6 +64,7 @@ export default function ProviderLoginModal({
   customCommand,
   isAuthenticated = false,
 }: ProviderLoginModalProps) {
+  const { t } = useTranslation('auth');
   if (!isOpen) {
     return null;
   }
@@ -83,14 +85,14 @@ export default function ProviderLoginModal({
           <button
             onClick={onClose}
             className="text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-gray-300"
-            aria-label="Close login modal"
+            aria-label={t('providerLogin.closeLoginModal')}
           >
             <X className="h-6 w-6" />
           </button>
         </div>
 
         <div className="flex-1 overflow-hidden">
-          <Suspense fallback={<div className="flex h-full items-center justify-center text-sm text-muted-foreground">正在加载登录终端…</div>}>
+          <Suspense fallback={<div className="flex h-full items-center justify-center text-sm text-muted-foreground">{t('providerLogin.loadingTerminal')}</div>}>
             <StandaloneShell project={DEFAULT_PROJECT_FOR_EMPTY_SHELL} command={command} onComplete={handleComplete} minimal={true} />
           </Suspense>
         </div>

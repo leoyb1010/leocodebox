@@ -16,7 +16,7 @@ import {
 
 import { cn } from '../../../lib/utils';
 import { copyTextToClipboard } from '../../../utils/clipboard';
-import { api } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 import { useTaskMaster } from '../context/TaskMasterContext';
 import type { TaskId, TaskMasterTask, TaskReference } from '../types';
 
@@ -84,7 +84,7 @@ export default function TaskDetailModal({
   }
 
   const handleSaveChanges = async () => {
-    if (!currentProject?.name) {
+    if (!currentProject?.projectId) {
       return;
     }
 
@@ -109,11 +109,10 @@ export default function TaskDetailModal({
 
     setIsSaving(true);
     try {
-      const response = await api.taskmaster.updateTask(currentProject.name, task.id, updates);
-      if (!response.ok) {
-        const errorPayload = (await response.json()) as { message?: string };
-        throw new Error(errorPayload.message ?? 'Failed to update task');
-      }
+      await apiClient.put(
+        `/api/taskmaster/update-task/${encodeURIComponent(currentProject.projectId)}/${encodeURIComponent(String(task.id))}`,
+        updates,
+      );
 
       setIsEditMode(false);
       await refreshTasks();
@@ -127,16 +126,15 @@ export default function TaskDetailModal({
   };
 
   const handleStatusSelect = async (nextStatus: string) => {
-    if (!currentProject?.name || nextStatus === task.status) {
+    if (!currentProject?.projectId || nextStatus === task.status) {
       return;
     }
 
     try {
-      const response = await api.taskmaster.updateTask(currentProject.name, task.id, { status: nextStatus });
-      if (!response.ok) {
-        const errorPayload = (await response.json()) as { message?: string };
-        throw new Error(errorPayload.message ?? 'Failed to update task status');
-      }
+      await apiClient.put(
+        `/api/taskmaster/update-task/${encodeURIComponent(currentProject.projectId)}/${encodeURIComponent(String(task.id))}`,
+        { status: nextStatus },
+      );
 
       await refreshTasks();
       onStatusChange?.(task.id, nextStatus);
@@ -159,9 +157,11 @@ export default function TaskDetailModal({
             <StatusIcon className="h-6 w-6 text-blue-600 dark:text-blue-400" />
             <div className="min-w-0 flex-1">
               <button
+                type="button"
                 onClick={() => copyTextToClipboard(String(task.id))}
                 className="mb-2 inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-1 text-xs text-gray-600 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
                 title="Copy task ID"
+                aria-label="Copy task ID"
               >
                 <span>Task {task.id}</span>
                 <Copy className="h-3 w-3" />
@@ -184,14 +184,17 @@ export default function TaskDetailModal({
             {isEditMode ? (
               <>
                 <button
+                  type="button"
                   onClick={handleSaveChanges}
                   disabled={isSaving}
                   className="rounded-md p-2 text-green-600 hover:bg-green-50 disabled:opacity-50 dark:hover:bg-green-950"
                   title="Save"
+                  aria-label="Save task"
                 >
                   <Save className={cn('w-5 h-5', isSaving && 'animate-spin')} />
                 </button>
                 <button
+                  type="button"
                   onClick={() => {
                     setEditableTask(task);
                     setIsEditMode(false);
@@ -199,20 +202,23 @@ export default function TaskDetailModal({
                   disabled={isSaving}
                   className="rounded-md p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"
                   title="Cancel editing"
+                  aria-label="Cancel editing"
                 >
                   <X className="h-5 w-5" />
                 </button>
               </>
             ) : (
               <button
+                type="button"
                 onClick={() => setIsEditMode(true)}
                 className="rounded-md p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800"
                 title="Edit task"
+                aria-label="Edit task"
               >
                 <Edit className="h-5 w-5" />
               </button>
             )}
-            <button onClick={onClose} className="rounded-md p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" title="Close">
+            <button type="button" onClick={onClose} className="rounded-md p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800" title="Close" aria-label="Close task details">
               <X className="h-5 w-5" />
             </button>
           </div>
@@ -250,6 +256,7 @@ export default function TaskDetailModal({
                 <div className="flex flex-wrap gap-1">
                   {task.dependencies.map((dependency) => (
                     <button
+                      type="button"
                       key={String(dependency)}
                       onClick={() => onTaskClick?.({ id: dependency })}
                       className="rounded bg-blue-100 px-2 py-1 text-sm text-blue-700 hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-300 dark:hover:bg-blue-800"
@@ -282,6 +289,8 @@ export default function TaskDetailModal({
           {task.details && (
             <div className="rounded-lg border border-gray-200 dark:border-gray-700">
               <button
+                type="button"
+                aria-expanded={showDetails}
                 onClick={() => setShowDetails((current) => !current)}
                 className="flex w-full items-center justify-between p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-800"
               >
@@ -299,6 +308,8 @@ export default function TaskDetailModal({
           {task.testStrategy && (
             <div className="rounded-lg border border-gray-200 dark:border-gray-700">
               <button
+                type="button"
+                aria-expanded={showTestStrategy}
                 onClick={() => setShowTestStrategy((current) => !current)}
                 className="flex w-full items-center justify-between p-4 text-left hover:bg-gray-50 dark:hover:bg-gray-800"
               >

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 
-import { authenticatedFetch } from '../../../../utils/api';
+import { apiClient } from '../../../../utils/apiClient';
 import type { CodeEditorFile } from '../../types/types';
 import { getPreviewMimeType, type PreviewKind } from '../../utils/previewableFile';
 
@@ -75,11 +75,8 @@ export default function CodeEditorMediaPreview({
         // ourselves and hand the media element a blob URL instead of a bare src.
         // Fetching a blob (rather than streaming) also lets <video>/<audio> seek.
         const contentUrl = `/api/projects/${projectId}/files/content?path=${encodeURIComponent(file.path)}`;
-        const response = await authenticatedFetch(contentUrl, { signal: controller.signal });
+        const response = await apiClient.raw(contentUrl, { signal: controller.signal });
 
-        if (!response.ok) {
-          throw new Error(`Request failed with status ${response.status}`);
-        }
 
         const blob = await response.blob();
 

@@ -1,4 +1,5 @@
-import { api } from '../../../utils/api';
+import { ApiError } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 import type {
   BrowseFilesystemResponse,
   CloneProgressEvent,
@@ -20,11 +21,6 @@ type CloneWorkspaceParams = {
 
 type CloneProgressHandlers = {
   onProgress: (message: string) => void;
-};
-
-const parseJson = async <T>(response: Response): Promise<T> => {
-  const data = (await response.json()) as T;
-  return data;
 };
 
 const resolveCreateProjectErrorMessage = (responseData: CreateProjectResponse): string | null => {
@@ -64,24 +60,19 @@ const resolveCreateProjectErrorMessage = (responseData: CreateProjectResponse): 
 };
 
 export const fetchGithubTokenCredentials = async () => {
-  const response = await api.get('/settings/credentials?type=github_token');
-  const data = await parseJson<CredentialsResponse>(response);
-
-  if (!response.ok) {
-    throw new Error(data.error || 'Failed to load GitHub tokens');
-  }
+  const data = await apiClient.get<CredentialsResponse>(
+    '/api/settings/credentials',
+    { type: 'github_token' },
+  );
 
   return (data.credentials || []).filter((credential) => credential.is_active);
 };
 
 export const browseFilesystemFolders = async (pathToBrowse: string) => {
-  const endpoint = `/browse-filesystem?path=${encodeURIComponent(pathToBrowse)}`;
-  const response = await api.get(endpoint);
-  const data = await parseJson<BrowseFilesystemResponse>(response);
-
-  if (!response.ok) {
-    throw new Error(data.error || 'Failed to browse filesystem');
-  }
+  const data = await apiClient.get<BrowseFilesystemResponse>(
+    '/api/browse-filesystem',
+    { path: pathToBrowse },
+  );
 
   return {
     path: data.path || pathToBrowse,
@@ -90,25 +81,24 @@ export const browseFilesystemFolders = async (pathToBrowse: string) => {
 };
 
 export const createFolderInFilesystem = async (folderPath: string) => {
-  const response = await api.createFolder(folderPath);
-  const data = await parseJson<CreateFolderResponse>(response);
-
-  if (!response.ok) {
-    throw new Error(data.error || 'Failed to create folder');
-  }
+  const data = await apiClient.post<CreateFolderResponse>('/api/create-folder', {
+    path: folderPath,
+  });
 
   return data.path || folderPath;
 };
 
 export const createProjectRequest = async (payload: CreateProjectPayload) => {
-  const response = await api.createProject(payload);
-  const data = await parseJson<CreateProjectResponse>(response);
-
-  if (!response.ok) {
-    throw new Error(resolveCreateProjectErrorMessage(data) || 'Failed to create project');
+  try {
+    const data = await apiClient.post<CreateProjectResponse>('/api/projects/create-project', payload);
+    return data.project;
+  } catch (error) {
+    if (error instanceof ApiError && error.payload && typeof error.payload === 'object') {
+      const message = resolveCreateProjectErrorMessage(error.payload as CreateProjectResponse);
+      if (message) throw new Error(message);
+    }
+    throw error;
   }
-
-  return data.project;
 };
 
 export const cloneWorkspaceWithProgress = (
@@ -144,15 +134,18 @@ export const cloneWorkspaceWithProgress = (
       }
     };
 
-    void api.post('/projects/clone-progress', {
-      path: params.workspacePath.trim(),
-      githubUrl: params.githubUrl.trim(),
-      githubTokenId: params.tokenMode === 'stored' && params.selectedGithubToken ? params.selectedGithubToken : null,
-      newGithubToken: params.tokenMode === 'new' ? params.newGithubToken.trim() || null : null,
-    }, { signal: abortController.signal }).then(async (response) => {
-      if (!response.ok || !response.body) {
-        const payload = await response.json().catch(() => ({})) as { error?: string };
-        throw new Error(payload.error || 'Failed to start repository clone');
+    void apiClient.raw('/api/projects/clone-progress', {
+      method: 'POST',
+      body: JSON.stringify({
+        path: params.workspacePath.trim(),
+        githubUrl: params.githubUrl.trim(),
+        githubTokenId: params.tokenMode === 'stored' && params.selectedGithubToken ? params.selectedGithubToken : null,
+        newGithubToken: params.tokenMode === 'new' ? params.newGithubToken.trim() || null : null,
+      }),
+      signal: abortController.signal,
+    }).then(async (response) => {
+      if (!response.body) {
+        throw new Error('Failed to start repository clone');
       }
 
       const reader = response.body.getReader();

@@ -203,7 +203,7 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
               variant="ghost"
               size="sm"
               onClick={onClose}
-              aria-label={t('actions.close', { defaultValue: '关闭' })}
+              aria-label={t('actions.close', { defaultValue: 'Close' })}
               className="h-10 w-10 touch-manipulation p-0 text-muted-foreground hover:text-foreground active:bg-accent/50"
             >
               <X className="h-5 w-5" />

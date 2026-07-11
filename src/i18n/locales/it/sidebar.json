@@ -141,5 +141,14 @@
     "deleteAllData": "Elimina tutti i dati permanentemente",
     "allConversationsDeleted": "Il progetto verrà rimosso dalla barra laterale. I tuoi file, memorie e dati delle sessioni verranno preservati.",
     "cannotUndo": "Puoi riaggiungerlo in seguito."
+  },
+  "localUi": {
+    "updateTo": "Update to v{{version}}",
+    "localLog": "Local log",
+    "settings": "Settings",
+    "localMode": "Local mode",
+    "leoapiSwitch": "Leoapi endpoint switcher",
+    "loadingSettings": "Loading settings…",
+    "close": "Close"
   }
 }

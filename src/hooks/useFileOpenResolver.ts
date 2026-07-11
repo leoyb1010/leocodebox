@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react';
 
-import { api } from '../utils/api';
+import { apiClient } from '../utils/apiClient';
 import type { Project } from '../types/app';
 
 type FileNode = {
@@ -77,11 +77,9 @@ export function useFileOpenResolver(
 
     const filesPromise = (async () => {
       try {
-        const response = await api.getFiles(projectId);
-        if (!response.ok) {
-          return [];
-        }
-        const data = await response.json();
+        const data = await apiClient.get<FileNode[]>(
+          `/api/projects/${encodeURIComponent(projectId)}/files`,
+        );
         const tree: FileNode[] = Array.isArray(data) ? data : [];
         const flat: FlatFile[] = [];
         flatten(tree, flat);

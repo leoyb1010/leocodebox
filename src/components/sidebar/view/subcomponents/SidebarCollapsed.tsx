@@ -51,8 +51,8 @@ export default function SidebarCollapsed({
         type="button"
         onClick={onShowLeoapi}
         className="group flex h-8 w-8 items-center justify-center rounded-lg transition-colors hover:bg-accent/80"
-        aria-label="Leoapi 接口切换"
-        title="Leoapi 接口切换"
+        aria-label={t('localUi.leoapiSwitch')}
+        title={t('localUi.leoapiSwitch')}
       >
         <SlidersHorizontal className="h-4 w-4 text-muted-foreground transition-colors group-hover:text-foreground" />
       </button>

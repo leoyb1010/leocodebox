@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { X } from 'lucide-react';
 
 import { Button } from '../../../shared/view/ui';
-import { authenticatedFetch } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 import type { FileTreeImageSelection } from '../types/types';
 
 type ImageViewerProps = {
@@ -26,13 +26,10 @@ export default function ImageViewer({ file, onClose }: ImageViewerProps) {
         setError(null);
         setImageUrl(null);
 
-        const response = await authenticatedFetch(imagePath, {
+        const response = await apiClient.raw(imagePath, {
           signal: controller.signal,
         });
 
-        if (!response.ok) {
-          throw new Error(`Request failed with status ${response.status}`);
-        }
 
         const blob = await response.blob();
         objectUrl = URL.createObjectURL(blob);

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { api } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 import type { SidebarSearchMode } from '../types/types';
 
 type SnippetHighlight = {
@@ -120,7 +120,7 @@ export function useConversationSearch(searchFilter: string, searchMode: SidebarS
       }
     };
 
-    void api.streamConversationSearch(query, {
+    void apiClient.streamConversationSearch(query, {
       result: (eventData: string) => {
         if (seq !== searchSeqRef.current) { controller.abort(); return; }
         const data = parseConversationResultEvent(eventData);

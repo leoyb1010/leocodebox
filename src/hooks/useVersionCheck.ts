@@ -82,7 +82,7 @@ export const useVersionCheck = (_owner?: string, _repo?: string) => {
   const latestVersion = desktopUpdate?.latestVersion || null;
   const releaseInfo: ReleaseInfo | null = desktopUpdate?.releaseNotes || desktopUpdate?.releaseName
     ? {
-        title: desktopUpdate.releaseName || (latestVersion ? `leocodebox v${latestVersion}` : 'leocodebox 更新'),
+        title: desktopUpdate.releaseName || (latestVersion ? `leocodebox v${latestVersion}` : 'leocodebox update'),
         body: desktopUpdate.releaseNotes || '',
         htmlUrl: latestVersion
           ? `https://github.com/leoyb1010/leocodebox/releases/tag/v${latestVersion}`

@@ -51,17 +51,17 @@ export default function MainContentStateView({ mode, isMobile, onMenuClick }: Ma
             <div className="divide-y divide-border border-y border-border text-sm">
               <div className="flex items-center gap-3 py-3.5">
                 <span className="flex h-7 w-7 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground">1</span>
-                <span className="flex-1 text-foreground">从左侧选择最近项目</span>
-                <span className="hidden text-xs text-muted-foreground sm:inline">聊天、文件与历史会自动恢复</span>
+                <span className="flex-1 text-foreground">{t('workspaceRuntime.stepSelectProject')}</span>
+                <span className="hidden text-xs text-muted-foreground sm:inline">{t('workspaceRuntime.stepRestore')}</span>
               </div>
               <div className="flex items-center gap-3 py-3.5">
                 <span className="flex h-7 w-7 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground">2</span>
-                <span className="flex-1 text-foreground">选择本机 Agent 并输入任务</span>
+                <span className="flex-1 text-foreground">{t('workspaceRuntime.stepChooseAgent')}</span>
                 <Command className="h-4 w-4 text-muted-foreground" />
               </div>
               <div className="flex items-center gap-3 py-3.5">
                 <span className="flex h-7 w-7 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground">3</span>
-                <span className="flex-1 text-foreground">变更、命令与记录始终留在本机</span>
+                <span className="flex-1 text-foreground">{t('workspaceRuntime.stepLocalOnly')}</span>
                 <ShieldCheck className="h-4 w-4 text-emerald-500" />
               </div>
             </div>

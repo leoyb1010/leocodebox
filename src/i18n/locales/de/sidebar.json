@@ -141,5 +141,14 @@
     "deleteAllData": "Alle Daten dauerhaft löschen",
     "allConversationsDeleted": "Das Projekt wird aus der Seitenleiste entfernt. Deine Dateien, Erinnerungen und Sitzungsdaten bleiben erhalten.",
     "cannotUndo": "Du kannst das Projekt später erneut hinzufügen."
+  },
+  "localUi": {
+    "updateTo": "Update to v{{version}}",
+    "localLog": "Local log",
+    "settings": "Settings",
+    "localMode": "Local mode",
+    "leoapiSwitch": "Leoapi endpoint switcher",
+    "loadingSettings": "Loading settings…",
+    "close": "Close"
   }
 }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { api } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 import type { PrdFile } from '../types';
 
 type UseProjectPrdFilesOptions = {
@@ -37,14 +37,9 @@ export function useProjectPrdFiles({ projectId }: UseProjectPrdFilesOptions) {
 
     try {
       setIsLoadingPrdFiles(true);
-      const response = await api.get(`/taskmaster/prd/${encodeURIComponent(projectId)}`);
-
-      if (!response.ok) {
-        setPrdFiles([]);
-        return;
-      }
-
-      const data = (await response.json()) as PrdResponse;
+      const data = await apiClient.get<PrdResponse>(
+        `/api/taskmaster/prd/${encodeURIComponent(projectId)}`,
+      );
       setPrdFiles(normalizePrdResponse(data));
     } catch (error) {
       console.error('Failed to load PRD files:', error);

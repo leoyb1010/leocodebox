@@ -61,7 +61,7 @@ export default function LoginForm() {
     <AuthScreenLayout
       title={t('login.title')}
       description={t('login.description')}
-      footerText="本地桌面模式不需要账号登录"
+      footerText={t('localDesktop.loginFooter')}
     >
       <form onSubmit={handleSubmit} className="space-y-4">
         <AuthInputField

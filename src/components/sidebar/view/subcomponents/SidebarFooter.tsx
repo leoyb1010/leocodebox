@@ -42,7 +42,7 @@ export default function SidebarFooter({
           onClick={onShowVersionModal}
         >
           <ArrowUpCircle className="h-3.5 w-3.5" />
-          <span className="truncate">{releaseInfo?.title || `可更新到 v${latestVersion}`}</span>
+          <span className="truncate">{releaseInfo?.title || t('localUi.updateTo', { version: latestVersion })}</span>
         </button>
       )}
       <div className="grid grid-cols-3 gap-1 md:hidden">
@@ -51,7 +51,7 @@ export default function SidebarFooter({
           onClick={onShowFeedback}
           className="flex items-center justify-center gap-1.5 rounded-md px-1.5 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
         >
-          <Bug className="h-3.5 w-3.5" />本地记录
+          <Bug className="h-3.5 w-3.5" />{t('localUi.localLog')}
         </button>
         <button
           type="button"
@@ -64,12 +64,12 @@ export default function SidebarFooter({
           className="flex items-center justify-center gap-1.5 rounded-md px-1.5 py-2 text-xs text-muted-foreground hover:bg-accent hover:text-foreground"
           onClick={onShowSettings}
         >
-          <Settings className="h-3.5 w-3.5" />设置
+          <Settings className="h-3.5 w-3.5" />{t('localUi.settings')}
         </button>
       </div>
       <div className="flex items-center justify-between px-2.5 pt-1 text-[10px] text-muted-foreground/50">
         <span>leocodebox v{currentVersion}</span>
-        <span className="hidden items-center gap-1 md:inline-flex"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />本机模式</span>
+        <span className="hidden items-center gap-1 md:inline-flex"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />{t('localUi.localMode')}</span>
       </div>
     </div>
   );

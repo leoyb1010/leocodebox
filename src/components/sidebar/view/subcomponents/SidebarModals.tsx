@@ -78,7 +78,7 @@ export default function SidebarModals({
     <>
       {localTool && ReactDOM.createPortal(
         <LocalToolModal
-          title={localTool === 'leoapi' ? 'Leoapi 接口切换' : '本地记录'}
+          title={localTool === 'leoapi' ? t('localUi.leoapiSwitch') : t('localUi.localLog')}
           src={localTool === 'leoapi' ? '/leocodebox-switch.html?embedded=1' : '/leocodebox-feedback.html?embedded=1'}
           onClose={onCloseLocalTool}
         />,
@@ -95,7 +95,7 @@ export default function SidebarModals({
 
       {showSettings &&
         ReactDOM.createPortal(
-          <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 text-sm text-muted-foreground">正在加载设置…</div>}>
+          <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 text-sm text-muted-foreground">{t('localUi.loadingSettings')}</div>}>
             <TypedSettings
               isOpen={showSettings}
               onClose={onCloseSettings}

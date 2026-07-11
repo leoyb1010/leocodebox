@@ -3,20 +3,47 @@ import webPush from 'web-push';
 import { notificationPreferencesDb, pushSubscriptionsDb, sessionsDb } from '@/modules/database/index.js';
 import { sendDesktopNotification as sendDesktopNotificationToClients } from '@/modules/notifications/services/desktop-notification-clients.service.js';
 
-const KIND_TO_PREF_KEY = {
+
+type NotificationKind = 'action_required' | 'stop' | 'error' | 'info';
+type NotificationMeta = Record<string, string | null | undefined>;
+type NotificationEvent = {
+  provider: string;
+  sessionId: string | null;
+  kind: NotificationKind;
+  code: string;
+  meta: NotificationMeta;
+  severity: string;
+  requiresUserAction: boolean;
+  dedupeKey: string | null;
+  createdAt: string;
+};
+type NotificationPayload = {
+  title: string;
+  body: string;
+  data: { sessionId: string | null; code: string; provider: string | null; sessionName: string | null; tag: string };
+};
+type NotificationPreferences = ReturnType<typeof notificationPreferencesDb.getPreferences>;
+type SessionRow = ReturnType<typeof sessionsDb.getSessionById>;
+type NotificationChannel = {
+  id: string;
+  isEnabled: (preferences: NotificationPreferences) => boolean;
+  send: (input: { userId: number; event: NotificationEvent; payload: NotificationPayload }) => unknown;
+};
+
+const KIND_TO_PREF_KEY: Partial<Record<NotificationKind, keyof NotificationPreferences['events']>> = {
   action_required: 'actionRequired',
   stop: 'stop',
   error: 'error'
 };
 
-const PROVIDER_LABELS = {
+const PROVIDER_LABELS: Record<string, string> = {
   claude: 'Claude',
   cursor: 'Cursor',
   codex: 'Codex',
   system: 'System'
 };
 
-const recentEventKeys = new Map();
+const recentEventKeys = new Map<string, number>();
 const DEDUPE_WINDOW_MS = 20000;
 
 const cleanupOldEventKeys = () => {
@@ -28,14 +55,14 @@ const cleanupOldEventKeys = () => {
   }
 };
 
-function isNotificationEventEnabled(preferences, event) {
+function isNotificationEventEnabled(preferences: NotificationPreferences, event: NotificationEvent): boolean {
   const prefEventKey = KIND_TO_PREF_KEY[event.kind];
   const eventEnabled = prefEventKey ? Boolean(preferences?.events?.[prefEventKey]) : true;
 
   return eventEnabled;
 }
 
-function isDuplicate(event) {
+function isDuplicate(event: NotificationEvent): boolean {
   cleanupOldEventKeys();
   const key = event.dedupeKey || `${event.provider}:${event.kind || 'info'}:${event.code || 'generic'}:${event.sessionId || 'none'}`;
   if (recentEventKeys.has(key)) {
@@ -54,7 +81,7 @@ function createNotificationEvent({
   severity = 'info',
   dedupeKey = null,
   requiresUserAction = false
-}) {
+}: { provider: string; sessionId?: string | null; kind?: NotificationKind; code?: string; meta?: NotificationMeta; severity?: string; dedupeKey?: string | null; requiresUserAction?: boolean }): NotificationEvent {
   return {
     provider,
     sessionId,
@@ -68,12 +95,12 @@ function createNotificationEvent({
   };
 }
 
-function normalizeErrorMessage(error) {
+function normalizeErrorMessage(error: unknown): string {
   if (typeof error === 'string') {
     return error;
   }
 
-  if (error && typeof error.message === 'string') {
+  if (error instanceof Error) {
     return error.message;
   }
 
@@ -84,7 +111,7 @@ function normalizeErrorMessage(error) {
   return String(error);
 }
 
-function normalizeSessionName(sessionName) {
+function normalizeSessionName(sessionName: unknown): string | null {
   if (typeof sessionName !== 'string') {
     return null;
   }
@@ -97,11 +124,11 @@ function normalizeSessionName(sessionName) {
   return normalized.length > 80 ? `${normalized.slice(0, 77)}...` : normalized;
 }
 
-function rowMatchesProvider(row, provider) {
-  return row && (!provider || row.provider === provider);
+function rowMatchesProvider(row: SessionRow, provider: string | null | undefined): boolean {
+  return Boolean(row && (!provider || row.provider === provider));
 }
 
-function resolveSessionRow(sessionId, provider) {
+function resolveSessionRow(sessionId: string | null, provider: string | null | undefined): SessionRow {
   if (!sessionId) {
     return null;
   }
@@ -119,7 +146,7 @@ function resolveSessionRow(sessionId, provider) {
   return null;
 }
 
-function normalizeNotificationSession(event) {
+function normalizeNotificationSession(event: NotificationEvent): NotificationEvent {
   if (!event?.sessionId || !event.provider || event.provider === 'system') {
     return event;
   }
@@ -135,7 +162,7 @@ function normalizeNotificationSession(event) {
   };
 }
 
-function resolveSessionName(event) {
+function resolveSessionName(event: NotificationEvent): string | null {
   const explicitSessionName = normalizeSessionName(event.meta?.sessionName);
   if (explicitSessionName) {
     return explicitSessionName;
@@ -148,9 +175,9 @@ function resolveSessionName(event) {
   return normalizeSessionName(sessionsDb.getSessionName(event.sessionId, event.provider));
 }
 
-function buildNotificationPayload(event) {
+function buildNotificationPayload(event: NotificationEvent): NotificationPayload {
   const normalizedEvent = normalizeNotificationSession(event);
-  const CODE_MAP = {
+  const CODE_MAP: Record<string, string> = {
     'permission.required': normalizedEvent.meta?.toolName
       ? `Action Required: Tool "${normalizedEvent.meta.toolName}" needs approval`
       : 'Action Required: A tool needs your approval',
@@ -176,7 +203,7 @@ function buildNotificationPayload(event) {
   };
 }
 
-function sendWebPushPayload(userId, payload) {
+function sendWebPushPayload(userId: number, payload: NotificationPayload): Promise<unknown> {
   const subscriptions = pushSubscriptionsDb.getSubscriptions(userId);
   if (!subscriptions.length) return Promise.resolve();
 
@@ -206,7 +233,7 @@ function sendWebPushPayload(userId, payload) {
   });
 }
 
-const notificationChannels = [
+const notificationChannels: NotificationChannel[] = [
   {
     id: 'webPush',
     // TODO: Web push still uses push_subscriptions. Do not remove that table until
@@ -221,7 +248,7 @@ const notificationChannels = [
   }
 ];
 
-function notifyUserIfEnabled({ userId, event }) {
+function notifyUserIfEnabled({ userId, event }: { userId: number; event: NotificationEvent }): void {
   if (!userId || !event) {
     return;
   }
@@ -246,7 +273,7 @@ function notifyUserIfEnabled({ userId, event }) {
   }
 }
 
-function notifyRunStopped({ userId, provider, sessionId = null, stopReason = 'completed', sessionName = null }) {
+function notifyRunStopped({ userId, provider, sessionId = null, stopReason = 'completed', sessionName = null }: { userId: number; provider: string; sessionId?: string | null; stopReason?: string; sessionName?: string | null }): void {
   notifyUserIfEnabled({
     userId,
     event: createNotificationEvent({
@@ -261,7 +288,7 @@ function notifyRunStopped({ userId, provider, sessionId = null, stopReason = 'co
   });
 }
 
-function notifyRunFailed({ userId, provider, sessionId = null, error, sessionName = null }) {
+function notifyRunFailed({ userId, provider, sessionId = null, error, sessionName = null }: { userId: number; provider: string; sessionId?: string | null; error: unknown; sessionName?: string | null }): void {
   const errorMessage = normalizeErrorMessage(error);
 
   notifyUserIfEnabled({

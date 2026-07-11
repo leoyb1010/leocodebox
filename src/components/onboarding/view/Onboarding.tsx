@@ -2,17 +2,14 @@ import { Check, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { LLMProvider } from '../../../types/app';
-import { authenticatedFetch } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 import { useProviderAuthStatus } from '../../provider-auth/hooks/useProviderAuthStatus';
 import ProviderLoginModal from '../../provider-auth/view/ProviderLoginModal';
 
 import AgentConnectionsStep from './subcomponents/AgentConnectionsStep';
 import GitConfigurationStep from './subcomponents/GitConfigurationStep';
 import OnboardingStepProgress from './subcomponents/OnboardingStepProgress';
-import {
-  gitEmailPattern,
-  readErrorMessageFromResponse,
-} from './utils';
+import { gitEmailPattern } from './utils';
 
 type OnboardingProps = {
   onComplete?: () => void | Promise<void>;
@@ -35,12 +32,9 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
 
   const loadGitConfig = useCallback(async () => {
     try {
-      const response = await authenticatedFetch('/api/user/git-config');
-      if (!response.ok) {
-        return;
-      }
-
-      const payload = (await response.json()) as { gitName?: string; gitEmail?: string };
+      const payload = await apiClient.get<{ gitName?: string; gitEmail?: string }>(
+        '/api/user/git-config',
+      );
       if (payload.gitName) {
         setGitName(payload.gitName);
       }
@@ -101,16 +95,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
 
     setIsSubmitting(true);
     try {
-      const response = await authenticatedFetch('/api/user/git-config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ gitName, gitEmail }),
-      });
-
-      if (!response.ok) {
-        const message = await readErrorMessageFromResponse(response, 'Failed to save git configuration');
-        throw new Error(message);
-      }
+      await apiClient.post('/api/user/git-config', { gitName, gitEmail });
 
       setCurrentStep((previous) => previous + 1);
     } catch (caughtError) {
@@ -130,11 +115,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
     setErrorMessage('');
 
     try {
-      const response = await authenticatedFetch('/api/user/complete-onboarding', { method: 'POST' });
-      if (!response.ok) {
-        const message = await readErrorMessageFromResponse(response, 'Failed to complete onboarding');
-        throw new Error(message);
-      }
+      await apiClient.post('/api/user/complete-onboarding');
 
       await onComplete?.();
     } catch (caughtError) {

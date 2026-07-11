@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 import { cn } from '../../../../../lib/utils';
 import SessionProviderLogo from '../../../../llm-logo-provider/SessionProviderLogo';
 import type { AgentProvider, AuthStatus } from '../../../types/types';
@@ -56,13 +58,14 @@ export default function AgentListItem({
   onClick,
   isMobile = false,
 }: AgentListItemProps) {
+  const { t } = useTranslation('settings');
   const config = agentConfig[agentId];
   const colors = colorClasses[config.color];
   const statusLabel = authStatus.loading
-    ? '正在检查'
+    ? t('agents.authStatus.checking')
     : authStatus.authenticated
-      ? '已连接'
-      : '未连接';
+      ? t('agents.authStatus.connected')
+      : t('agents.authStatus.notConnected');
   const buttonLabel = `${config.name}，${statusLabel}`;
 
   if (isMobile) {

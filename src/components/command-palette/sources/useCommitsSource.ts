@@ -1,4 +1,4 @@
-import { authenticatedFetch } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 
 import { useApiSource } from './useApiSource';
 
@@ -20,7 +20,7 @@ export function useCommitsSource(projectId: string | undefined, enabled: boolean
     deps: [projectId],
     fetcher: (signal) => {
       const params = new URLSearchParams({ project: projectId!, limit: '50' });
-      return authenticatedFetch(`/api/git/commits?${params.toString()}`, { signal });
+      return apiClient.raw(`/api/git/commits?${params.toString()}`, { signal });
     },
     parse: (data) => {
       if (!data.commits) return [];

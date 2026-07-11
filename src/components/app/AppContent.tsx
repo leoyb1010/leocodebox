@@ -12,7 +12,7 @@ import { useDeviceSettings } from '../../hooks/useDeviceSettings';
 import { useSessionProtection } from '../../hooks/useSessionProtection';
 import { useProjectsState } from '../../hooks/useProjectsState';
 import { useQueuedMessageAutoSend } from '../../hooks/useQueuedMessageAutoSend';
-import { api } from '../../utils/api';
+import { apiClient } from '../../utils/apiClient';
 
 import DesktopAppRail from './DesktopAppRail';
 import WorkspaceStatusBar from './WorkspaceStatusBar';
@@ -105,14 +105,9 @@ function AppContentInner() {
 
   const refreshRunningSessions = useCallback(async () => {
     try {
-      const response = await api.runningSessions();
-      if (!response.ok) {
-        runningSessionFailures.current += 1;
-        if (runningSessionFailures.current >= 2) syncProcessingSessions([]);
-        return;
-      }
-
-      const payload = (await response.json()) as RunningSessionsApiPayload;
+      const payload = await apiClient.get<RunningSessionsApiPayload>(
+        '/api/providers/sessions/running',
+      );
       const sessions = Array.isArray(payload.data?.sessions) ? payload.data.sessions : [];
       runningSessionFailures.current = 0;
 
@@ -282,14 +277,14 @@ function AppContentInner() {
         {projectsError ? (
           <main className="flex min-w-0 flex-1 items-center justify-center p-6">
             <div role="alert" className="max-w-lg border border-destructive/40 bg-card p-6 text-center">
-              <h2 className="text-base font-semibold text-foreground">本地项目加载失败</h2>
+              <h2 className="text-base font-semibold text-foreground">{t('errorBoundary.projectsLoad')}</h2>
               <p className="mt-2 text-sm text-muted-foreground">{projectsError}</p>
               <button
                 type="button"
                 onClick={() => void fetchProjects()}
                 className="mt-4 rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
               >
-                重试
+                {t('errorBoundary.retry')}
               </button>
             </div>
           </main>

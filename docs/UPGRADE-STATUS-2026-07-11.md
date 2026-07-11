@@ -102,3 +102,142 @@
 5. 增强跨 Provider 搜索筛选，逐步形成审计页；
 6. 有签名凭据和测试 feed 后执行真实更新桥 E2E；
 7. `.claude/worktrees` 仅在用户明确确认删除后处理。
+
+## 接续执行检查点（第二轮拆分后）
+
+> 此节记录 `019f5191-cd40-71c3-aeb6-1eda68fd6f04` 中断后接续执行的当前工作树状态。改动尚未统一提交或推送。
+
+### 已完成的新进展
+
+1. **统一 API 错误层完成 renderer 全量迁移**
+   - 业务组件、Hook、Context 和 Store 不再直接调用 `authenticatedFetch` 或旧 `api` endpoint wrapper。
+   - JSON、PATCH/DELETE、带 query 的 DELETE、FormData、二进制响应和 SSE 均通过 `apiClient`、`apiRequest`、`ApiError`。
+   - 旧 `src/utils/api.js` 从 326 行缩减为 58 行，仅保留认证 fetch 与统一错误原语。
+   - 新增二进制错误、DELETE query 语义和 SSE 事件解析测试。
+
+2. **四个巨型 Hook 第二轮拆分完成**
+   - `useChatComposerState.ts`：667 行；队列、命令、附件和发送选项均已独立。
+   - `useProjectsState.ts`：582 行；实时事件、Session Attention、分页和状态转换均已独立。
+   - `useSidebarController.ts`：602 行；归档、Star、搜索和项目/会话操作已拆分。
+   - `useGitPanelController.ts`：606 行；API Client 与 Remote Operations 已拆分。
+
+3. **新增独立会话审计/回放页**
+   - 新增 `audit` 工作区 Tab，按项目、Provider、日期和查询词筛选。
+   - 支持完整会话消息回放、工具调用/错误/权限事件筛选、Token 用量显示和 JSON 导出。
+   - 审计页独立懒加载，生产 chunk 约 8.45KB。
+
+4. **i18n 与可访问性继续收尾**
+   - Browser Settings、Workspace Shell、Appearance、Auth、本地错误页、Command Palette、应用更新、Provider 登录终端和 Sidebar 本机入口已迁入 locale。
+   - 所有 10 个 locale 均有结构完整性测试；非中文语言当前可使用英文翻译作为阶段性占位。
+   - renderer 源码中的硬编码中文已清理，仅保留语言选择器中的语言原生名称。
+   - 模态遮罩改为语义按钮；Task Detail 图标按钮补充类型、aria-label 和 aria-expanded。
+
+### 当前验证证据
+
+```text
+Typecheck：通过
+ESLint：0 errors / 0 warnings
+Desktop tests：16/16
+Client tests：38/38
+Server tests：168/168
+总测试：222
+Production build：通过
+入口 JS：580.58KB（仍低于 600KB 目标）
+git diff --check：通过
+```
+
+### 仍需继续，不能据此宣称全部升级完成
+
+- 后端模块仍有 43 个 JavaScript 文件；Agent、Git、TaskMaster、Files 和 Provider Switch 的主要 route/service 需要继续 TypeScript 化及进一步分层。
+- 部分英文 UI 文案仍需继续提取到 i18n；当前已完成原文点名的中文硬编码主线和最显著工作区入口。
+- 会话审计页已具备筛选、回放、事件分类、Token 与导出，但仍应补充组件级交互测试和大数据量分页/取消行为验证。
+- 真实签名、公证和私有更新 Feed E2E 按用户要求不在本机执行。
+- `.claude/worktrees` 删除仍需用户单独明确确认。
+
+## 接续执行检查点（2026-07-12）
+
+### 后端 TypeScript 化进展
+
+- Files 原 762 行 JavaScript 巨型路由已完全移除，替换为严格 TypeScript 子路由：
+  - `workspace-filesystem.routes.ts`
+  - `file-content.routes.ts`
+  - `file-mutation.routes.ts`
+  - `file-upload.routes.ts`
+  - `files.routes.ts` 纯装配入口（15 行）
+- 文件上传迁移时修复了旧实现使用 `os.tmpdir()` 却未导入 `node:os` 的运行时缺陷。
+- 文件上传恢复并测试了 Multer 文件大小/数量错误的 JSON 响应语义。
+- 新增 Files 路由集成测试：工作区越界拒绝、无文件上传校验。
+- 以下模块也已迁入严格 TypeScript：
+  - CORS policy
+  - WebSocket runtime 装配
+  - Server lifecycle
+  - Provider Switch config/storage/version network utilities
+  - Leoapi/Agent/Git/TaskMaster/Files index 装配
+  - TaskMaster installation service、PRD parse routes、template routes
+- TypeScript 迁移发现并修复了 TaskMaster parse 后 WebSocket 广播缺少第三个 `tasksData` 参数的问题。
+
+### 会话审计稳定性
+
+- 项目会话加载增加并发上限（4），避免项目较多时同时发起无界请求。
+- 刷新、组件卸载和会话切换均通过 AbortController 取消旧请求。
+- 新增并发限制单元测试。
+
+### 当前验证
+
+```text
+Typecheck：通过
+ESLint：0 errors / 0 warnings
+Desktop tests：16/16
+Client tests：39/39
+Server tests：170/170
+总测试：225/225
+Production build：通过
+入口 JS：581.19KB（低于 600KB）
+git diff --check：通过
+```
+
+### 当前迁移数量
+
+```text
+server 全部 JavaScript 文件：74 → 58
+server/modules + runtime + middleware JavaScript：43 → 27
+```
+
+下一步继续处理 TaskMaster 主路由/模板服务、Git、Agent 与 Provider Switch 的剩余 JavaScript 服务和路由。
+
+## 接续执行检查点（2026-07-12，第三轮）
+
+### 后端 TypeScript 化继续推进
+
+- Git 主路由、远程操作路由、工作区操作路由及服务层已全部迁入严格 TypeScript。
+- Token Usage 路由、认证中间件、通知编排服务已迁入严格 TypeScript。
+- Leoapi 的 CLI Tools、Feedback/Update、Provider Store、Backup、Apply 服务已迁入严格 TypeScript。
+- 为无内置类型声明的 `jsonwebtoken` 与 `web-push` 增加了最小本地声明，不新增运行时依赖。
+- TypeScript 迁移额外发现并修复了三处会在运行时触发的问题：
+  - Git status 路由漏导入 `parseGitStatusOutput`；
+  - Git remote 路由漏导入 `validateBranchName`；
+  - CLI status 路由调用了未定义的 `nowIso`。
+
+### 当前验证
+
+```text
+Typecheck：通过
+ESLint：0 errors / 0 warnings
+Desktop tests：16/16
+Client tests：39/39
+Server tests：172/172
+总测试：227/227
+Production build：通过
+入口 JS：581.19KB（低于 600KB）
+git diff --check：通过
+```
+
+### 当前迁移数量
+
+```text
+server 全部 JavaScript 文件：74 → 42
+server/modules + runtime + middleware JavaScript：43 → 11
+其中生产 JavaScript：9（另有 2 个 JavaScript 测试文件）
+```
+
+剩余生产 JavaScript 已收敛为：Agent routes/service、Provider Switch routes/discovery/import，以及 Claude/Codex/Cursor/OpenCode 四个 runtime adapter。真实签名、公证、私有更新 Feed E2E 与 `.claude/worktrees` 删除仍不在本机自动执行。

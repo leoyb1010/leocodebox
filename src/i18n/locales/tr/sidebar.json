@@ -141,5 +141,14 @@
     "deleteAllData": "Tüm veriyi kalıcı olarak sil",
     "allConversationsDeleted": "Proje kenar çubuğundan kaldırılacak. Dosyaların, bellek verilerin ve oturum verilerin korunacak.",
     "cannotUndo": "Projeyi sonra tekrar ekleyebilirsin."
+  },
+  "localUi": {
+    "updateTo": "Update to v{{version}}",
+    "localLog": "Local log",
+    "settings": "Settings",
+    "localMode": "Local mode",
+    "leoapiSwitch": "Leoapi endpoint switcher",
+    "loadingSettings": "Loading settings…",
+    "close": "Close"
   }
 }

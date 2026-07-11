@@ -200,8 +200,6 @@ export default function ProviderSelectionEmptyState({
             <DialogTrigger asChild>
               <Card
                 className="group mx-auto max-w-xs cursor-pointer border-border/60 transition-all duration-150 hover:border-border hover:shadow-md active:scale-[0.99]"
-                role="button"
-                tabIndex={0}
               >
                 <div className="flex items-center gap-2 p-3">
                   <SessionProviderLogo

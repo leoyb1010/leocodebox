@@ -28,8 +28,8 @@ export default function LocalToolModal({ title, src, onClose }: LocalToolModalPr
           type="button"
           className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           onClick={onClose}
-          aria-label="关闭"
-          title="关闭"
+          aria-label={title}
+          title={title}
         >
           <X className="h-4 w-4" />
         </button>

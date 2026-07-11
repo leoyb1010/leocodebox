@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Dispatch, KeyboardEvent, RefObject, SetStateAction } from 'react';
 
-import { api } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 import { escapeRegExp } from '../utils/chatFormatting';
 import type { Project } from '../../../types/app';
 
@@ -71,12 +71,11 @@ export function useFileMentions({ selectedProject, input, setInput, textareaRef 
 
 
       try {
-        const response = await api.getFiles(projectId, { signal: abortController.signal });
-        if (!response.ok) {
-          return;
-        }
-
-        const files = (await response.json()) as ProjectFileNode[];
+        const files = await apiClient.get<ProjectFileNode[]>(
+          `/api/projects/${encodeURIComponent(projectId)}/files`,
+          undefined,
+          abortController.signal,
+        );
         setFileList(flattenFileTree(files));
       } catch (error) {
         // Ignore aborts from rapid project switches; we only care about the latest request.

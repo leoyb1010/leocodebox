@@ -211,7 +211,7 @@ export default function McpServers({ selectedProvider, currentProjects }: McpSer
                     {managed && (
                       <div className="text-xs text-muted-foreground">
                         {t('mcpServers.managed.hint', {
-                          defaultValue: '由 leocodebox 自动管理。',
+                          defaultValue: 'Managed automatically by leocodebox.',
                         })}
                       </div>
                     )}

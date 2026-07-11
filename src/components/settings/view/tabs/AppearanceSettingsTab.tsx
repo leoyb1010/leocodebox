@@ -35,9 +35,9 @@ export default function AppearanceSettingsTab({
 
   return (
     <div className="space-y-8">
-      <SettingsSection title="本机智能体默认值">
+      <SettingsSection title={t('appearanceSettings.workspace.agentDefaultsTitle')}>
         <SettingsCard divided>
-          <SettingsRow label="默认智能体" description="新会话默认使用的本机智能体">
+          <SettingsRow label={t('appearanceSettings.workspace.defaultAgent')} description={t('appearanceSettings.workspace.defaultAgentDescription')}>
             <select
               value={preferences.defaultProvider}
               disabled={saving}
@@ -50,66 +50,66 @@ export default function AppearanceSettingsTab({
               <option value="cursor">Cursor</option>
             </select>
           </SettingsRow>
-          <SettingsRow label="默认模型" description="留空时使用所选智能体自身的默认模型">
+          <SettingsRow label={t('appearanceSettings.workspace.defaultModel')} description={t('appearanceSettings.workspace.defaultModelDescription')}>
             <input
               key={`${preferences.defaultProvider}:${preferences.defaultModel}`}
               defaultValue={preferences.defaultModel}
               disabled={saving}
-              placeholder="使用默认模型"
+              placeholder={t('appearanceSettings.workspace.defaultModelPlaceholder')}
               onBlur={(event) => void updatePreferences({ defaultModel: event.target.value })}
               className="w-full rounded-lg border border-input bg-card p-2.5 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary sm:w-52"
             />
           </SettingsRow>
-          <SettingsRow label="默认权限模式" description="新会话启动时采用的工具授权策略">
+          <SettingsRow label={t('appearanceSettings.workspace.defaultPermission')} description={t('appearanceSettings.workspace.defaultPermissionDescription')}>
             <select
               value={preferences.permissionMode}
               disabled={saving}
               onChange={(event) => void updatePreferences({ permissionMode: event.target.value as typeof preferences.permissionMode })}
               className="w-full rounded-lg border border-input bg-card p-2.5 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary sm:w-40"
             >
-              <option value="default">每次确认</option>
-              <option value="acceptEdits">自动接受编辑</option>
-              <option value="bypassPermissions">跳过权限确认</option>
-              <option value="plan">只读规划</option>
+              <option value="default">{t('appearanceSettings.workspace.permissionEveryTime')}</option>
+              <option value="acceptEdits">{t('appearanceSettings.workspace.permissionAcceptEdits')}</option>
+              <option value="bypassPermissions">{t('appearanceSettings.workspace.permissionBypass')}</option>
+              <option value="plan">{t('appearanceSettings.workspace.permissionPlan')}</option>
             </select>
           </SettingsRow>
         </SettingsCard>
       </SettingsSection>
 
-      <SettingsSection title="界面密度与动效">
+      <SettingsSection title={t('appearanceSettings.workspace.densityMotionTitle')}>
         <SettingsCard divided>
-          <SettingsRow label="信息密度" description="重度使用推荐紧凑模式">
+          <SettingsRow label={t('appearanceSettings.workspace.density')} description={t('appearanceSettings.workspace.densityDescription')}>
             <select
               value={preferences.density}
               disabled={saving}
               onChange={(event) => void updatePreferences({ density: event.target.value as typeof preferences.density })}
               className="w-full rounded-lg border border-input bg-card p-2.5 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary sm:w-36"
             >
-              <option value="compact">紧凑</option>
-              <option value="comfortable">舒适</option>
+              <option value="compact">{t('appearanceSettings.workspace.compact')}</option>
+              <option value="comfortable">{t('appearanceSettings.workspace.comfortable')}</option>
             </select>
           </SettingsRow>
-          <SettingsRow label="减少动态效果" description="关闭非必要过渡和位移动画">
+          <SettingsRow label={t('appearanceSettings.workspace.reduceMotion')} description={t('appearanceSettings.workspace.reduceMotionDescription')}>
             <SettingsToggle
               checked={preferences.reduceMotion}
               onChange={(value) => void updatePreferences({ reduceMotion: value })}
-              ariaLabel="减少动态效果"
+              ariaLabel={t('appearanceSettings.workspace.reduceMotion')}
             />
           </SettingsRow>
         </SettingsCard>
       </SettingsSection>
 
-      <SettingsSection title="外观主题">
+      <SettingsSection title={t('appearanceSettings.workspace.themeTitle')}>
         <SettingsCard>
           <SettingsRow
-            label="外观主题"
-            description="可固定浅色或深色，也可随电脑外观自动切换"
+            label={t('appearanceSettings.workspace.theme')}
+            description={t('appearanceSettings.workspace.themeDescription')}
           >
-            <div className="inline-flex rounded-lg border border-border bg-muted/60 p-1" role="group" aria-label="外观主题">
+            <div className="inline-flex rounded-lg border border-border bg-muted/60 p-1" role="group" aria-label={t('appearanceSettings.workspace.theme')}>
               {([
-                ['system', '跟随系统', Monitor],
-                ['light', '浅色', Sun],
-                ['dark', '深色', Moon],
+                ['system', t('appearanceSettings.workspace.system'), Monitor],
+                ['light', t('appearanceSettings.workspace.light'), Sun],
+                ['dark', t('appearanceSettings.workspace.dark'), Moon],
               ] as const).map(([mode, label, Icon]) => (
                 <button
                   key={mode}

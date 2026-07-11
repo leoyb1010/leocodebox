@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { CircleCheck, Clock3, ShieldCheck } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import type { SessionActivity } from '../../../../hooks/useSessionProtection';
 import type { ProjectSession } from '../../../../types/app';
@@ -18,6 +19,7 @@ const formatElapsed = (startedAt: number, now: number) => {
 };
 
 export default function WorkspaceActivityStrip({ session, activity }: WorkspaceActivityStripProps) {
+  const { t } = useTranslation();
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -44,17 +46,17 @@ export default function WorkspaceActivityStrip({ session, activity }: WorkspaceA
         <span className="font-medium text-foreground">{providerLabel}</span>
         <span className="inline-flex items-center gap-1 text-primary">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-current" />
-          运行中
+          {t('workspaceRuntime.running')}
         </span>
       </div>
       <span className="min-w-0 flex-1 truncate text-muted-foreground">
-        {activity.statusText || '正在处理当前任务…'}
+        {activity.statusText || t('workspaceRuntime.processingCurrent')}
       </span>
       <span className="hidden items-center gap-1.5 text-muted-foreground sm:inline-flex">
         <Clock3 className="h-3 w-3" />{formatElapsed(activity.startedAt, now)}
       </span>
       <span className="hidden items-center gap-1.5 text-muted-foreground lg:inline-flex">
-        <ShieldCheck className="h-3 w-3" />本机执行
+        <ShieldCheck className="h-3 w-3" />{t('workspaceRuntime.localExecution')}
       </span>
       <CircleCheck className="h-3.5 w-3.5 text-muted-foreground/50" />
       <div className="leocodebox-activity-trace absolute inset-x-0 bottom-0 h-px bg-primary/20" />

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 
 import { useTheme } from '../../../contexts/ThemeContext';
-import { authenticatedFetch } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 import { usePlugins } from '../../../contexts/PluginsContext';
 import type { Project, ProjectSession } from '../../../types/app';
 
@@ -82,8 +82,7 @@ export default function PluginTabContent({
         // Fetch the plugin JS with auth headers (Cloudflare Worker requires auth on all routes).
         // Then import it via a Blob URL so the browser never makes an unauthenticated request.
         const assetUrl = `/api/plugins/${encodeURIComponent(pluginName)}/assets/${encodeURIComponent(entryFile)}`;
-        const res = await authenticatedFetch(assetUrl);
-        if (!res.ok) throw new Error(`Failed to fetch plugin (HTTP ${res.status})`);
+        const res = await apiClient.raw(assetUrl);
         const jsText = await res.text();
         const blob = new Blob([jsText], { type: 'application/javascript' });
         const blobUrl = URL.createObjectURL(blob);
@@ -103,14 +102,13 @@ export default function PluginTabContent({
 
           async rpc(method: string, path: string, body?: unknown): Promise<unknown> {
             const cleanPath = String(path).replace(/^\//, '');
-            const res = await authenticatedFetch(
+            const res = await apiClient.raw(
               `/api/plugins/${encodeURIComponent(pluginName)}/rpc/${cleanPath}`,
               {
                 method: method || 'GET',
                 ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
               },
             );
-            if (!res.ok) throw new Error(`RPC error ${res.status}`);
             return res.json();
           },
         };

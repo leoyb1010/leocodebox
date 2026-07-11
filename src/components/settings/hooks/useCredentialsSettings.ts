@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { authenticatedFetch } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 import type {
   ApiKeyItem,
   ApiKeysResponse,
@@ -15,9 +15,12 @@ type UseCredentialsSettingsArgs = {
   confirmDeleteGithubCredentialText: string;
 };
 
-const getApiError = (payload: { error?: string } | undefined, fallback: string) => (
-  payload?.error || fallback
-);
+const requireSuccess = <T extends { success?: boolean; error?: string }>(payload: T, fallback: string): T => {
+  if (payload.success === false) {
+    throw new Error(payload.error || fallback);
+  }
+  return payload;
+};
 
 export function useCredentialsSettings({
   confirmDeleteApiKeyText,
@@ -43,14 +46,9 @@ export function useCredentialsSettings({
     try {
       setLoading(true);
 
-      const [apiKeysResponse, credentialsResponse] = await Promise.all([
-        authenticatedFetch('/api/settings/api-keys'),
-        authenticatedFetch('/api/settings/credentials?type=github_token'),
-      ]);
-
       const [apiKeysPayload, credentialsPayload] = await Promise.all([
-        apiKeysResponse.json() as Promise<ApiKeysResponse>,
-        credentialsResponse.json() as Promise<GithubCredentialsResponse>,
+        apiClient.get<ApiKeysResponse>('/api/settings/api-keys'),
+        apiClient.get<GithubCredentialsResponse>('/api/settings/credentials', { type: 'github_token' }),
       ]);
 
       setApiKeys(apiKeysPayload.apiKeys || []);
@@ -68,16 +66,10 @@ export function useCredentialsSettings({
     }
 
     try {
-      const response = await authenticatedFetch('/api/settings/api-keys', {
-        method: 'POST',
-        body: JSON.stringify({ keyName: newKeyName.trim() }),
-      });
-
-      const payload = await response.json() as ApiKeysResponse;
-      if (!response.ok || !payload.success) {
-        console.error('Error creating API key:', getApiError(payload, 'Failed to create API key'));
-        return;
-      }
+      const payload = requireSuccess(
+        await apiClient.post<ApiKeysResponse>('/api/settings/api-keys', { keyName: newKeyName.trim() }),
+        'Failed to create API key',
+      );
 
       if (payload.apiKey) {
         setNewlyCreatedKey(payload.apiKey);
@@ -96,15 +88,10 @@ export function useCredentialsSettings({
     }
 
     try {
-      const response = await authenticatedFetch(`/api/settings/api-keys/${keyId}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        const payload = await response.json() as ApiKeysResponse;
-        console.error('Error deleting API key:', getApiError(payload, 'Failed to delete API key'));
-        return;
-      }
+      requireSuccess(
+        await apiClient.delete<ApiKeysResponse>(`/api/settings/api-keys/${encodeURIComponent(keyId)}`),
+        'Failed to delete API key',
+      );
 
       await fetchData();
     } catch (error) {
@@ -114,16 +101,13 @@ export function useCredentialsSettings({
 
   const toggleApiKey = useCallback(async (keyId: string, isActive: boolean) => {
     try {
-      const response = await authenticatedFetch(`/api/settings/api-keys/${keyId}/toggle`, {
-        method: 'PATCH',
-        body: JSON.stringify({ isActive: !isActive }),
-      });
-
-      if (!response.ok) {
-        const payload = await response.json() as ApiKeysResponse;
-        console.error('Error toggling API key:', getApiError(payload, 'Failed to toggle API key'));
-        return;
-      }
+      requireSuccess(
+        await apiClient.patch<ApiKeysResponse>(
+          `/api/settings/api-keys/${encodeURIComponent(keyId)}/toggle`,
+          { isActive: !isActive },
+        ),
+        'Failed to toggle API key',
+      );
 
       await fetchData();
     } catch (error) {
@@ -137,21 +121,15 @@ export function useCredentialsSettings({
     }
 
     try {
-      const response = await authenticatedFetch('/api/settings/credentials', {
-        method: 'POST',
-        body: JSON.stringify({
+      requireSuccess(
+        await apiClient.post<GithubCredentialsResponse>('/api/settings/credentials', {
           credentialName: newGithubName.trim(),
           credentialType: 'github_token',
           credentialValue: newGithubToken,
           description: newGithubDescription.trim(),
         }),
-      });
-
-      const payload = await response.json() as GithubCredentialsResponse;
-      if (!response.ok || !payload.success) {
-        console.error('Error creating GitHub credential:', getApiError(payload, 'Failed to create GitHub credential'));
-        return;
-      }
+        'Failed to create GitHub credential',
+      );
 
       setNewGithubName('');
       setNewGithubToken('');
@@ -170,15 +148,12 @@ export function useCredentialsSettings({
     }
 
     try {
-      const response = await authenticatedFetch(`/api/settings/credentials/${credentialId}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        const payload = await response.json() as GithubCredentialsResponse;
-        console.error('Error deleting GitHub credential:', getApiError(payload, 'Failed to delete GitHub credential'));
-        return;
-      }
+      requireSuccess(
+        await apiClient.delete<GithubCredentialsResponse>(
+          `/api/settings/credentials/${encodeURIComponent(credentialId)}`,
+        ),
+        'Failed to delete GitHub credential',
+      );
 
       await fetchData();
     } catch (error) {
@@ -188,16 +163,13 @@ export function useCredentialsSettings({
 
   const toggleGithubCredential = useCallback(async (credentialId: string, isActive: boolean) => {
     try {
-      const response = await authenticatedFetch(`/api/settings/credentials/${credentialId}/toggle`, {
-        method: 'PATCH',
-        body: JSON.stringify({ isActive: !isActive }),
-      });
-
-      if (!response.ok) {
-        const payload = await response.json() as GithubCredentialsResponse;
-        console.error('Error toggling GitHub credential:', getApiError(payload, 'Failed to toggle GitHub credential'));
-        return;
-      }
+      requireSuccess(
+        await apiClient.patch<GithubCredentialsResponse>(
+          `/api/settings/credentials/${encodeURIComponent(credentialId)}/toggle`,
+          { isActive: !isActive },
+        ),
+        'Failed to toggle GitHub credential',
+      );
 
       await fetchData();
     } catch (error) {

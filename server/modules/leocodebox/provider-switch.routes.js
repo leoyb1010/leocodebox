@@ -1,0 +1,576 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import crypto from 'node:crypto';
+
+import express from 'express';
+
+import { PROVIDER_TEMPLATES } from '../../shared/provider-templates.js';
+
+
+import { applyProviderTransactionally } from './provider-apply.service.js';
+import {
+  detectActiveByTarget,
+  importCcSwitchProviders,
+  importCurrentProviders,
+} from './provider-import.service.js';
+import {
+  allowedConfigDestinations,
+  backupFile,
+  configStatus,
+  defaultSnapshotPath,
+  ensureDefaultSnapshot,
+  readDefaultSnapshot,
+  resolveBackupDestination,
+} from './provider-backup.service.js';
+import {
+  benchmarkProviderModel,
+  discoverProviderModels,
+  testProviderConnectivity,
+  testProviderEndpoints,
+  validateProviderBaseUrl,
+} from './provider-discovery.service.js';
+import {
+  normalizeEndpointUrls,
+  normalizeModelMapping,
+  normalizeProvider,
+  normalizeTarget,
+  readStore,
+  sanitizeIdPart,
+  sanitizeProvider,
+  upsertProviderInStore,
+  withSwitchMutation,
+  writeStore,
+} from './provider-store.service.js';
+import {
+  displayConfigPath,
+  providerStorePath,
+  switchDir,
+  TARGETS,
+  targetConfigPaths,
+} from './provider-switch.config.js';
+import {
+  atomicWrite,
+  captureFiles,
+  fileExists,
+  nowIso,
+  restoreFiles,
+  safeText,
+} from './provider-switch.storage.js';
+
+
+const router = express.Router();
+
+
+
+
+
+router.use('/switch', (req, res, next) => {
+  if (process.env.LEOCODEBOX_LOCAL_ONLY === '1' || process.env.LEOCODEBOX_TEST_HOME) {
+    next();
+    return;
+  }
+  res.status(403).json({ success: false, error: 'Provider switching is available only in local-only mode.' });
+});
+
+router.get('/switch/status', async (_req, res, next) => {
+  try {
+    const store = await readStore();
+    const activeByTarget = await detectActiveByTarget(store.providers, store.activeByTarget);
+    await Promise.all(Object.keys(activeByTarget).map((target) => (
+      TARGETS[target]?.writable ? ensureDefaultSnapshot(target, store) : Promise.resolve()
+    )));
+    const nativeAvailableByTarget = Object.fromEntries(await Promise.all(
+      Object.values(TARGETS).map(async (target) => [
+        target.id,
+        target.writable && await fileExists(defaultSnapshotPath(target.id)),
+      ]),
+    ));
+    res.json({
+      success: true,
+      targets: configStatus(),
+      presets: PROVIDER_TEMPLATES,
+      activeByTarget,
+      nativeAvailableByTarget,
+      lastAppliedByTarget: store.activeByTarget,
+      providers: store.providers.map(sanitizeProvider),
+      storePath: providerStorePath(),
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+
+function validateProviderDestinations(provider) {
+  if (provider.baseUrl) validateProviderBaseUrl(provider.baseUrl);
+  for (const endpoint of normalizeEndpointUrls(provider, provider, provider.baseUrl)) {
+    validateProviderBaseUrl(endpoint);
+  }
+}
+
+function providerCredentialDestinationFingerprint(provider) {
+  const endpoints = normalizeEndpointUrls(provider, provider, provider.baseUrl)
+    .map((endpoint) => validateProviderBaseUrl(endpoint))
+    .sort();
+  return crypto.createHash('sha256').update(JSON.stringify({
+    target: provider.target,
+    baseUrl: provider.baseUrl ? validateProviderBaseUrl(provider.baseUrl) : '',
+    wireApi: provider.wireApi,
+    endpoints,
+  })).digest('hex');
+}
+
+function providerDiscoveryConfigFingerprint(provider) {
+  return crypto.createHash('sha256').update(JSON.stringify({
+    target: provider.target,
+    baseUrl: provider.baseUrl,
+    apiKey: provider.apiKey,
+    wireApi: provider.wireApi,
+  })).digest('hex');
+}
+
+function scheduleProviderModelDiscovery(provider, timeoutMs) {
+  const providerId = provider.id;
+  const expectedFingerprint = providerDiscoveryConfigFingerprint(provider);
+  void discoverProviderModels(provider, { bypassCache: true, timeoutMs }).then(async (discovery) => {
+    await withSwitchMutation(async () => {
+      const store = await readStore();
+      const latestProvider = store.providers.find((item) => item.id === providerId);
+      if (!latestProvider || providerDiscoveryConfigFingerprint(latestProvider) !== expectedFingerprint) return;
+      latestProvider.discoveredModels = discovery.models;
+      latestProvider.modelDiscovery = {
+        endpoint: discovery.endpoint,
+        updatedAt: discovery.cache.updatedAt,
+        expiresAt: discovery.cache.expiresAt,
+        latencyMs: discovery.latencyMs,
+        httpStatus: discovery.httpStatus,
+        modelCount: discovery.models.length,
+        lastSuccessAt: nowIso(),
+        lastErrorAt: null,
+      };
+      latestProvider.modelDiscoveryError = '';
+      if (!latestProvider.model && discovery.models[0]) {
+        latestProvider.model = discovery.models[0];
+        latestProvider.modelMapping = normalizeModelMapping({}, latestProvider, latestProvider.model);
+      }
+      latestProvider.updatedAt = nowIso();
+      await writeStore(store);
+    });
+  }).catch(async (error) => {
+    console.warn(`Provider model discovery failed for ${providerId}:`, error);
+    await withSwitchMutation(async () => {
+      const store = await readStore();
+      const latestProvider = store.providers.find((item) => item.id === providerId);
+      if (!latestProvider || providerDiscoveryConfigFingerprint(latestProvider) !== expectedFingerprint) return;
+      latestProvider.modelDiscoveryError = safeText(error?.message || '未知错误', 500);
+      latestProvider.modelDiscovery = {
+        ...(latestProvider.modelDiscovery || {}),
+        lastErrorAt: nowIso(),
+      };
+      latestProvider.updatedAt = nowIso();
+      await writeStore(store);
+    });
+  });
+}
+
+router.post('/switch/providers', async (req, res, next) => {
+  try {
+    const provider = await withSwitchMutation(async () => {
+      const store = await readStore();
+      const existing = req.body?.id ? store.providers.find((item) => item.id === req.body.id) : null;
+      const savedProvider = normalizeProvider(req.body, existing);
+      validateProviderDestinations(savedProvider);
+      if (existing?.apiKey && savedProvider.apiKey === existing.apiKey
+        && providerCredentialDestinationFingerprint(savedProvider) !== providerCredentialDestinationFingerprint(existing)) {
+        const error = new Error('修改请求地址、协议或端点时必须重新输入 API Key。');
+        error.statusCode = 400;
+        throw error;
+      }
+      upsertProviderInStore(store, savedProvider);
+      await writeStore(store);
+      return savedProvider;
+    });
+
+    const shouldDiscover = req.body?.autoDiscover === true && provider.baseUrl && provider.apiKey;
+    res.json({
+      success: true,
+      provider: sanitizeProvider(provider),
+      discovery: shouldDiscover ? 'pending' : null,
+      warning: null,
+    });
+    if (shouldDiscover) scheduleProviderModelDiscovery(provider, req.body?.timeoutMs);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/switch/providers/:id/apply', async (req, res, next) => {
+  try {
+    await withSwitchMutation(async () => {
+      const store = await readStore();
+      const provider = store.providers.find((item) => item.id === req.params.id);
+      if (!provider) {
+        res.status(404).json({ success: false, error: 'Provider not found.' });
+        return;
+      }
+
+      await ensureDefaultSnapshot(provider.target, store);
+      const changedFiles = await applyProviderTransactionally(provider, async () => {
+        store.activeByTarget[provider.target] = provider.id;
+        provider.lastAppliedAt = nowIso();
+        provider.updatedAt = nowIso();
+        await writeStore(store);
+      });
+
+      res.json({
+        success: true,
+        provider: sanitizeProvider(provider),
+        activeByTarget: store.activeByTarget,
+        activeModel: provider.target === 'opencode' && provider.model
+          ? `leocodebox_${sanitizeIdPart(provider.id)}/${provider.model}`
+          : provider.model || null,
+        changedFiles,
+      });
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/switch/targets/:target/restore-default', async (req, res, next) => {
+  try {
+    await withSwitchMutation(async () => {
+      const target = normalizeTarget(req.params.target);
+      if (!target || !TARGETS[target].writable) {
+        res.status(400).json({ success: false, error: 'This target does not support configuration restore.' });
+        return;
+      }
+      const snapshots = await readDefaultSnapshot(target);
+      if (!snapshots) {
+        res.status(404).json({ success: false, error: '尚未保存本机原配置。首次启用自定义接口时会自动保存。' });
+        return;
+      }
+
+      const current = await captureFiles(targetConfigPaths(target));
+      try {
+        for (const filePath of targetConfigPaths(target)) await backupFile(filePath);
+        await restoreFiles(snapshots);
+        const store = await readStore();
+        delete store.activeByTarget[target];
+        await writeStore(store);
+        res.json({
+          success: true,
+          target,
+          restoredFiles: snapshots.map((snapshot) => displayConfigPath(snapshot.filePath)),
+          activeByTarget: store.activeByTarget,
+        });
+      } catch (error) {
+        await restoreFiles(current);
+        throw error;
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/switch/import-current', async (_req, res, next) => {
+  try {
+    await withSwitchMutation(async () => {
+      const store = await readStore();
+      const imported = await importCurrentProviders(store);
+      await writeStore(store);
+      res.json({
+        success: true,
+        imported: imported.map(sanitizeProvider),
+        providers: store.providers.map(sanitizeProvider),
+        activeByTarget: store.activeByTarget,
+      });
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/switch/import-cc-switch', async (_req, res, next) => {
+  try {
+    await withSwitchMutation(async () => {
+      const store = await readStore();
+      const result = await importCcSwitchProviders(store);
+      if (!result.dbFound) {
+        res.status(404).json({ success: false, error: '未找到旧切换器数据库（~/.cc-switch/cc-switch.db）。' });
+        return;
+      }
+      await writeStore(store);
+      res.json({
+        success: true,
+        imported: result.imported.map(sanitizeProvider),
+        skipped: result.skipped,
+        providers: store.providers.map(sanitizeProvider),
+        activeByTarget: store.activeByTarget,
+      });
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.delete('/switch/providers/:id', async (req, res, next) => {
+  try {
+    await withSwitchMutation(async () => {
+      const store = await readStore();
+      const index = store.providers.findIndex((item) => item.id === req.params.id);
+      if (index === -1) {
+        res.status(404).json({ success: false, error: 'Provider not found.' });
+        return;
+      }
+      const [removed] = store.providers.splice(index, 1);
+      for (const [target, activeId] of Object.entries(store.activeByTarget)) {
+        if (activeId === removed.id) delete store.activeByTarget[target];
+      }
+      await writeStore(store);
+      res.json({
+        success: true,
+        removed: sanitizeProvider(removed),
+        providers: store.providers.map(sanitizeProvider),
+        activeByTarget: store.activeByTarget,
+      });
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/switch/providers/:id/test', async (req, res, next) => {
+  try {
+    const store = await readStore();
+    const provider = store.providers.find((item) => item.id === req.params.id);
+    if (!provider) {
+      res.status(404).json({ success: false, error: 'Provider not found.' });
+      return;
+    }
+    const result = await testProviderConnectivity(provider);
+    res.json({ success: true, provider: provider.id, ...result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/switch/discover-models', async (req, res, next) => {
+  try {
+    let apiKey = req.body?.apiKey;
+    if (!apiKey && req.body?.useStoredKey === true && req.body?.providerId) {
+      const store = await readStore();
+      const storedProvider = store.providers.find((item) => item.id === req.body.providerId);
+      if (!storedProvider) {
+        res.status(404).json({ success: false, error: 'Provider not found.' });
+        return;
+      }
+      const draftDestination = normalizeProvider({
+        ...storedProvider,
+        target: req.body?.target,
+        baseUrl: req.body?.baseUrl,
+        wireApi: req.body?.wireApi,
+        apiKey: storedProvider.apiKey,
+      }, storedProvider);
+      if (providerCredentialDestinationFingerprint(draftDestination) !== providerCredentialDestinationFingerprint(storedProvider)) {
+        res.status(400).json({ success: false, error: '修改请求地址或协议后必须重新输入 API Key。' });
+        return;
+      }
+      apiKey = storedProvider.apiKey || '';
+    }
+    const provider = normalizeProvider({
+      id: 'draft-model-discovery',
+      name: 'Draft',
+      target: req.body?.target,
+      baseUrl: req.body?.baseUrl,
+      apiKey,
+      wireApi: req.body?.wireApi,
+    });
+    const result = await discoverProviderModels(provider, {
+      baseUrl: req.body?.baseUrl,
+      timeoutMs: req.body?.timeoutMs,
+      bypassCache: req.body?.bypassCache === true,
+    });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/switch/providers/:id/models', async (req, res, next) => {
+  try {
+    const store = await readStore();
+    const provider = store.providers.find((item) => item.id === req.params.id);
+    if (!provider) {
+      res.status(404).json({ success: false, error: 'Provider not found.' });
+      return;
+    }
+    const result = await discoverProviderModels(provider, {
+      timeoutMs: req.body?.timeoutMs,
+      bypassCache: true,
+    });
+    await withSwitchMutation(async () => {
+      const latestStore = await readStore();
+      const latestProvider = latestStore.providers.find((item) => item.id === req.params.id);
+      if (!latestProvider) return;
+      latestProvider.discoveredModels = result.models;
+      latestProvider.modelDiscovery = {
+        endpoint: result.endpoint,
+        updatedAt: result.cache.updatedAt,
+        expiresAt: result.cache.expiresAt,
+        latencyMs: result.latencyMs,
+        httpStatus: result.httpStatus,
+        modelCount: result.models.length,
+        lastSuccessAt: nowIso(),
+        lastErrorAt: null,
+      };
+      latestProvider.modelDiscoveryError = '';
+      latestProvider.updatedAt = nowIso();
+      await writeStore(latestStore);
+    });
+    res.json({ success: true, provider: provider.id, ...result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/switch/providers/:id/benchmark', async (req, res, next) => {
+  try {
+    const store = await readStore();
+    const provider = store.providers.find((item) => item.id === req.params.id);
+    if (!provider) {
+      res.status(404).json({ success: false, error: 'Provider not found.' });
+      return;
+    }
+    const result = await benchmarkProviderModel(provider, req.body || {});
+    res.json({ success: true, provider: provider.id, ...result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/switch/providers/:id/endpoints/test', async (req, res, next) => {
+  try {
+    await withSwitchMutation(async () => {
+      const store = await readStore();
+      const provider = store.providers.find((item) => item.id === req.params.id);
+      if (!provider) {
+        res.status(404).json({ success: false, error: 'Provider not found.' });
+        return;
+      }
+      const requestedEndpoints = Array.isArray(req.body?.endpoints)
+        ? req.body.endpoints.map((endpoint) => safeText(typeof endpoint === 'string' ? endpoint : endpoint?.url, 800).replace(/\/+$/, '')).filter(Boolean)
+        : provider.endpoints;
+      const persistedEndpoints = new Set(normalizeEndpointUrls(provider, provider, provider.baseUrl));
+      const untrustedEndpoint = requestedEndpoints.find((endpoint) => !persistedEndpoints.has(endpoint));
+      if (untrustedEndpoint) {
+        res.status(400).json({ success: false, error: '测试新端点前必须编辑 Provider 并重新输入 API Key。' });
+        return;
+      }
+      if (requestedEndpoints?.length && !requestedEndpoints.includes(provider.baseUrl)) {
+        provider.baseUrl = requestedEndpoints[0];
+      }
+      const endpoints = normalizeEndpointUrls({ endpoints: requestedEndpoints }, provider, provider.baseUrl);
+      const results = await testProviderEndpoints(provider, { ...req.body, endpoints });
+      const autoSelectEndpoint = typeof req.body?.autoSelectEndpoint === 'boolean'
+        ? req.body.autoSelectEndpoint
+        : Boolean(provider.autoSelectEndpoint);
+      const fastest = results
+        .filter((result) => result.usable)
+        .sort((left, right) => left.latencyMs - right.latencyMs)[0] || null;
+      provider.endpoints = endpoints;
+      provider.autoSelectEndpoint = autoSelectEndpoint;
+      provider.endpointStats = Object.fromEntries(results.map((result) => [result.url, {
+        latencyMs: result.latencyMs,
+        httpStatus: result.httpStatus,
+        authStatus: result.authStatus,
+        usable: result.usable,
+        testedAt: nowIso(),
+      }]));
+      if (autoSelectEndpoint && fastest) provider.baseUrl = fastest.url;
+      provider.updatedAt = nowIso();
+      await writeStore(store);
+      res.json({
+        success: true,
+        provider: sanitizeProvider(provider),
+        selectedBaseUrl: provider.baseUrl,
+        results,
+      });
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/switch/backups', async (_req, res, next) => {
+  try {
+    const root = path.join(switchDir(), 'backups');
+    const backups = [];
+    async function walk(dir) {
+      let entries = [];
+      try {
+        entries = await fs.readdir(dir, { withFileTypes: true });
+      } catch (error) {
+        if (error?.code === 'ENOENT') return;
+        throw error;
+      }
+      for (const entry of entries) {
+        const filePath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          await walk(filePath);
+        } else {
+          const relativePath = path.relative(root, filePath);
+          const targetPath = resolveBackupDestination(relativePath);
+          backups.push({
+            path: filePath,
+            relativePath,
+            targetPath: targetPath ? displayConfigPath(targetPath) : null,
+          });
+        }
+      }
+    }
+    await walk(root);
+    backups.sort((a, b) => b.relativePath.localeCompare(a.relativePath));
+    res.json({ success: true, backups });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/switch/backups/restore', async (req, res, next) => {
+  try {
+    await withSwitchMutation(async () => {
+      const root = path.resolve(switchDir(), 'backups');
+      const relativePath = String(req.body?.relativePath || '').trim();
+      const backupPath = path.resolve(root, relativePath);
+      if (!relativePath || !backupPath.startsWith(`${root}${path.sep}`)) {
+        const error = new Error('Invalid backup path.');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      const destination = resolveBackupDestination(relativePath);
+      if (!destination) {
+        const error = new Error('Backup path does not include a restorable config path.');
+        error.statusCode = 400;
+        throw error;
+      }
+      if (!allowedConfigDestinations().has(destination)) {
+        const error = new Error('Backup destination is not a recognized local Agent config path.');
+        error.statusCode = 400;
+        throw error;
+      }
+
+      const contents = await fs.readFile(backupPath);
+      await backupFile(destination);
+      await atomicWrite(destination, contents, 0o600);
+      res.json({ success: true, restoredPath: destination });
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+
+export default router;

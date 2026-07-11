@@ -52,7 +52,7 @@ export function filterImagesToUploadStore(images: unknown, assetsRootOverride?: 
 type ProviderSpawnFn = (
   command: string,
   options: AnyRecord,
-  writer: unknown
+  writer: object
 ) => Promise<unknown>;
 
 type ChatWebSocketDependencies = {

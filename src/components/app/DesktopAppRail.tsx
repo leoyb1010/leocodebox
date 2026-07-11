@@ -6,6 +6,7 @@ import {
   Settings,
   SlidersHorizontal,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { cn } from '../../lib/utils';
 import { Tooltip } from '../../shared/view/ui';
@@ -20,9 +21,9 @@ type DesktopAppRailProps = {
 };
 
 const primaryItems = [
-  { id: 'projects', label: '项目', icon: FolderKanban, tab: 'files' as AppTab },
-  { id: 'chat', label: '对话', icon: MessageSquare, tab: 'chat' as AppTab },
-  { id: 'git', label: '变更', icon: GitBranch, tab: 'git' as AppTab },
+  { id: 'projects', labelKey: 'workspaceShell.projects', icon: FolderKanban, tab: 'files' as AppTab },
+  { id: 'chat', labelKey: 'workspaceShell.chat', icon: MessageSquare, tab: 'chat' as AppTab },
+  { id: 'git', labelKey: 'workspaceShell.changes', icon: GitBranch, tab: 'git' as AppTab },
 ];
 
 export default function DesktopAppRail({
@@ -32,27 +33,29 @@ export default function DesktopAppRail({
   onShowLeoapi,
   onShowLocalLog,
 }: DesktopAppRailProps) {
+  const { t } = useTranslation();
   return (
     <aside className="leocodebox-app-rail hidden h-full w-[58px] flex-shrink-0 flex-col items-center border-r border-border md:flex">
       <div className="flex h-14 w-full items-center justify-center border-b border-border/70">
         <img src="/logo-32.png" alt="leocodebox" className="h-7 w-7 rounded-md" />
       </div>
 
-      <nav className="flex w-full flex-1 flex-col items-center gap-1 px-2 py-3" aria-label="工作区导航">
+      <nav className="flex w-full flex-1 flex-col items-center gap-1 px-2 py-3" aria-label={t('workspaceShell.navigationLabel')}>
         {primaryItems.map((item) => {
           const Icon = item.icon;
+          const label = t(item.labelKey);
           const isActive = activeTab === item.tab;
           return (
-            <Tooltip key={item.id} content={item.label} position="right">
+            <Tooltip key={item.id} content={label} position="right">
               <button
                 type="button"
-                aria-label={item.label}
+                aria-label={label}
                 aria-current={isActive ? 'page' : undefined}
                 onClick={() => onTabChange(item.tab)}
                 className={cn('leocodebox-rail-button', isActive && 'is-active')}
               >
                 <Icon className="h-[18px] w-[18px]" strokeWidth={isActive ? 2.1 : 1.7} />
-                <span>{item.label}</span>
+                <span>{label}</span>
               </button>
             </Tooltip>
           );
@@ -60,10 +63,10 @@ export default function DesktopAppRail({
 
         <div className="my-2 h-px w-7 bg-border/70" />
 
-        <Tooltip content="本地记录" position="right">
-          <button type="button" aria-label="本地记录" onClick={onShowLocalLog} className="leocodebox-rail-button">
+        <Tooltip content={t('workspaceShell.localLog')} position="right">
+          <button type="button" aria-label={t('workspaceShell.localLog')} onClick={onShowLocalLog} className="leocodebox-rail-button">
             <Activity className="h-[18px] w-[18px]" strokeWidth={1.7} />
-            <span>记录</span>
+            <span>{t('workspaceShell.log')}</span>
           </button>
         </Tooltip>
         <Tooltip content="Leoapi" position="right">
@@ -75,13 +78,13 @@ export default function DesktopAppRail({
       </nav>
 
       <div className="flex w-full flex-col items-center gap-1 border-t border-border/70 px-2 py-3">
-        <Tooltip content="设置" position="right">
-          <button type="button" aria-label="设置" onClick={onShowSettings} className="leocodebox-rail-button">
+        <Tooltip content={t('workspaceShell.settings')} position="right">
+          <button type="button" aria-label={t('workspaceShell.settings')} onClick={onShowSettings} className="leocodebox-rail-button">
             <Settings className="h-[18px] w-[18px]" strokeWidth={1.7} />
-            <span>设置</span>
+            <span>{t('workspaceShell.settings')}</span>
           </button>
         </Tooltip>
-        <span className="mt-1 h-1.5 w-1.5 rounded-full bg-emerald-500" title="本机服务正常" />
+        <span className="mt-1 h-1.5 w-1.5 rounded-full bg-emerald-500" title={t('workspaceShell.serviceHealthy')} />
       </div>
     </aside>
   );

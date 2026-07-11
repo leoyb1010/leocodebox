@@ -1,4 +1,4 @@
-import { api } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 
 import { useApiSource } from './useApiSource';
 
@@ -31,7 +31,10 @@ export function useFilesSource(projectId: string | undefined, enabled: boolean) 
   return useApiSource<FileResult, unknown>({
     enabled: enabled && !!projectId,
     deps: [projectId],
-    fetcher: (signal) => api.getFiles(projectId!, { signal }),
+    fetcher: (signal) => apiClient.raw(
+      `/api/projects/${encodeURIComponent(projectId!)}/files`,
+      { signal },
+    ),
     parse: (data) => {
       const tree: FileNode[] = Array.isArray(data) ? (data as FileNode[]) : [];
       const flat: FileResult[] = [];

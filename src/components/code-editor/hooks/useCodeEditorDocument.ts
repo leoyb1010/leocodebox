@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { api } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 import type { CodeEditorFile } from '../types/types';
 import { isBinaryFile } from '../utils/binaryFile';
 import { getPreviewKind } from '../utils/previewableFile';
@@ -72,12 +72,10 @@ export const useCodeEditorDocument = ({ file, projectPath }: UseCodeEditorDocume
           throw new Error('Missing project identifier');
         }
 
-        const response = await api.readFile(fileProjectId, filePath);
-        if (!response.ok) {
-          throw new Error(`Failed to load file: ${response.status} ${response.statusText}`);
-        }
-
-        const data = await response.json();
+        const data = await apiClient.get<{ content: string }>(
+          `/api/projects/${encodeURIComponent(fileProjectId)}/file`,
+          { filePath },
+        );
         setContent(data.content);
       } catch (error) {
         const message = getErrorMessage(error);
@@ -106,21 +104,10 @@ export const useCodeEditorDocument = ({ file, projectPath }: UseCodeEditorDocume
         throw new Error('Missing project identifier');
       }
 
-      const response = await api.saveFile(fileProjectId, filePath, content);
-
-      if (!response.ok) {
-        const contentType = response.headers.get('content-type');
-        if (contentType?.includes('application/json')) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || `Save failed: ${response.status}`);
-        }
-
-        const textError = await response.text();
-        console.error('Non-JSON error response:', textError);
-        throw new Error(`Save failed: ${response.status} ${response.statusText}`);
-      }
-
-      await response.json();
+      await apiClient.put(
+        `/api/projects/${encodeURIComponent(fileProjectId)}/file`,
+        { filePath, content },
+      );
 
       setSaveSuccess(true);
       setTimeout(() => setSaveSuccess(false), 2000);

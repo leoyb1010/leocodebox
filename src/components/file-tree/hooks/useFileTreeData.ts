@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 
-import { api } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 import type { Project } from '../../../types/app';
 import type { FileTreeNode } from '../types/types';
 
@@ -45,18 +45,11 @@ export function useFileTreeData(selectedProject: Project | null): UseFileTreeDat
         setLoading(true);
       }
       try {
-        const response = await api.getFiles(projectId, { signal: abortControllerRef.current!.signal });
-
-        if (!response.ok) {
-          const errorText = await response.text();
-          console.error('File fetch failed:', response.status, errorText);
-          if (isActive) {
-            setFiles([]);
-          }
-          return;
-        }
-
-        const data = (await response.json()) as FileTreeNode[];
+        const data = await apiClient.get<FileTreeNode[]>(
+          `/api/projects/${encodeURIComponent(projectId)}/files`,
+          undefined,
+          abortControllerRef.current!.signal,
+        );
         if (isActive) {
           setFiles(data);
         }

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { api } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 import { PRD_TEMPLATE } from '../constants';
 import type { PrdFile } from '../types';
 import { createDefaultPrdName, sanitizeFileName, stripPrdExtension } from '../utils/fileName';
@@ -89,12 +89,10 @@ export function usePrdDocument({
         setLoading(true);
 
         // readFile uses the DB projectId to resolve the project's path server-side.
-        const response = await api.readFile(file.projectId, file.path);
-        if (!response.ok) {
-          throw new Error(`Failed to load file: ${response.status} ${response.statusText}`);
-        }
-
-        const data = (await response.json()) as { content?: string };
+        const data = await apiClient.get<{ content?: string }>(
+          `/api/projects/${encodeURIComponent(file.projectId)}/file`,
+          { filePath: file.path },
+        );
         if (!isMounted) {
           return;
         }

@@ -1,5 +1,6 @@
 import { useCallback, useState, type ErrorInfo, type ReactNode } from 'react';
 import { CircleAlert, RotateCcw } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import {
   ErrorBoundary as ReactErrorBoundary,
   type FallbackProps,
@@ -31,17 +32,18 @@ function ErrorFallback({
   showDetails,
   componentStack,
 }: ErrorFallbackProps) {
+  const { t } = useTranslation();
   const canShowDetails = showDetails && import.meta.env.DEV;
 
   return (
     <div className="flex h-full min-h-48 items-center justify-center p-6 text-center">
       <div className="w-full max-w-md rounded-md border border-destructive/30 bg-card p-6 shadow-sm">
         <CircleAlert className="mx-auto h-7 w-7 text-destructive" aria-hidden="true" />
-        <h3 className="mt-3 text-sm font-semibold text-foreground">此区域暂时无法加载</h3>
-        <p className="mt-1 text-sm text-muted-foreground">可以重新加载该区域；其他项目和会话不会受到影响。</p>
+        <h3 className="mt-3 text-sm font-semibold text-foreground">{t('errorBoundary.regionTitle')}</h3>
+        <p className="mt-1 text-sm text-muted-foreground">{t('errorBoundary.regionDescription')}</p>
         {canShowDetails && (
           <details className="mt-4 text-left">
-            <summary className="cursor-pointer text-xs font-medium text-muted-foreground">查看开发错误详情</summary>
+            <summary className="cursor-pointer text-xs font-medium text-muted-foreground">{t('errorBoundary.details')}</summary>
             <pre className="mt-2 max-h-40 overflow-auto rounded-md border border-border bg-muted p-3 font-mono text-xs text-muted-foreground">
                 {formatError(error)}
                 {componentStack}
@@ -54,7 +56,7 @@ function ErrorFallback({
           className="mx-auto mt-5 inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         >
           <RotateCcw className="h-4 w-4" aria-hidden="true" />
-          重新加载
+          {t('errorBoundary.reload')}
         </button>
       </div>
     </div>

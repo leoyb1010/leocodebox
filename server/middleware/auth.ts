@@ -1,5 +1,6 @@
 import { timingSafeEqual } from 'node:crypto';
 
+import type { NextFunction, Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 
 import { userDb, appConfigDb } from '../modules/database/index.js';
@@ -11,7 +12,10 @@ const IS_LOCAL_ONLY_AUTH = process.env.LEOCODEBOX_LOCAL_ONLY === '1' || process.
 const getLocalOnlyUser = () => userDb.getOrCreateLocalUser();
 const LOCAL_ONLY_AUTH_TOKEN = process.env.LEOCODEBOX_LOCAL_AUTH_TOKEN || process.env.CLOUDCLI_DESKTOP_LOCAL_AUTH_TOKEN || '';
 
-const safeTokenEquals = (actual, expected) => {
+type AuthUser = { id: number; username: string };
+type AuthenticatedRequest = Request & { user?: AuthUser };
+
+const safeTokenEquals = (actual: string | null | undefined, expected: string | null | undefined): boolean => {
   if (!actual || !expected) return false;
   const actualBuffer = Buffer.from(String(actual));
   const expectedBuffer = Buffer.from(String(expected));
@@ -19,16 +23,16 @@ const safeTokenEquals = (actual, expected) => {
   return timingSafeEqual(actualBuffer, expectedBuffer);
 };
 
-const isLocalOnlyAuthToken = (token) => safeTokenEquals(token, LOCAL_ONLY_AUTH_TOKEN);
+const isLocalOnlyAuthToken = (token: string | null | undefined): boolean => safeTokenEquals(token, LOCAL_ONLY_AUTH_TOKEN);
 
-const getRequestToken = (req) => {
+const getRequestToken = (req: Request): string | null => {
   const authHeader = req.headers['authorization'];
   let token = authHeader && authHeader.split(' ')[1];
   return token || null;
 };
 
 // Optional API key middleware
-const validateApiKey = (req, res, next) => {
+const validateApiKey = (req: Request, res: Response, next: NextFunction) => {
   // Skip API key validation if not configured
   if (!process.env.API_KEY) {
     return next();
@@ -42,7 +46,7 @@ const validateApiKey = (req, res, next) => {
 };
 
 // JWT authentication middleware
-const authenticateToken = async (req, res, next) => {
+const authenticateToken = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   if (IS_LOCAL_ONLY_AUTH) {
     const token = getRequestToken(req);
     if (!isLocalOnlyAuthToken(token)) {
@@ -84,7 +88,7 @@ const authenticateToken = async (req, res, next) => {
     const decoded = jwt.verify(token, JWT_SECRET);
 
     // Verify user still exists and is active
-    const user = userDb.getUserById(decoded.userId);
+    const user = typeof decoded.userId === 'number' ? userDb.getUserById(decoded.userId) : undefined;
     if (!user) {
       return res.status(401).json({ error: 'Invalid token. User not found.' });
     }
@@ -108,7 +112,7 @@ const authenticateToken = async (req, res, next) => {
 };
 
 // Generate JWT token
-const generateToken = (user) => {
+const generateToken = (user: AuthUser): string => {
   return jwt.sign(
     {
       userId: user.id,
@@ -120,7 +124,7 @@ const generateToken = (user) => {
 };
 
 // WebSocket authentication function
-const authenticateWebSocket = (token) => {
+const authenticateWebSocket = (token: string | null | undefined): AuthUser | ({ userId: number; username: string }) | null => {
   if (IS_LOCAL_ONLY_AUTH) {
     if (!isLocalOnlyAuthToken(token)) {
       return null;
@@ -157,7 +161,7 @@ const authenticateWebSocket = (token) => {
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
     // Verify user actually exists in database (matches REST authenticateToken behavior)
-    const user = userDb.getUserById(decoded.userId);
+    const user = typeof decoded.userId === 'number' ? userDb.getUserById(decoded.userId) : undefined;
     if (!user) {
       return null;
     }

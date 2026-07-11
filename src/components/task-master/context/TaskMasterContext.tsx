@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
-import { api } from '../../../utils/api';
+import { apiClient } from '../../../utils/apiClient';
 import { useAuth } from '../../auth/context/AuthContext';
 import { useWebSocket } from '../../../contexts/WebSocketContext';
 import type { ServerEvent } from '../../../contexts/WebSocketContext';
@@ -137,12 +137,9 @@ export function TaskMasterProvider({ children }: { children: React.ReactNode }) 
       const requestSequence = ++taskMasterRequestSeqRef.current;
 
       try {
-        const response = await api.projectTaskmaster(projectId);
-        if (!response.ok) {
-          throw new Error(`Failed to fetch TaskMaster details: ${response.status}`);
-        }
-
-        const data = (await response.json()) as { taskmaster?: TaskMasterProjectInfo };
+        const data = await apiClient.get<{ taskmaster?: TaskMasterProjectInfo }>(
+          `/api/projects/${encodeURIComponent(projectId)}/taskmaster`,
+        );
         const resolvedTaskMasterInfo = data.taskmaster ?? null;
 
         if (
@@ -202,12 +199,7 @@ export function TaskMasterProvider({ children }: { children: React.ReactNode }) 
       setIsLoading(true);
       clearError();
 
-      const response = await api.get('/projects');
-      if (!response.ok) {
-        throw new Error(`Failed to fetch projects: ${response.status}`);
-      }
-
-      const data = (await response.json()) as unknown;
+      const data = await apiClient.get<unknown>('/api/projects');
       const loadedProjects = Array.isArray(data) ? (data as TaskMasterProject[]) : [];
       const enrichedProjects = loadedProjects.map((project) => enrichProject(project));
 
@@ -281,13 +273,9 @@ export function TaskMasterProvider({ children }: { children: React.ReactNode }) 
       setIsLoadingTasks(true);
       clearError();
 
-      const response = await api.get(`/taskmaster/tasks/${encodeURIComponent(projectId)}`);
-      if (!response.ok) {
-        const errorPayload = (await response.json()) as { message?: string };
-        throw new Error(errorPayload.message ?? 'Failed to load tasks');
-      }
-
-      const data = (await response.json()) as { tasks?: TaskMasterTask[] };
+      const data = await apiClient.get<{ tasks?: TaskMasterTask[] }>(
+        `/api/taskmaster/tasks/${encodeURIComponent(projectId)}`,
+      );
       const loadedTasks = Array.isArray(data.tasks) ? data.tasks : [];
 
       setTasks(loadedTasks);
@@ -311,12 +299,7 @@ export function TaskMasterProvider({ children }: { children: React.ReactNode }) 
       setIsLoadingMCP(true);
       clearError();
 
-      const response = await api.get('/mcp-utils/taskmaster-server');
-      if (!response.ok) {
-        throw new Error(`Failed to load MCP status: ${response.status}`);
-      }
-
-      const status = (await response.json()) as TaskMasterMcpStatus;
+      const status = await apiClient.get<TaskMasterMcpStatus>('/api/mcp-utils/taskmaster-server');
       setMcpServerStatus(status);
     } catch (caughtError) {
       handleError('check MCP server status', caughtError);
