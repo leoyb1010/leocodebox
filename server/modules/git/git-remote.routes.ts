@@ -18,7 +18,7 @@ function getErrorMessage(error: unknown): string {
 
 router.get('/remote-status', async (req, res) => {
   const project = typeof req.query.project === 'string' ? req.query.project : '';
-  
+
   if (!project) {
     return res.status(400).json({ error: 'Project id is required' });
   }
@@ -74,7 +74,7 @@ router.get('/remote-status', async (req, res) => {
       'git', ['rev-list', '--count', '--left-right', `${trackingBranch}...HEAD`],
       { cwd: projectPath }
     );
-    
+
     const [behind, ahead] = countOutput.trim().split('\t').map(Number);
 
     res.json({
@@ -96,7 +96,7 @@ router.get('/remote-status', async (req, res) => {
 // Fetch from remote (using smart remote detection)
 router.post('/fetch', async (req, res) => {
   const { project } = req.body;
-  
+
   if (!project) {
     return res.status(400).json({ error: 'Project id is required' });
   }
@@ -123,9 +123,9 @@ router.post('/fetch', async (req, res) => {
     res.json({ success: true, output: stdout || 'Fetch completed successfully', remoteName });
   } catch (error) {
     console.error('Git fetch error:', error);
-    res.status(500).json({ 
-      error: 'Fetch failed', 
-      details: getErrorMessage(error).includes('Could not resolve hostname') 
+    res.status(500).json({
+      error: 'Fetch failed',
+      details: getErrorMessage(error).includes('Could not resolve hostname')
         ? 'Unable to connect to remote repository. Check your internet connection.'
         : getErrorMessage(error).includes('fatal: \'origin\' does not appear to be a git repository')
         ? 'No remote repository configured. Add a remote with: git remote add origin <url>'
@@ -137,7 +137,7 @@ router.post('/fetch', async (req, res) => {
 // Pull from remote (fetch + merge using smart remote detection)
 router.post('/pull', async (req, res) => {
   const { project } = req.body;
-  
+
   if (!project) {
     return res.status(400).json({ error: 'Project id is required' });
   }
@@ -177,12 +177,12 @@ router.post('/pull', async (req, res) => {
     // Enhanced error handling for common pull scenarios
     let errorMessage = 'Pull failed';
     let details = getErrorMessage(error);
-    
+
     if (getErrorMessage(error).includes('CONFLICT')) {
       errorMessage = 'Merge conflicts detected';
       details = 'Pull created merge conflicts. Please resolve conflicts manually in the editor, then commit the changes.';
     } else if (getErrorMessage(error).includes('Please commit your changes or stash them')) {
-      errorMessage = 'Uncommitted changes detected';  
+      errorMessage = 'Uncommitted changes detected';
       details = 'Please commit or stash your local changes before pulling.';
     } else if (getErrorMessage(error).includes('Could not resolve hostname')) {
       errorMessage = 'Network error';
@@ -194,9 +194,9 @@ router.post('/pull', async (req, res) => {
       errorMessage = 'Branches have diverged';
       details = 'Your local branch and remote branch have diverged. Consider fetching first to review changes.';
     }
-    
-    res.status(500).json({ 
-      error: errorMessage, 
+
+    res.status(500).json({
+      error: errorMessage,
       details: details
     });
   }
@@ -205,7 +205,7 @@ router.post('/pull', async (req, res) => {
 // Push commits to remote repository
 router.post('/push', async (req, res) => {
   const { project } = req.body;
-  
+
   if (!project) {
     return res.status(400).json({ error: 'Project id is required' });
   }
@@ -241,11 +241,11 @@ router.post('/push', async (req, res) => {
     });
   } catch (error) {
     console.error('Git push error:', error);
-    
+
     // Enhanced error handling for common push scenarios
     let errorMessage = 'Push failed';
     let details = getErrorMessage(error);
-    
+
     if (getErrorMessage(error).includes('rejected')) {
       errorMessage = 'Push rejected';
       details = 'The remote has newer commits. Pull first to merge changes before pushing.';
@@ -265,9 +265,9 @@ router.post('/push', async (req, res) => {
       errorMessage = 'No upstream branch';
       details = 'No upstream branch configured. Use: git push --set-upstream origin <branch>';
     }
-    
-    res.status(500).json({ 
-      error: errorMessage, 
+
+    res.status(500).json({
+      error: errorMessage,
       details: details
     });
   }
@@ -276,7 +276,7 @@ router.post('/push', async (req, res) => {
 // Publish branch to remote (set upstream and push)
 router.post('/publish', async (req, res) => {
   const { project, branch } = req.body;
-  
+
   if (!project || !branch) {
     return res.status(400).json({ error: 'Project id and branch are required' });
   }
@@ -317,20 +317,20 @@ router.post('/publish', async (req, res) => {
     // Publish the branch (set upstream and push)
     validateRemoteName(remoteName);
     const { stdout } = await spawnAsync('git', ['push', '--set-upstream', remoteName, branch], { cwd: projectPath });
-    
-    res.json({ 
-      success: true, 
-      output: stdout || 'Branch published successfully', 
+
+    res.json({
+      success: true,
+      output: stdout || 'Branch published successfully',
       remoteName,
       branch
     });
   } catch (error) {
     console.error('Git publish error:', error);
-    
+
     // Enhanced error handling for common publish scenarios
     let errorMessage = 'Publish failed';
     let details = getErrorMessage(error);
-    
+
     if (getErrorMessage(error).includes('rejected')) {
       errorMessage = 'Publish rejected';
       details = 'The remote branch already exists and has different commits. Use push instead.';
@@ -344,9 +344,9 @@ router.post('/publish', async (req, res) => {
       errorMessage = 'Remote not configured';
       details = 'Remote repository not properly configured. Check your remote URL.';
     }
-    
-    res.status(500).json({ 
-      error: errorMessage, 
+
+    res.status(500).json({
+      error: errorMessage,
       details: details
     });
   }

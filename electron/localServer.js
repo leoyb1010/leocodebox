@@ -297,9 +297,9 @@ export class LocalServerController {
 
   getPendingTarget() {
     return {
-	      kind: 'local',
-	      name: '本地 leocodebox',
-	      url: this.localServerUrl || `http://${DISPLAY_HOST}:${this.localServerPort || DEFAULT_PORT}`,
+      kind: 'local',
+      name: '本地 leocodebox',
+      url: this.localServerUrl || `http://${DISPLAY_HOST}:${this.localServerPort || DEFAULT_PORT}`,
     };
   }
 
@@ -456,7 +456,7 @@ export class LocalServerController {
     childProcess.once('exit', (code, signal) => {
       this.appendStartupLog(`process exited with code ${code ?? 'null'} and signal ${signal ?? 'null'}`);
       if (this.ownedServerProcess) {
-	        console.error(`leocodebox desktop server exited with code ${code ?? 'null'} and signal ${signal ?? 'null'}`);
+        console.error(`leocodebox desktop server exited with code ${code ?? 'null'} and signal ${signal ?? 'null'}`);
       }
       if (this.ownedServerProcess === childProcess) {
         this.ownedServerProcess = null;
@@ -488,7 +488,7 @@ export class LocalServerController {
         if (await isLeocodeboxServer(candidateUrl)) {
           const displayUrl = getDisplayUrl(candidateUrl);
           this.localServerPort = getPortFromUrl(candidateUrl);
-	          this.appendStartupLog(`Using existing Local leocodebox at ${displayUrl}`);
+          this.appendStartupLog(`Using existing Local leocodebox at ${displayUrl}`);
           return displayUrl;
         }
       }
@@ -513,7 +513,7 @@ export class LocalServerController {
       ].join('\n\n'));
     }
 
-	    this.appendStartupLog(`Local leocodebox ready at ${displayUrl}`);
+    this.appendStartupLog(`Local leocodebox ready at ${displayUrl}`);
     this.localServerUrl = displayUrl;
     return displayUrl;
   }
@@ -549,9 +549,9 @@ export class LocalServerController {
   async getResolvedTarget() {
     await this.ensureLocalServer();
     return {
-	      kind: 'local',
-	      name: '本地 leocodebox',
-	      url: this.localServerUrl,
+      kind: 'local',
+      name: '本地 leocodebox',
+      url: this.localServerUrl,
     };
   }
 

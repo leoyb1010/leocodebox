@@ -10,6 +10,7 @@ import {
   LEGACY_UPDATE_BRIDGE_VERSION,
   clearUpdaterTokenEnvironment,
 } from './updater.js';
+import { getUpdateMetadataVersion } from './versionBridge.js';
 
 class FakeUpdater extends EventEmitter {
   setFeedURL(options) {
@@ -86,11 +87,11 @@ test('private updater requires a credential and never exposes the saved token in
   }
 });
 
-test('version reset bridge updates legacy builds without looping on 1.1.5', async () => {
+test('historical version reset bridge does not loop on 1.1.3', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'leocodebox-updater-bridge-'));
   const updater = new FakeUpdater();
   const controller = new DesktopUpdaterController({
-    appVersion: '1.1.5',
+    appVersion: '1.1.3',
     isPackaged: true,
     settingsPath: path.join(root, 'updater.json'),
     updater,
@@ -100,17 +101,17 @@ test('version reset bridge updates legacy builds without looping on 1.1.5', asyn
   try {
     await controller.load();
     assert.equal(await updater.isUpdateSupported({ version: LEGACY_UPDATE_BRIDGE_VERSION }), false);
-    assert.equal(await updater.isUpdateSupported({ version: '1.1.6' }), true);
+    assert.equal(await updater.isUpdateSupported({ version: '1.38.0' }), true);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
 });
 
-test('versions outside the reset target use normal semver updates', async () => {
+test('current releases use normal semver updates', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'leocodebox-updater-current-'));
   const updater = new FakeUpdater();
   const controller = new DesktopUpdaterController({
-    appVersion: '1.37.0',
+    appVersion: '1.38.0',
     isPackaged: true,
     settingsPath: path.join(root, 'updater.json'),
     updater,
@@ -123,4 +124,8 @@ test('versions outside the reset target use normal semver updates', async () => 
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
+});
+
+test('release metadata preserves the current product version', () => {
+  assert.equal(getUpdateMetadataVersion('1.38.0'), '1.38.0');
 });

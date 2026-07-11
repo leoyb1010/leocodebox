@@ -74,7 +74,7 @@ Brief description of what this web application will do and why it's needed.
 
 ## Timeline
 - Phase 1: Core functionality (4-6 weeks)
-- Phase 2: Advanced features (2-4 weeks)  
+- Phase 2: Advanced features (2-4 weeks)
 - Phase 3: Polish and launch (2 weeks)
 
 ## Constraints & Assumptions

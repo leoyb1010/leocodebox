@@ -1,6 +1,6 @@
 {
   "name": "leocodebox",
-  "version": "1.1.5",
+  "version": "1.38.0",
   "productName": "leocodebox",
   "description": "Local desktop controller for coding agents",
   "type": "module",
@@ -32,8 +32,8 @@
   "scripts": {
     "dev": "concurrently --kill-others \"npm run server:dev\" \"npm run client\"",
     "server": "node dist-server/server/index.js",
-    "server:dev": "tsx --tsconfig server/tsconfig.json server/index.js",
-    "server:dev-watch": "tsx watch --tsconfig server/tsconfig.json server/index.js",
+    "server:dev": "tsx --tsconfig server/tsconfig.json server/index.ts",
+    "server:dev-watch": "tsx watch --tsconfig server/tsconfig.json server/index.ts",
     "client": "vite",
     "desktop": "electron electron/main.js",
     "desktop:dev": "cross-env ELECTRON_DEV_URL=http://127.0.0.1:5173 electron electron/main.js",

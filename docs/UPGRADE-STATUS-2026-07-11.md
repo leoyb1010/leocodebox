@@ -1,10 +1,10 @@
 # Workspace 2.0 升级完成度审计
 
-> 审计日期：2026-07-11（Asia/Shanghai）  
-> 原始执行文档：`/Users/admin/Desktop/leocodebox-审查与升级执行文档-2026-07-11.md`  
-> 原始接手线程：`019f5103-a6d7-7750-8f9d-3ec7cfd607a8`  
-> 当前分支：`feat/comprehensive-2.0-upgrade`  
-> 当前基线：`03ddbf4`，相对 `origin/main` 领先 13 个提交
+> 审计日期：2026-07-11（Asia/Shanghai）
+> 原始执行文档：`/Users/admin/Desktop/leocodebox-审查与升级执行文档-2026-07-11.md`
+> 原始接手线程：`019f5103-a6d7-7750-8f9d-3ec7cfd607a8`
+> 原升级分支：`feat/comprehensive-2.0-upgrade`
+> 合并状态：2026-07-12 已快进合并到 `main`，正式候选版本调整为 `1.38.0`
 
 ## 结论
 
@@ -16,7 +16,7 @@
 4. 后端 JS 双轨向 TypeScript modules 的继续迁移；
 5. 四个巨型前端 hook 的继续拆分；
 6. 跨 Provider 会话审计产品页；
-7. 真实签名私有 feed 下的 `1.37.0 -> 1.1.5 -> 1.1.6` 更新链验证；
+7. 真实签名私有 feed 下的 `1.37.0 -> 1.38.0` 更新链验证；
 8. 需用户明确确认后才能执行的 `.claude/worktrees` 删除。
 
 ## Phase 0
@@ -86,10 +86,10 @@
 
 仍未完成：
 
-- 使用 Developer ID 签名的 1.1.5 测试资产；
+- 使用 Developer ID 签名的 1.38.0 测试资产；
 - Apple 公证、App/DMG staple、Gatekeeper 下载后复验；
-- 私有测试 feed 下从真实 1.37.0 更新到合成 feed 版本 1.37.1、安装后显示 1.1.5且不循环；
-- 再从 1.1.5 更新到 1.1.6，证明恢复正常 semver 链。
+- 私有测试 feed 下从真实 1.37.0 更新到 1.38.0，并验证下载、安装与重启完整链路；
+- 后续版本继续按正常递增 semver 发布，不再使用合成版本。
 
 因此当前分支可作为已验证的开发交付分支，但不能仅凭本地未签名验证宣称正式更新链已经完成。
 
@@ -241,3 +241,12 @@ server/modules + runtime + middleware JavaScript：43 → 11
 ```
 
 剩余生产 JavaScript 已收敛为：Agent routes/service、Provider Switch routes/discovery/import，以及 Claude/Codex/Cursor/OpenCode 四个 runtime adapter。真实签名、公证、私有更新 Feed E2E 与 `.claude/worktrees` 删除仍不在本机自动执行。
+
+## 合并收口（2026-07-12）
+
+- `feat/comprehensive-2.0-upgrade` 的 20 个提交已快进合并到本地 `main`。
+- 放弃 `1.37.0 -> 1.1.5` 的版本回退方案，候选版本改为单调递增的 `1.38.0`，更新元数据使用正常 semver。
+- 修正 TypeScript 开发入口、迁移文件行尾空格和 Electron 本地服务格式遗留。
+- Typecheck、全域 ESLint 零警告、228/228 项测试、生产构建、净设备测试、生产依赖审计和 `desktop:pack` 均通过。
+- 打包 App 已在独立端口实机启动，健康接口返回 `1.38.0`，识别 6 类 CLI，退出后端口正常释放。
+- README 下载入口继续指向已签名公证的 `1.37.0`；DMG、Developer ID 签名、公证和部署待候选版确认后单独执行。

@@ -19,7 +19,7 @@ function errorMessage(error: unknown): string {
 router.post('/discard', async (req, res) => {
   const project = typeof req.body?.project === 'string' ? req.body.project : '';
   const file = typeof req.body?.file === 'string' ? req.body.file : '';
-  
+
   if (!project || !file) {
     return res.status(400).json({ error: 'Project id and file path are required' });
   }
@@ -62,7 +62,7 @@ router.post('/discard', async (req, res) => {
       // Added file - unstage it
       await spawnAsync('git', ['reset', 'HEAD', '--', repositoryRelativeFilePath], { cwd: repositoryRootPath });
     }
-    
+
     res.json({ success: true, message: `Changes discarded for ${repositoryRelativeFilePath}` });
   } catch (error) {
     console.error('Git discard error:', error);
@@ -74,7 +74,7 @@ router.post('/discard', async (req, res) => {
 router.post('/delete-untracked', async (req, res) => {
   const project = typeof req.body?.project === 'string' ? req.body.project : '';
   const file = typeof req.body?.file === 'string' ? req.body.file : '';
-  
+
   if (!project || !file) {
     return res.status(400).json({ error: 'Project id and file path are required' });
   }
@@ -93,13 +93,13 @@ router.post('/delete-untracked', async (req, res) => {
       ['status', '--porcelain', '--', repositoryRelativeFilePath],
       { cwd: repositoryRootPath },
     );
-    
+
     if (!statusOutput.trim()) {
       return res.status(400).json({ error: 'File is not untracked or does not exist' });
     }
 
     const status = statusOutput.substring(0, 2);
-    
+
     if (status !== '??') {
       return res.status(400).json({ error: 'File is not untracked. Use discard for tracked files.' });
     }

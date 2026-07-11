@@ -81,14 +81,14 @@ router.get('/status', async (req, res) => {
 router.get('/diff', async (req, res) => {
   const project = typeof req.query.project === 'string' ? req.query.project : '';
   const file = typeof req.query.file === 'string' ? req.query.file : '';
-  
+
   if (!project || !file) {
     return res.status(400).json({ error: 'Project id and file path are required' });
   }
 
   try {
     const projectPath = await getActualProjectPath(project);
-    
+
     // Validate git repository
     await validateGitRepository(projectPath);
 
@@ -289,18 +289,18 @@ router.post('/initial-commit', async (req, res) => {
 // Commit changes
 router.post('/commit', async (req, res) => {
   const { project, message, files } = req.body;
-  
+
   if (!project || !message || !files || files.length === 0) {
     return res.status(400).json({ error: 'Project name, commit message, and files are required' });
   }
 
   try {
     const projectPath = await getActualProjectPath(project);
-    
+
     // Validate git repository
     await validateGitRepository(projectPath);
     const repositoryRootPath = await getRepositoryRootPath(projectPath);
-    
+
     // Stage selected files
     for (const file of files) {
       const { repositoryRelativeFilePath } = await resolveRepositoryFilePath(projectPath, file);
@@ -309,7 +309,7 @@ router.post('/commit', async (req, res) => {
 
     // Commit with message
     const { stdout } = await spawnAsync('git', ['commit', '-m', message], { cwd: repositoryRootPath });
-    
+
     res.json({ success: true, output: stdout });
   } catch (error) {
     console.error('Git commit error:', error);
@@ -425,17 +425,17 @@ router.post('/revert-local-commit', async (req, res) => {
 // Get list of branches
 router.get('/branches', async (req, res) => {
   const project = typeof req.query.project === 'string' ? req.query.project : '';
-  
+
   if (!project) {
     return res.status(400).json({ error: 'Project id is required' });
   }
 
   try {
     const projectPath = await getActualProjectPath(project);
-    
+
     // Validate git repository
     await validateGitRepository(projectPath);
-    
+
     // Get all branches
     const { stdout } = await spawnAsync('git', ['branch', '-a'], { cwd: projectPath });
 
@@ -469,21 +469,21 @@ router.get('/branches', async (req, res) => {
 // Checkout branch
 router.post('/checkout', async (req, res) => {
   const { project, branch } = req.body;
-  
+
   if (!project || !branch) {
     return res.status(400).json({ error: 'Project id and branch are required' });
   }
 
   try {
     const projectPath = await getActualProjectPath(project);
-    
+
     // Checkout the branch. Trailing `--` marks the end of pathspecs so `branch`
     // is always treated as a ref, never as an option (defense-in-depth on top of
     // validateBranchName). Note: for `checkout`/`show` the `--` must follow the
     // ref — a leading `--` would make git read the ref as a file path instead.
     validateBranchName(branch);
     const { stdout } = await spawnAsync('git', ['checkout', branch, '--'], { cwd: projectPath });
-    
+
     res.json({ success: true, output: stdout });
   } catch (error) {
     console.error('Git checkout error:', error);
@@ -494,19 +494,19 @@ router.post('/checkout', async (req, res) => {
 // Create new branch
 router.post('/create-branch', async (req, res) => {
   const { project, branch } = req.body;
-  
+
   if (!project || !branch) {
     return res.status(400).json({ error: 'Project id and branch name are required' });
   }
 
   try {
     const projectPath = await getActualProjectPath(project);
-    
+
     // Create and checkout new branch. Trailing `--` (after the new branch name)
     // ends option/pathspec parsing so the name cannot be read as an option.
     validateBranchName(branch);
     const { stdout } = await spawnAsync('git', ['checkout', '-b', branch, '--'], { cwd: projectPath });
-    
+
     res.json({ success: true, output: stdout });
   } catch (error) {
     console.error('Git create branch error:', error);
@@ -638,7 +638,7 @@ router.get('/commits', async (req, res) => {
 router.get('/commit-diff', async (req, res) => {
   const project = typeof req.query.project === 'string' ? req.query.project : '';
   const commit = typeof req.query.commit === 'string' ? req.query.commit : '';
-  
+
   if (!project || !commit) {
     return res.status(400).json({ error: 'Project id and commit hash are required' });
   }
