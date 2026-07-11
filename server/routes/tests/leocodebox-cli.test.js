@@ -7,7 +7,7 @@ import {
   readCliLatestVersion,
   resolveCliUpdateCommand,
   withCliMutation,
-} from '../../modules/leocodebox/leocodebox.routes.js';
+} from '../../modules/leocodebox/cli-tools.routes.js';
 
 const opencode = {
   id: 'opencode',

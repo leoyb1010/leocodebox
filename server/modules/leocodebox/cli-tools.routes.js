@@ -1,0 +1,327 @@
+import { execFile } from 'node:child_process';
+import fs from 'node:fs/promises';
+
+import express from 'express';
+
+import { compareSemver, fetchJson } from './version-network.utils.js';
+
+const router = express.Router();
+const pendingCliMutations = new Map();
+const cliLatestVersionCache = new Map();
+const CLI_LATEST_VERSION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+
+// ---------------------------------------------------------------------------
+// Agent CLI tooling: live version + one-click self-update
+// ---------------------------------------------------------------------------
+
+const CLI_VERSION_TOKEN = /(?<![\d.])(\d+\.\d+[A-Za-z0-9.+_-]*)/;
+
+const CLI_TOOLS = {
+  claude: {
+    id: 'claude',
+    label: 'Claude Code',
+    cmd: 'claude',
+    updateArgs: ['update'],
+    install: { command: 'npm', args: ['install', '--global', '@anthropic-ai/claude-code'] },
+    npmPackage: '@anthropic-ai/claude-code',
+    docsUrl: 'https://docs.anthropic.com/en/docs/claude-code',
+  },
+  codex: {
+    id: 'codex',
+    label: 'Codex',
+    cmd: 'codex',
+    updateArgs: ['update'],
+    install: { command: 'npm', args: ['install', '--global', '@openai/codex'] },
+    npmPackage: '@openai/codex',
+    docsUrl: 'https://github.com/openai/codex',
+  },
+  opencode: {
+    id: 'opencode',
+    label: 'OpenCode',
+    cmd: 'opencode',
+    // Update selection is resolved from the executable's verified install source.
+    updateArgs: null,
+    install: { command: 'npm', args: ['install', '--global', 'opencode-ai'] },
+    npmPackage: 'opencode-ai',
+    docsUrl: 'https://opencode.ai',
+  },
+  cursor: {
+    id: 'cursor',
+    label: 'Cursor',
+    cmd: 'cursor-agent',
+    updateArgs: ['update'],
+    npmPackage: null,
+    docsUrl: 'https://cursor.com',
+  },
+  gemini: {
+    id: 'gemini',
+    label: 'Gemini CLI',
+    cmd: 'gemini',
+    updateArgs: null,
+    install: { command: 'npm', args: ['install', '--global', '@google/gemini-cli'] },
+    npmPackage: '@google/gemini-cli',
+    docsUrl: 'https://github.com/google-gemini/gemini-cli',
+  },
+  hermes: {
+    id: 'hermes',
+    label: 'Hermes Agent',
+    cmd: 'hermes',
+    updateArgs: null,
+    npmPackage: null,
+    docsUrl: 'https://hermes-agent.nousresearch.com',
+  },
+};
+
+function parseCliVersionText(output) {
+  if (!output) return null;
+  const match = String(output).match(CLI_VERSION_TOKEN);
+  return match ? match[1] : null;
+}
+
+export async function resolveExecutablePath(command) {
+  const result = await runCliCommand('which', [command], 5000);
+  if (!result.ok) return null;
+  const executablePath = result.stdout.trim().split(/\r?\n/)[0];
+  if (!executablePath) return null;
+  try {
+    return await fs.realpath(executablePath);
+  } catch {
+    return executablePath;
+  }
+}
+
+export async function detectCliInstallSource(tool, resolvePath = resolveExecutablePath) {
+  const executablePath = await resolvePath(tool.cmd);
+  if (!executablePath) return { source: 'unknown', executablePath: null };
+  const normalized = executablePath.replaceAll('\\', '/');
+  if (/(^|\/)(Cellar|homebrew)(\/|$)/i.test(normalized)) {
+    return { source: 'homebrew', executablePath };
+  }
+  if (/(^|\/)(pnpm|pnpm-global)(\/|$)/i.test(normalized)) {
+    return { source: 'pnpm', executablePath };
+  }
+  if (/(^|\/)\.volta(\/|$)/i.test(normalized)) {
+    return { source: 'volta', executablePath };
+  }
+  if (/(^|\/)(lib\/node_modules|\.npm-global|npm\/bin)(\/|$)/i.test(normalized)) {
+    return { source: 'npm-global', executablePath };
+  }
+  if (normalized.includes('.app/Contents/')) {
+    return { source: 'app-bundled', executablePath };
+  }
+  if (/(^|\/)\.local\/(bin|share\/claude)(\/|$)/i.test(normalized)) {
+    return { source: 'standalone', executablePath };
+  }
+  return { source: 'unknown', executablePath };
+}
+
+export async function resolveCliUpdateCommand(tool, source) {
+  if (source === 'npm-global' && tool.npmPackage) {
+    return { command: 'npm', args: ['install', '--global', `${tool.npmPackage}@latest`] };
+  }
+  if (source === 'homebrew') {
+    const formulaById = { opencode: 'opencode' };
+    const formula = formulaById[tool.id];
+    if (formula) return { command: 'brew', args: ['upgrade', formula] };
+  }
+  if (source === 'pnpm' && tool.npmPackage) {
+    return { command: 'pnpm', args: ['add', '--global', `${tool.npmPackage}@latest`] };
+  }
+  if (source === 'volta' && tool.npmPackage) {
+    return { command: 'volta', args: ['install', `${tool.npmPackage}@latest`] };
+  }
+  if (source === 'standalone' && Array.isArray(tool.updateArgs)) {
+    return { command: tool.cmd, args: tool.updateArgs };
+  }
+  return null;
+}
+
+export async function withCliMutation(toolId, operation) {
+  if (pendingCliMutations.has(toolId)) {
+    const error = new Error(`CLI operation already in progress for ${toolId}.`);
+    error.statusCode = 409;
+    throw error;
+  }
+  const request = Promise.resolve().then(operation);
+  pendingCliMutations.set(toolId, request);
+  try {
+    return await request;
+  } finally {
+    if (pendingCliMutations.get(toolId) === request) pendingCliMutations.delete(toolId);
+  }
+}
+
+function runCliCommand(cmd, args, timeoutMs = 10_000) {
+  return new Promise((resolve) => {
+    execFile(cmd, args, { timeout: timeoutMs, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 }, (error, stdout, stderr) => {
+      resolve({
+        ok: !error,
+        code: error?.code ?? 0,
+        stdout: String(stdout || ''),
+        stderr: String(stderr || ''),
+        error: error ? error.message : null,
+      });
+    });
+  });
+}
+
+export async function readCliLatestVersion(tool, {
+  force = false,
+  now = Date.now(),
+  loadLatest = async (packageName) => {
+    const encoded = packageName.replace('@', '%40').replace('/', '%2F');
+    const info = await fetchJson(`https://registry.npmjs.org/${encoded}/latest`);
+    return info?.version || null;
+  },
+} = {}) {
+  if (!tool.npmPackage) return { version: null, checkedAt: null, source: 'unsupported' };
+  const cached = cliLatestVersionCache.get(tool.id);
+  if (!force && cached && now - cached.updatedAt < CLI_LATEST_VERSION_CACHE_TTL_MS) {
+    return { version: cached.version, checkedAt: new Date(cached.updatedAt).toISOString(), source: 'cache' };
+  }
+  try {
+    const version = await loadLatest(tool.npmPackage);
+    cliLatestVersionCache.set(tool.id, { version, updatedAt: now });
+    return { version, checkedAt: new Date(now).toISOString(), source: 'registry' };
+  } catch {
+    return cached
+      ? { version: cached.version, checkedAt: new Date(cached.updatedAt).toISOString(), source: 'stale-cache' }
+      : { version: null, checkedAt: new Date(now).toISOString(), source: 'unavailable' };
+  }
+}
+
+export function clearCliLatestVersionCache() {
+  cliLatestVersionCache.clear();
+}
+
+async function getCliToolStatus(tool, { checkLatest = true, forceLatest = false } = {}) {
+  const probe = await runCliCommand(tool.cmd, ['--version'], 5000);
+  const installed = probe.code !== 'ENOENT';
+  const runnable = probe.ok;
+  const currentVersion = runnable ? parseCliVersionText(probe.stdout || probe.stderr) : null;
+  const latest = checkLatest && runnable
+    ? await readCliLatestVersion(tool, { force: forceLatest })
+    : { version: null, checkedAt: null, source: 'skipped' };
+  const latestVersion = latest.version;
+  const updateAvailable = Boolean(
+    currentVersion && latestVersion && compareSemver(latestVersion, currentVersion) > 0,
+  );
+  const installInfo = installed
+    ? await detectCliInstallSource(tool)
+    : { source: 'not-installed', executablePath: null };
+  const updateCommand = runnable ? await resolveCliUpdateCommand(tool, installInfo.source) : null;
+  return {
+    id: tool.id,
+    label: tool.label,
+    command: tool.cmd,
+    installed,
+    runnable,
+    error: runnable ? null : (probe.stderr || probe.error || `${tool.cmd} could not run`).trim(),
+    currentVersion,
+    latestVersion,
+    latestCheckedAt: latest.checkedAt,
+    latestVersionSource: latest.source,
+    updateAvailable,
+    installSource: installInfo.source,
+    executablePath: installInfo.executablePath,
+    canInstall: !installed && Boolean(tool.install),
+    canSelfUpdate: runnable && Boolean(updateCommand),
+    docsUrl: tool.docsUrl,
+  };
+}
+
+router.get('/status', async (req, res, next) => {
+  try {
+    const forceLatest = req.query?.refresh === '1';
+    const tools = await Promise.all(
+      Object.values(CLI_TOOLS).map((tool) => getCliToolStatus(tool, { forceLatest })),
+    );
+    res.json({ success: true, checkedAt: nowIso(), tools });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/:id/install', async (req, res, next) => {
+  try {
+    if (process.env.LEOCODEBOX_LOCAL_ONLY !== '1' && !process.env.LEOCODEBOX_TEST_HOME) {
+      res.status(403).json({ success: false, error: 'CLI installs are available only in local-only mode.' });
+      return;
+    }
+    const tool = CLI_TOOLS[String(req.params.id || '').toLowerCase()];
+    if (!tool) {
+      res.status(404).json({ success: false, error: 'Unknown CLI tool.' });
+      return;
+    }
+    if (!tool.install) {
+      res.status(409).json({ success: false, error: `${tool.label} 没有经过验证的一键安装方式。` });
+      return;
+    }
+    const payload = await withCliMutation(tool.id, async () => {
+      const before = await getCliToolStatus(tool, { checkLatest: false });
+      if (before.installed) {
+        const error = new Error(`${tool.label} 已安装。`);
+        error.statusCode = 409;
+        throw error;
+      }
+      const result = await runCliCommand(tool.install.command, tool.install.args, 300_000);
+      const after = await getCliToolStatus(tool, { checkLatest: false });
+      return {
+        success: result.ok && after.installed,
+        tool: tool.id,
+        currentVersion: after.currentVersion,
+        installSource: after.installSource,
+        output: `${result.stdout}\n${result.stderr}`.trim().slice(0, 8000),
+        error: result.ok && after.installed ? null : (result.error || 'Install command failed.'),
+      };
+    });
+    res.json(payload);
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/:id/update', async (req, res, next) => {
+  try {
+    if (process.env.LEOCODEBOX_LOCAL_ONLY !== '1' && !process.env.LEOCODEBOX_TEST_HOME) {
+      res.status(403).json({ success: false, error: 'CLI updates are available only in local-only mode.' });
+      return;
+    }
+    const tool = CLI_TOOLS[String(req.params.id || '').toLowerCase()];
+    if (!tool) {
+      res.status(404).json({ success: false, error: 'Unknown CLI tool.' });
+      return;
+    }
+    const payload = await withCliMutation(tool.id, async () => {
+      const before = await getCliToolStatus(tool, { checkLatest: false });
+      if (!before.installed) {
+        const error = new Error(`${tool.label} CLI is not installed.`);
+        error.statusCode = 409;
+        throw error;
+      }
+      const updateCommand = await resolveCliUpdateCommand(tool, before.installSource);
+      if (!updateCommand) {
+        const error = new Error(`${tool.label} 的安装来源为 ${before.installSource}，无法安全自动更新。`);
+        error.statusCode = 409;
+        throw error;
+      }
+      const result = await runCliCommand(updateCommand.command, updateCommand.args, 180_000);
+      const after = await getCliToolStatus(tool, { checkLatest: false });
+      return {
+        success: result.ok,
+        tool: tool.id,
+        previousVersion: before.currentVersion,
+        currentVersion: after.currentVersion,
+        changed: before.currentVersion !== after.currentVersion,
+        output: `${result.stdout}\n${result.stderr}`.trim().slice(0, 8000),
+        error: result.ok ? null : (result.error || 'Update command failed.'),
+      };
+    });
+    res.json(payload);
+  } catch (error) {
+    next(error);
+  }
+});
+
+
+export default router;
