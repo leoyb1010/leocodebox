@@ -379,6 +379,34 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
   const discoveredModels = await post('/switch/providers/codex-probe/models', { timeoutMs: 4000 });
   assert.deepEqual(discoveredModels.models, ['model-a', 'model-b']);
   assert.equal(discoveredModels.httpStatus, 200);
+  const healthStatus = await fetch(`${base}/switch/status`).then((response) => response.json());
+  const healthyProvider = healthStatus.providers.find((item) => item.id === 'codex-probe');
+  assert.equal(healthyProvider.modelDiscovery.modelCount, 2);
+  assert.equal(healthyProvider.modelDiscovery.httpStatus, 200);
+  assert.equal(Number.isFinite(healthyProvider.modelDiscovery.latencyMs), true);
+  assert.equal(typeof healthyProvider.modelDiscovery.lastSuccessAt, 'string');
+  assert.equal(healthyProvider.modelDiscovery.lastErrorAt, null);
+
+  const failedDiscoverySave = await post('/switch/providers', {
+    id: 'failed-discovery',
+    target: 'codex',
+    name: 'Failed Discovery',
+    baseUrl: 'http://127.0.0.1:1/v1',
+    apiKey: 'failed-key',
+    autoDiscover: true,
+    timeoutMs: 1000,
+  });
+  assert.equal(failedDiscoverySave.discovery, 'pending');
+  let failedProvider = null;
+  for (let attempt = 0; attempt < 50; attempt += 1) {
+    const failedStatus = await fetch(`${base}/switch/status`).then((response) => response.json());
+    failedProvider = failedStatus.providers.find((item) => item.id === 'failed-discovery');
+    if (failedProvider?.modelDiscoveryError) break;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  assert.equal(typeof failedProvider.modelDiscoveryError, 'string');
+  assert.ok(failedProvider.modelDiscoveryError.length > 0);
+  assert.equal(typeof failedProvider.modelDiscovery.lastErrorAt, 'string');
 
   const destinationChangeWithStoredKey = await fetch(`${base}/switch/providers`, {
     method: 'POST',

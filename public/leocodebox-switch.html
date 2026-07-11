@@ -189,6 +189,12 @@
     .provider-url:hover { color: var(--blue-hover); text-decoration: underline; text-underline-offset: 3px; }
     .state-chip { min-height: 25px; display: inline-flex; align-items: center; padding: 0 9px; border-radius: 6px; background: var(--chip-bg); color: var(--chip-text); font-size: 12px; }
     .state-chip.readonly { background: #34343a; color: var(--muted); }
+    .state-chip.health-ok { background: rgba(46, 160, 67, .16); color: #3fb950; }
+    .state-chip.health-warn { background: rgba(210, 153, 34, .16); color: #d29922; }
+    .state-chip.health-fail { background: rgba(248, 81, 73, .16); color: #ff6b63; }
+    .state-chip.health-idle { background: var(--chip-bg); color: var(--muted); }
+    .provider-health { display: block; margin-top: 5px; color: var(--subtle); font-size: 11px; }
+    .failover-button { border-color: rgba(210, 153, 34, .55); color: #d29922; }
     .card-actions {
       display: flex; align-items: center; justify-content: flex-end; gap: 7px;
       opacity: 0; pointer-events: none; transition: opacity .16s ease;
@@ -811,6 +817,39 @@
       return escapeHtml((source[0] || "L").toUpperCase());
     }
 
+    function providerHealth(provider) {
+      const discovery = provider?.modelDiscovery || {};
+      if (provider?.modelDiscoveryError) {
+        return { id: "failed", label: "失败", className: "health-fail", detail: provider.modelDiscoveryError };
+      }
+      const modelCount = Number(discovery.modelCount ?? provider?.discoveredModels?.length ?? 0);
+      if (discovery.updatedAt && modelCount > 0) {
+        const latency = Number.isFinite(Number(discovery.latencyMs)) ? ` · ${Math.round(Number(discovery.latencyMs))}ms` : "";
+        return { id: "healthy", label: "健康", className: "health-ok", detail: `${modelCount} 个模型${latency}` };
+      }
+      if (discovery.updatedAt) {
+        return { id: "degraded", label: "降级", className: "health-warn", detail: "连接成功，但未发现模型" };
+      }
+      return { id: "unverified", label: "未验证", className: "health-idle", detail: "尚未执行模型发现" };
+    }
+
+    function failoverCandidate(provider) {
+      const alternatives = state.providers.filter((item) => item.target === provider.target && item.id !== provider.id);
+      return alternatives.find((item) => providerHealth(item).id === "healthy") || alternatives[0] || null;
+    }
+
+    async function suggestFailover(providerId) {
+      const provider = state.providers.find((item) => item.id === providerId);
+      const candidate = provider ? failoverCandidate(provider) : null;
+      if (!provider || !candidate) {
+        showToast("没有可用的备用 Provider", "error");
+        return;
+      }
+      const prompt = `检测到 ${provider.name} 当前不可用。是否切换到备用 Provider「${candidate.name}」？\n\n切换前会自动备份现有配置，可随时恢复。`;
+      if (!window.confirm(prompt)) return;
+      await applyProvider(candidate.id);
+    }
+
     function renderProviders() {
       const target = state.targets[selectedTarget];
       const providers = state.providers.filter((provider) => provider.target === selectedTarget);
@@ -840,14 +879,18 @@
         const providerName = escapeHtml(provider.name);
         const providerId = escapeHtml(provider.id);
         const url = escapeHtml(provider.baseUrl || "本机默认配置");
+        const health = providerHealth(provider);
+        const backup = health.id === "failed" ? failoverCandidate(provider) : null;
         return `<article class="provider-card${active ? " is-active" : ""}${selected ? " is-selected" : ""}" data-card-provider="${providerId}" tabindex="0">
           <div class="drag-handle" aria-hidden="true"><img src="${icon("grip-vertical")}" alt=""></div>
           <div class="provider-mark" aria-hidden="true">${providerMark(provider)}</div>
           <div class="provider-info">
-            <div class="provider-title"><strong>${providerName}</strong>${active ? `<span class="state-chip">${text("active")}</span>` : !target?.writable ? `<span class="state-chip readonly">${text("readonly")}</span>` : ""}</div>
+            <div class="provider-title"><strong>${providerName}</strong>${active ? `<span class="state-chip">${text("active")}</span>` : !target?.writable ? `<span class="state-chip readonly">${text("readonly")}</span>` : ""}<span class="state-chip ${health.className}" title="${escapeHtml(health.detail)}">${health.label}</span></div>
             <button class="provider-url" type="button" data-copy="${providerId}" title="${text("copy")}">${url}</button>
+            <span class="provider-health">${escapeHtml(health.detail)}</span>
           </div>
           <div class="card-actions">
+            ${backup ? `<button class="quiet-button failover-button" type="button" data-failover="${providerId}" title="切换到 ${escapeHtml(backup.name)}">切换备用</button>` : ""}
             ${active ? "" : `<button class="primary-button activate-button" type="button" data-apply="${providerId}" ${target?.writable ? "" : "disabled"}><img class="button-icon" src="${icon("play")}" alt="">${target?.writable ? text("enable") : text("readonly")}</button>`}
             <button class="icon-button" type="button" data-edit="${providerId}" aria-label="${text("edit")} ${providerName}" title="${text("edit")}"><img src="${icon("pencil")}" alt=""></button>
             <button class="icon-button" type="button" data-test="${providerId}" aria-label="${text("test")} ${providerName}" title="${text("test")}"><img src="${icon("activity")}" alt=""></button>
@@ -1274,6 +1317,8 @@
       if (edit) openEditProvider(edit.dataset.edit);
       const apply = event.target.closest("[data-apply]");
       if (apply) applyProvider(apply.dataset.apply).catch((error) => showToast(error.message, "error"));
+      const failover = event.target.closest("[data-failover]");
+      if (failover) suggestFailover(failover.dataset.failover).catch((error) => showToast(error.message, "error"));
       const test = event.target.closest("[data-test]");
       if (test) openProviderTools(test.dataset.test);
       const copy = event.target.closest("[data-copy]");

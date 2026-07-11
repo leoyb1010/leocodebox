@@ -2032,6 +2032,11 @@ function scheduleProviderModelDiscovery(provider, timeoutMs) {
         endpoint: discovery.endpoint,
         updatedAt: discovery.cache.updatedAt,
         expiresAt: discovery.cache.expiresAt,
+        latencyMs: discovery.latencyMs,
+        httpStatus: discovery.httpStatus,
+        modelCount: discovery.models.length,
+        lastSuccessAt: nowIso(),
+        lastErrorAt: null,
       };
       latestProvider.modelDiscoveryError = '';
       if (!latestProvider.model && discovery.models[0]) {
@@ -2048,6 +2053,10 @@ function scheduleProviderModelDiscovery(provider, timeoutMs) {
       const latestProvider = store.providers.find((item) => item.id === providerId);
       if (!latestProvider || providerDiscoveryConfigFingerprint(latestProvider) !== expectedFingerprint) return;
       latestProvider.modelDiscoveryError = safeText(error?.message || '未知错误', 500);
+      latestProvider.modelDiscovery = {
+        ...(latestProvider.modelDiscovery || {}),
+        lastErrorAt: nowIso(),
+      };
       latestProvider.updatedAt = nowIso();
       await writeStore(store);
     });
@@ -2300,6 +2309,11 @@ router.post('/switch/providers/:id/models', async (req, res, next) => {
         endpoint: result.endpoint,
         updatedAt: result.cache.updatedAt,
         expiresAt: result.cache.expiresAt,
+        latencyMs: result.latencyMs,
+        httpStatus: result.httpStatus,
+        modelCount: result.models.length,
+        lastSuccessAt: nowIso(),
+        lastErrorAt: null,
       };
       latestProvider.modelDiscoveryError = '';
       latestProvider.updatedAt = nowIso();
