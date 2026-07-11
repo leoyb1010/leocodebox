@@ -43,5 +43,5 @@ test('file tree skips dependency and VCS directories', async (t) => {
   await fs.writeFile(path.join(root, 'src', 'index.ts'), 'export {};');
   const tree = await getFileTree(root, 2);
   assert.deepEqual(tree.map((entry) => entry.name), ['src']);
-  assert.equal(tree[0].children[0].name, 'index.ts');
+  assert.equal(tree[0]!.children![0]!.name, 'index.ts');
 });

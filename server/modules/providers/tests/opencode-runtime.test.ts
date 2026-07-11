@@ -6,10 +6,10 @@ import test from 'node:test';
 
 import { resolveOpenCodePermissionOptions, spawnOpenCode } from '../list/opencode/opencode-runtime.js';
 
-const findEnvKey = (name) =>
+const findEnvKey = (name: string): string =>
   Object.keys(process.env).find((key) => key.toLowerCase() === name.toLowerCase()) || name;
 
-async function createFakeOpenCodeExecutable(binDir) {
+async function createFakeOpenCodeExecutable(binDir: string): Promise<void> {
   const scriptPath = path.join(binDir, 'opencode.js');
   await writeFile(scriptPath, `
 const capturePath = process.env.OPENCODE_ARGS_CAPTURE;
@@ -49,14 +49,14 @@ test('spawnOpenCode emits session_created before normalized live messages for ne
   const previousPath = process.env[pathKey];
   const previousPathExt = process.env[pathExtKey];
   const previousArgsCapture = process.env.OPENCODE_ARGS_CAPTURE;
-  const messages = [];
+  const messages: Array<Record<string, unknown>> = [];
   const writer = {
     userId: null,
-    sessionId: null,
-    send(message) {
-      messages.push(message);
+    sessionId: null as string | null,
+    send(message: unknown) {
+      if (message && typeof message === 'object') messages.push(message as Record<string, unknown>);
     },
-    setSessionId(sessionId) {
+    setSessionId(sessionId: string) {
       this.sessionId = sessionId;
     },
   };
@@ -83,7 +83,7 @@ test('spawnOpenCode emits session_created before normalized live messages for ne
     assert.notEqual(sessionCreatedIndex, -1);
     assert.notEqual(assistantDeltaIndex, -1);
     assert.ok(sessionCreatedIndex < assistantDeltaIndex);
-    assert.equal(messages[sessionCreatedIndex].newSessionId, 'open-live-1');
+    assert.equal(messages[sessionCreatedIndex]!.newSessionId, 'open-live-1');
     assert.equal(writer.sessionId, 'open-live-1');
     assert.equal(streamEnd?.sessionId, 'open-live-1');
     assert.equal(complete?.sessionId, 'open-live-1');
@@ -148,9 +148,9 @@ test('spawnOpenCode passes permission mode flags and env to the CLI', async () =
   const previousArgsCapture = process.env.OPENCODE_ARGS_CAPTURE;
   const writer = {
     userId: null,
-    sessionId: null,
-    send() {},
-    setSessionId(sessionId) {
+    sessionId: null as string | null,
+    send(_message: unknown) {},
+    setSessionId(sessionId: string) {
       this.sessionId = sessionId;
     },
   };

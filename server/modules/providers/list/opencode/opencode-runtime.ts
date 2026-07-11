@@ -1,4 +1,5 @@
 import fsSync from 'node:fs';
+import type { ChildProcess } from 'node:child_process';
 
 import crossSpawn from 'cross-spawn';
 import Database from 'better-sqlite3';
@@ -14,9 +15,32 @@ import { createCompleteMessage, createNormalizedMessage, flattenPromptForWindows
 // child_process.spawn everywhere else.
 const spawnFunction = crossSpawn;
 
-const activeOpenCodeProcesses = new Map();
+type OpenCodeProcess = ChildProcess & { aborted?: boolean; sessionId?: string };
+type RuntimeWriter = { send(data: unknown): void; setSessionId?(sessionId: string): void; userId?: number | null };
+type OpenCodeOptions = {
+  abortSignal?: AbortSignal;
+  appSessionId?: string | null;
+  sessionId?: string | null;
+  projectPath?: string | null;
+  cwd?: string | null;
+  model?: string | null;
+  effort?: string | null;
+  sessionSummary?: string | null;
+  images?: unknown[];
+  permissionMode?: string;
+};
+type ModelsDefinition = { OPTIONS?: Array<{ value?: string; effort?: { values?: Array<{ value?: string }> } }> } | null;
+type OpenCodeUsageRow = { inputTokens?: number | null; outputTokens?: number | null; reasoningTokens?: number | null; cacheReadTokens?: number | null; cacheWriteTokens?: number | null };
+type TerminalState = { code?: number | null; error?: unknown };
 
-function terminateOpenCodeProcess(childProcess) {
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+
+const activeOpenCodeProcesses = new Map<string, OpenCodeProcess>();
+
+function terminateOpenCodeProcess(childProcess: OpenCodeProcess): boolean {
   try {
     if (process.platform !== 'win32' && childProcess.pid) process.kill(-childProcess.pid, 'SIGTERM');
     else childProcess.kill('SIGTERM');
@@ -43,7 +67,7 @@ function terminateOpenCodeProcess(childProcess) {
  *
  * Exported for tests only.
  */
-export function resolveOpenCodePermissionOptions(permissionMode) {
+export function resolveOpenCodePermissionOptions(permissionMode: string | undefined): { args: string[]; env: Record<string, string> } {
   switch (permissionMode) {
     case 'plan':
       return { args: ['--agent', 'plan'], env: {} };
@@ -56,7 +80,7 @@ export function resolveOpenCodePermissionOptions(permissionMode) {
   }
 }
 
-function resolveOpenCodeEffort(model, effort, modelsDefinition) {
+function resolveOpenCodeEffort(model: string | undefined, effort: string | null | undefined, modelsDefinition: ModelsDefinition): string | undefined {
   const selectedModel = modelsDefinition?.OPTIONS?.find((option) => option.value === model);
   const allowedEfforts = selectedModel?.effort?.values?.map((value) => value.value) || [];
   return typeof effort === 'string' && effort !== 'default' && allowedEfforts.includes(effort)
@@ -64,15 +88,17 @@ function resolveOpenCodeEffort(model, effort, modelsDefinition) {
     : undefined;
 }
 
-function readOpenCodeSessionId(event) {
+function readOpenCodeSessionId(event: unknown): string | null {
   if (!event || typeof event !== 'object') {
     return null;
   }
 
-  return event.sessionID || event.sessionId || null;
+  const record = asRecord(event);
+  const value = record.sessionID || record.sessionId;
+  return typeof value === 'string' ? value : null;
 }
 
-function readOpenCodeTokenUsage(sessionId) {
+function readOpenCodeTokenUsage(sessionId: string | null): { used: number; inputTokens: number; outputTokens: number; breakdown: { input: number; output: number } } | null {
   const dbPath = getOpenCodeDatabasePath();
   if (!sessionId || !fsSync.existsSync(dbPath)) {
     return null;
@@ -81,7 +107,7 @@ function readOpenCodeTokenUsage(sessionId) {
   let db = null;
   try {
     db = new Database(dbPath, { readonly: true, fileMustExist: true });
-    const columns = db.prepare('PRAGMA table_info(session)').all();
+    const columns = db.prepare('PRAGMA table_info(session)').all() as Array<{ name: string }>;
     const columnNames = new Set(columns.map((column) => column.name));
     const requiredColumns = ['tokens_input', 'tokens_output', 'tokens_reasoning', 'tokens_cache_read', 'tokens_cache_write'];
     if (!requiredColumns.every((column) => columnNames.has(column))) {
@@ -97,7 +123,7 @@ function readOpenCodeTokenUsage(sessionId) {
         tokens_cache_write AS cacheWriteTokens
       FROM session
       WHERE id = ?
-    `).get(sessionId);
+    `).get(sessionId) as OpenCodeUsageRow | undefined;
 
     if (!row) {
       return null;
@@ -132,8 +158,9 @@ function readOpenCodeTokenUsage(sessionId) {
   }
 }
 
-async function spawnOpenCode(command, options = {}, ws) {
-  return new Promise((resolve, reject) => {
+async function spawnOpenCode(command: string, options: OpenCodeOptions = {}, writer: object): Promise<void> {
+  const ws = writer as RuntimeWriter;
+  return new Promise<void>((resolve, reject) => {
     const { abortSignal, appSessionId, sessionId, projectPath, cwd, model, effort, sessionSummary, images, permissionMode } = options;
     const workingDir = cwd || projectPath || process.cwd();
     const processKey = appSessionId || sessionId || Date.now().toString();
@@ -141,12 +168,12 @@ async function spawnOpenCode(command, options = {}, ws) {
     let sessionCreatedSent = false;
     let stdoutLineBuffer = '';
     let terminalNotificationSent = false;
-    let opencodeProcess = null;
+    let opencodeProcess: OpenCodeProcess | null = null;
     // Unified lifecycle contract: exactly one terminal `complete` per run
     // (close and error handlers can both fire for spawn failures).
     let completeSent = false;
 
-    const notifyTerminalState = ({ code = null, error = null } = {}) => {
+    const notifyTerminalState = ({ code = null, error = null }: TerminalState = {}): void => {
       if (terminalNotificationSent) {
         return;
       }
@@ -173,7 +200,7 @@ async function spawnOpenCode(command, options = {}, ws) {
       });
     };
 
-    const registerSession = (nextSessionId) => {
+    const registerSession = (nextSessionId: string | null): void => {
       if (!nextSessionId || capturedSessionId === nextSessionId) {
         return;
       }
@@ -201,7 +228,7 @@ async function spawnOpenCode(command, options = {}, ws) {
       }
     };
 
-    const processOpenCodeOutputLine = (line) => {
+    const processOpenCodeOutputLine = (line: string): void => {
       if (!line || !line.trim()) {
         return;
       }
@@ -241,7 +268,7 @@ async function spawnOpenCode(command, options = {}, ws) {
       }
     };
 
-    void providerModelsService.resolveResumeModel('opencode', appSessionId || sessionId, model).then(async (resolvedModel) => {
+    void providerModelsService.resolveResumeModel('opencode', appSessionId || sessionId || undefined, model || undefined).then(async (resolvedModel) => {
       let effortModels = null;
       try {
         effortModels = (await providerModelsService.getProviderModels('opencode')).models;
@@ -254,7 +281,7 @@ async function spawnOpenCode(command, options = {}, ws) {
         resolve();
         return;
       }
-      const args = ['run', '--format', 'json'];
+      const args: string[] = ['run', '--format', 'json'];
       // OpenCode's `run` command owns workspace selection through `--dir`.
       // Relying on the child-process cwd alone is not enough on Linux, where
       // the CLI can still resolve the session under the server install dir.
@@ -278,24 +305,25 @@ async function spawnOpenCode(command, options = {}, ws) {
         args.push(flattenPromptForWindowsShell(appendImagesInputTag(command.trim(), images)));
       }
 
-      opencodeProcess = spawnFunction('opencode', args, {
+      const childProcess = spawnFunction('opencode', args, {
         cwd: workingDir,
         stdio: ['pipe', 'pipe', 'pipe'],
         detached: process.platform !== 'win32',
         env: { ...process.env, ...permissionOptions.env },
-      });
+      }) as OpenCodeProcess;
+      opencodeProcess = childProcess;
 
-      activeOpenCodeProcesses.set(processKey, opencodeProcess);
+      activeOpenCodeProcesses.set(processKey, childProcess);
       const abortFromGateway = () => {
-        opencodeProcess.aborted = true;
-        terminateOpenCodeProcess(opencodeProcess);
+        childProcess.aborted = true;
+        terminateOpenCodeProcess(childProcess);
       };
       if (abortSignal?.aborted) abortFromGateway();
       else abortSignal?.addEventListener('abort', abortFromGateway, { once: true });
-      opencodeProcess.sessionId = processKey;
-      opencodeProcess.stdin.end();
+      childProcess.sessionId = processKey;
+      childProcess.stdin?.end();
 
-      opencodeProcess.stdout.on('data', (data) => {
+      childProcess.stdout?.on('data', (data) => {
         stdoutLineBuffer += data.toString();
         const completeLines = stdoutLineBuffer.split(/\r?\n/);
         stdoutLineBuffer = completeLines.pop() || '';
@@ -305,7 +333,7 @@ async function spawnOpenCode(command, options = {}, ws) {
         });
       });
 
-      opencodeProcess.stderr.on('data', (data) => {
+      childProcess.stderr?.on('data', (data) => {
         const stderrText = data.toString();
         if (!stderrText.trim()) {
           return;
@@ -319,7 +347,7 @@ async function spawnOpenCode(command, options = {}, ws) {
         }));
       });
 
-      opencodeProcess.on('close', async (code) => {
+      childProcess.on('close', async (code) => {
         abortSignal?.removeEventListener('abort', abortFromGateway);
         const finalSessionId = capturedSessionId || sessionId || processKey;
         activeOpenCodeProcesses.delete(finalSessionId);
@@ -343,12 +371,12 @@ async function spawnOpenCode(command, options = {}, ws) {
 
         // Terminal complete — skipped for aborted runs (abort-session
         // already sent the aborted complete on this run's behalf).
-        if (!completeSent && !opencodeProcess.aborted) {
+        if (!completeSent && !childProcess.aborted) {
           completeSent = true;
           ws.send(createCompleteMessage({ provider: 'opencode', sessionId: finalSessionId, exitCode: code }));
         }
 
-        if (opencodeProcess.aborted) {
+        if (childProcess.aborted) {
           resolve();
           return;
         }
@@ -374,7 +402,7 @@ async function spawnOpenCode(command, options = {}, ws) {
         reject(new Error(code === null ? 'OpenCode CLI process was terminated' : `OpenCode CLI exited with code ${code}`));
       });
 
-      opencodeProcess.on('error', async (error) => {
+      childProcess.on('error', async (error) => {
         abortSignal?.removeEventListener('abort', abortFromGateway);
         const finalSessionId = capturedSessionId || sessionId || processKey;
         activeOpenCodeProcesses.delete(finalSessionId);
@@ -391,7 +419,7 @@ async function spawnOpenCode(command, options = {}, ws) {
           sessionId: finalSessionId,
           provider: 'opencode',
         }));
-        if (!completeSent && !opencodeProcess.aborted) {
+        if (!completeSent && !childProcess.aborted) {
           completeSent = true;
           ws.send(createCompleteMessage({ provider: 'opencode', sessionId: finalSessionId, exitCode: 1 }));
         }
@@ -402,7 +430,7 @@ async function spawnOpenCode(command, options = {}, ws) {
   });
 }
 
-function abortOpenCodeSession(sessionId) {
+function abortOpenCodeSession(sessionId: string): boolean {
   const process = activeOpenCodeProcesses.get(sessionId);
   if (!process) {
     return false;
@@ -416,11 +444,11 @@ function abortOpenCodeSession(sessionId) {
   return terminated;
 }
 
-function isOpenCodeSessionActive(sessionId) {
+function isOpenCodeSessionActive(sessionId: string): boolean {
   return activeOpenCodeProcesses.has(sessionId);
 }
 
-function getActiveOpenCodeSessions() {
+function getActiveOpenCodeSessions(): string[] {
   return Array.from(activeOpenCodeProcesses.keys());
 }
 

@@ -248,7 +248,7 @@ const notificationChannels: NotificationChannel[] = [
   }
 ];
 
-function notifyUserIfEnabled({ userId, event }: { userId: number; event: NotificationEvent }): void {
+function notifyUserIfEnabled({ userId, event }: { userId: number | null | undefined; event: NotificationEvent }): void {
   if (!userId || !event) {
     return;
   }
@@ -273,7 +273,7 @@ function notifyUserIfEnabled({ userId, event }: { userId: number; event: Notific
   }
 }
 
-function notifyRunStopped({ userId, provider, sessionId = null, stopReason = 'completed', sessionName = null }: { userId: number; provider: string; sessionId?: string | null; stopReason?: string; sessionName?: string | null }): void {
+function notifyRunStopped({ userId, provider, sessionId = null, stopReason = 'completed', sessionName = null }: { userId: number | null | undefined; provider: string; sessionId?: string | null; stopReason?: string; sessionName?: string | null }): void {
   notifyUserIfEnabled({
     userId,
     event: createNotificationEvent({
@@ -288,7 +288,7 @@ function notifyRunStopped({ userId, provider, sessionId = null, stopReason = 'co
   });
 }
 
-function notifyRunFailed({ userId, provider, sessionId = null, error, sessionName = null }: { userId: number; provider: string; sessionId?: string | null; error: unknown; sessionName?: string | null }): void {
+function notifyRunFailed({ userId, provider, sessionId = null, error, sessionName = null }: { userId: number | null | undefined; provider: string; sessionId?: string | null; error: unknown; sessionName?: string | null }): void {
   const errorMessage = normalizeErrorMessage(error);
 
   notifyUserIfEnabled({

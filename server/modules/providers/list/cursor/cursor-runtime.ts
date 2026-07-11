@@ -1,3 +1,5 @@
+import type { ChildProcess } from 'node:child_process';
+
 import crossSpawn from 'cross-spawn';
 
 import { appendImagesInputTag } from '@/shared/image-attachments.js';
@@ -11,9 +13,31 @@ import { createCompleteMessage, createNormalizedMessage, flattenPromptForWindows
 // child_process.spawn everywhere else.
 const spawnFunction = crossSpawn;
 
-let activeCursorProcesses = new Map(); // Track active processes by session ID
+type CursorProcess = ChildProcess & { aborted?: boolean };
+type RuntimeWriter = {
+  send(data: unknown): void;
+  setSessionId?(sessionId: string): void;
+  userId?: number | null;
+};
+type CursorRuntimeOptions = {
+  abortSignal?: AbortSignal;
+  appSessionId?: string | null;
+  sessionId?: string | null;
+  projectPath?: string | null;
+  cwd?: string | null;
+  toolsSettings?: { allowedShellCommands?: string[]; skipPermissions?: boolean };
+  skipPermissions?: boolean;
+  permissionMode?: string;
+  model?: string | null;
+  sessionSummary?: string | null;
+  images?: unknown[];
+};
+type TerminalState = { code?: number | null; error?: unknown };
 
-function terminateCursorProcess(childProcess) {
+
+const activeCursorProcesses = new Map<string, CursorProcess>(); // Track active processes by session ID
+
+function terminateCursorProcess(childProcess: CursorProcess): boolean {
   try {
     if (process.platform !== 'win32' && childProcess.pid) process.kill(-childProcess.pid, 'SIGTERM');
     else childProcess.kill('SIGTERM');
@@ -23,17 +47,18 @@ function terminateCursorProcess(childProcess) {
   }
 }
 
-export function resolveCursorPermissionArgs(permissionMode, skipPermissions = false) {
+export function resolveCursorPermissionArgs(permissionMode: string | undefined, skipPermissions = false): string[] {
   if (permissionMode === 'plan') return ['--plan'];
   if (permissionMode === 'bypassPermissions' || skipPermissions) return ['-f'];
   if (permissionMode === 'acceptEdits') return ['--auto-review'];
   return [];
 }
 
-async function spawnCursor(command, options = {}, ws) {
-  return new Promise(async (resolve, reject) => {
+async function spawnCursor(command: string, options: CursorRuntimeOptions = {}, writer: object): Promise<void> {
+  const ws = writer as RuntimeWriter;
+  return new Promise<void>(async (resolve, reject) => {
     const { abortSignal, appSessionId, sessionId, projectPath, cwd, toolsSettings, skipPermissions, permissionMode, model, sessionSummary, images } = options;
-    const resolvedModel = await providerModelsService.resolveResumeModel('cursor', appSessionId || sessionId, model);
+    const resolvedModel = await providerModelsService.resolveResumeModel('cursor', appSessionId || sessionId || undefined, model || undefined);
     if (abortSignal?.aborted) {
       resolve();
       return;
@@ -53,7 +78,7 @@ async function spawnCursor(command, options = {}, ws) {
     };
 
     // Build Cursor CLI command
-    const baseArgs = [];
+    const baseArgs: string[] = [];
 
     // Build flags allowing both resume and prompt together (reply in existing session)
     // Treat presence of sessionId as intention to resume, regardless of resume flag
@@ -87,7 +112,7 @@ async function spawnCursor(command, options = {}, ws) {
     // Store process reference for potential abort
     const processKey = appSessionId || capturedSessionId || Date.now().toString();
 
-    const settleOnce = (callback) => {
+    const settleOnce = (callback: () => void): void => {
       if (settled) {
         return;
       }
@@ -95,11 +120,11 @@ async function spawnCursor(command, options = {}, ws) {
       callback();
     };
 
-    const runCursorProcess = (args) => {
+    const runCursorProcess = (args: string[]): void => {
       let stdoutLineBuffer = '';
       let terminalNotificationSent = false;
 
-      const notifyTerminalState = ({ code = null, error = null } = {}) => {
+      const notifyTerminalState = ({ code = null, error = null }: TerminalState = {}): void => {
         if (terminalNotificationSent) {
           return;
         }
@@ -132,7 +157,7 @@ async function spawnCursor(command, options = {}, ws) {
         stdio: ['pipe', 'pipe', 'pipe'],
         detached: process.platform !== 'win32',
         env: { ...process.env } // Inherit all environment variables
-      });
+      }) as CursorProcess;
 
       activeCursorProcesses.set(processKey, cursorProcess);
       const abortFromGateway = () => {
@@ -142,7 +167,7 @@ async function spawnCursor(command, options = {}, ws) {
       if (abortSignal?.aborted) abortFromGateway();
       else abortSignal?.addEventListener('abort', abortFromGateway, { once: true });
 
-      const processCursorOutputLine = (line) => {
+      const processCursorOutputLine = (line: string): void => {
         if (!line || !line.trim()) {
           return;
         }
@@ -156,16 +181,17 @@ async function spawnCursor(command, options = {}, ws) {
               if (response.subtype === 'init') {
                 // Capture session ID
                 if (response.session_id && !capturedSessionId) {
-                  capturedSessionId = response.session_id;
+                  const newSessionId = String(response.session_id);
+                  capturedSessionId = newSessionId;
 
                   // Update process key with captured session ID
                   if (processKey !== capturedSessionId) {
-                    activeCursorProcesses.set(capturedSessionId, cursorProcess);
+                    activeCursorProcesses.set(newSessionId, cursorProcess);
                   }
 
                   // Set session ID on writer (for API endpoint compatibility)
                   if (ws.setSessionId && typeof ws.setSessionId === 'function') {
-                    ws.setSessionId(capturedSessionId);
+                    ws.setSessionId(newSessionId);
                   }
 
                   // Send session-created event only once for new sessions
@@ -215,7 +241,7 @@ async function spawnCursor(command, options = {}, ws) {
       };
 
       // Handle stdout (streaming JSON responses)
-      cursorProcess.stdout.on('data', (data) => {
+      cursorProcess.stdout?.on('data', (data) => {
         const rawOutput = data.toString();
 
         // Stream chunks can split JSON objects across packets; keep trailing partial line.
@@ -229,7 +255,7 @@ async function spawnCursor(command, options = {}, ws) {
       });
 
       // Handle stderr
-      cursorProcess.stderr.on('data', (data) => {
+      cursorProcess.stderr?.on('data', (data) => {
         const stderrText = data.toString();
         console.error('Cursor CLI stderr:', stderrText);
 
@@ -294,14 +320,14 @@ async function spawnCursor(command, options = {}, ws) {
       });
 
       // Close stdin since Cursor doesn't need interactive input
-      cursorProcess.stdin.end();
+      cursorProcess.stdin?.end();
     };
 
     runCursorProcess(baseArgs);
   });
 }
 
-function abortCursorSession(sessionId) {
+function abortCursorSession(sessionId: string): boolean {
   const process = activeCursorProcesses.get(sessionId);
   if (process) {
     console.log(`Aborting Cursor session: ${sessionId}`);
@@ -315,11 +341,11 @@ function abortCursorSession(sessionId) {
   return false;
 }
 
-function isCursorSessionActive(sessionId) {
+function isCursorSessionActive(sessionId: string): boolean {
   return activeCursorProcesses.has(sessionId);
 }
 
-function getActiveCursorSessions() {
+function getActiveCursorSessions(): string[] {
   return Array.from(activeCursorProcesses.keys());
 }
 
