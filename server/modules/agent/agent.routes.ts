@@ -6,6 +6,7 @@ import crypto from 'crypto';
 
 import spawn from 'cross-spawn';
 import express from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import { Octokit } from '@octokit/rest';
 
 import { userDb, apiKeysDb, githubTokensDb, projectsDb } from '@/modules/database/index.js';
@@ -34,6 +35,23 @@ import {
 const router = express.Router();
 const IS_PLATFORM = process.env.VITE_IS_PLATFORM === 'true';
 
+type BranchInfo = { name: string; url: string } | { error: string };
+type PullRequestInfo = { number: number; url: string } | { error: string };
+type AgentResponsePayload = {
+  success: boolean;
+  sessionId: string | null;
+  messages: unknown[];
+  tokens: ReturnType<ResponseCollector['getTotalTokens']>;
+  projectPath: string;
+  branch?: BranchInfo;
+  pullRequest?: PullRequestInfo;
+};
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error ?? '');
+}
+
+
 /**
  * Middleware to authenticate agent API requests.
  *
@@ -45,7 +63,7 @@ const IS_PLATFORM = process.env.VITE_IS_PLATFORM === 'true';
  * 2. API key mode (default): For self-hosted deployments where users authenticate
  *    via API keys created in the UI. Keys are validated against the local database.
  */
-const validateExternalApiKey = (req, res, next) => {
+const validateExternalApiKey = (req: Request, res: Response, next: NextFunction) => {
   // Platform mode: Authentication is handled externally (e.g., by a proxy layer).
   // Trust the request and use the default user context.
   if (IS_PLATFORM) {
@@ -69,7 +87,7 @@ const validateExternalApiKey = (req, res, next) => {
     return res.status(401).json({ error: 'API key required' });
   }
 
-  const user = apiKeysDb.validateApiKey(apiKey);
+  const user = apiKeysDb.validateApiKey(String(apiKey));
 
   if (!user) {
     return res.status(401).json({ error: 'Invalid or inactive API key' });
@@ -374,8 +392,8 @@ router.post('/', validateExternalApiKey, async (req, res) => {
     return res.status(400).json({ error: 'createBranch and createPR require either githubUrl or projectPath with a GitHub remote' });
   }
 
-  let finalProjectPath = null;
-  let writer = null;
+  let finalProjectPath: string | null = null;
+  let writer: SSEStreamWriter | ResponseCollector | null = null;
 
   try {
     // Determine the final project path
@@ -463,7 +481,7 @@ router.post('/', validateExternalApiKey, async (req, res) => {
 
       await queryClaudeSDK(message.trim(), {
         projectPath: finalProjectPath,
-        cwd: finalProjectPath,
+        cwd: finalProjectPath!,
         sessionId: sessionId || null,
         model: model,
         effort,
@@ -475,7 +493,7 @@ router.post('/', validateExternalApiKey, async (req, res) => {
 
       await spawnCursor(message.trim(), {
         projectPath: finalProjectPath,
-        cwd: finalProjectPath,
+        cwd: finalProjectPath!,
         sessionId: sessionId || null,
         model: model || undefined,
         skipPermissions // Bypass permissions for Cursor unless caller chose a safer mode
@@ -485,7 +503,7 @@ router.post('/', validateExternalApiKey, async (req, res) => {
 
       await queryCodex(message.trim(), {
         projectPath: finalProjectPath,
-        cwd: finalProjectPath,
+        cwd: finalProjectPath!,
         sessionId: sessionId || null,
         model: model || codexModels.DEFAULT,
         effort,
@@ -496,7 +514,7 @@ router.post('/', validateExternalApiKey, async (req, res) => {
 
       await spawnOpenCode(message.trim(), {
         projectPath: finalProjectPath,
-        cwd: finalProjectPath,
+        cwd: finalProjectPath!,
         sessionId: sessionId || null,
         model: model || opencodeModels.DEFAULT,
         effort,
@@ -533,7 +551,7 @@ router.post('/', validateExternalApiKey, async (req, res) => {
             }
             console.log(`✅ Found GitHub remote: ${repoUrl}`);
           } catch (error) {
-            throw new Error(`Failed to get GitHub remote URL: ${error.message}`);
+            throw new Error(`Failed to get GitHub remote URL: ${errorMessage(error)}`);
           }
         }
 
@@ -559,13 +577,13 @@ router.post('/', validateExternalApiKey, async (req, res) => {
           // Create and checkout the new branch locally
           console.log('🔄 Creating local branch...');
           const checkoutProcess = spawn('git', ['checkout', '-b', finalBranchName], {
-            cwd: finalProjectPath,
+            cwd: finalProjectPath!,
             stdio: 'pipe'
           });
 
-          await new Promise((resolve, reject) => {
+          await new Promise<void>((resolve, reject) => {
             let stderr = '';
-            checkoutProcess.stderr.on('data', (data) => { stderr += data.toString(); });
+            checkoutProcess.stderr?.on('data', (data) => { stderr += data.toString(); });
             checkoutProcess.on('close', (code) => {
               if (code === 0) {
                 console.log(`✅ Created and checked out local branch '${finalBranchName}'`);
@@ -575,7 +593,7 @@ router.post('/', validateExternalApiKey, async (req, res) => {
                 if (stderr.includes('already exists')) {
                   console.log(`ℹ️ Branch '${finalBranchName}' already exists locally, checking out...`);
                   const checkoutExisting = spawn('git', ['checkout', finalBranchName], {
-                    cwd: finalProjectPath,
+                    cwd: finalProjectPath!,
                     stdio: 'pipe'
                   });
                   checkoutExisting.on('close', (checkoutCode) => {
@@ -596,15 +614,15 @@ router.post('/', validateExternalApiKey, async (req, res) => {
           // Push the branch to remote
           console.log('🔄 Pushing branch to remote...');
           const pushProcess = spawn('git', ['push', '-u', 'origin', finalBranchName], {
-            cwd: finalProjectPath,
+            cwd: finalProjectPath!,
             stdio: 'pipe'
           });
 
-          await new Promise((resolve, reject) => {
+          await new Promise<void>((resolve, reject) => {
             let stderr = '';
             let stdout = '';
-            pushProcess.stdout.on('data', (data) => { stdout += data.toString(); });
-            pushProcess.stderr.on('data', (data) => { stderr += data.toString(); });
+            pushProcess.stdout?.on('data', (data) => { stdout += data.toString(); });
+            pushProcess.stderr?.on('data', (data) => { stderr += data.toString(); });
             pushProcess.on('close', (code) => {
               if (code === 0) {
                 console.log(`✅ Pushed branch '${finalBranchName}' to remote`);
@@ -674,13 +692,13 @@ router.post('/', validateExternalApiKey, async (req, res) => {
         if (stream) {
           writer.send({
             type: 'github-error',
-            error: error.message
+            error: errorMessage(error)
           });
         }
         // Store error info for non-streaming response
         if (!stream) {
-          branchInfo = { error: error.message };
-          prInfo = { error: error.message };
+          branchInfo = { error: errorMessage(error) };
+          prInfo = { error: errorMessage(error) };
         }
       }
     }
@@ -691,10 +709,11 @@ router.post('/', validateExternalApiKey, async (req, res) => {
       writer.end();
     } else {
       // Non-streaming mode: send filtered messages and token summary as JSON
+      if (!(writer instanceof ResponseCollector)) throw new Error('Non-streaming response collector was not initialized.');
       const assistantMessages = writer.getAssistantMessages();
       const tokenSummary = writer.getTotalTokens();
 
-      const response = {
+      const response: AgentResponsePayload = {
         success: true,
         sessionId: writer.getSessionId(),
         messages: assistantMessages,
@@ -718,7 +737,7 @@ router.post('/', validateExternalApiKey, async (req, res) => {
       // Only cleanup if we cloned a repo (not for existing project paths)
       const sessionIdForCleanup = writer.getSessionId();
       setTimeout(() => {
-        cleanupProject(finalProjectPath, sessionIdForCleanup);
+        cleanupProject(finalProjectPath!, sessionIdForCleanup);
       }, 5000);
     }
 
@@ -728,7 +747,7 @@ router.post('/', validateExternalApiKey, async (req, res) => {
     // Clean up on error
     if (finalProjectPath && cleanup && githubUrl) {
       const sessionIdForCleanup = writer ? writer.getSessionId() : null;
-      cleanupProject(finalProjectPath, sessionIdForCleanup);
+      cleanupProject(finalProjectPath!, sessionIdForCleanup);
     }
 
     if (stream) {
@@ -745,15 +764,15 @@ router.post('/', validateExternalApiKey, async (req, res) => {
       if (!res.writableEnded) {
         writer.send({
           type: 'error',
-          error: error.message,
-          message: `Failed: ${error.message}`
+          error: errorMessage(error),
+          message: `Failed: ${errorMessage(error)}`
         });
         writer.end();
       }
     } else if (!res.headersSent) {
       res.status(500).json({
         success: false,
-        error: error.message
+        error: errorMessage(error)
       });
     }
   }

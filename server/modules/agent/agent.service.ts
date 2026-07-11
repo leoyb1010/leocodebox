@@ -3,9 +3,22 @@ import os from 'node:os';
 import { promises as fs } from 'node:fs';
 
 import spawn from 'cross-spawn';
+import type { Response } from 'express';
+import type { Octokit } from '@octokit/rest';
 
-async function getGitRemoteUrl(repoPath) {
-  return new Promise((resolve, reject) => {
+type GitHubApiError = Error & { status?: number };
+type MessageRecord = Record<string, unknown>;
+
+function asRecord(value: unknown): MessageRecord {
+  return value && typeof value === 'object' && !Array.isArray(value) ? value as MessageRecord : {};
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error ?? '');
+}
+
+async function getGitRemoteUrl(repoPath: string): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
     const gitProcess = spawn('git', ['config', '--get', 'remote.origin.url'], {
       cwd: repoPath,
       stdio: ['pipe', 'pipe', 'pipe']
@@ -14,11 +27,11 @@ async function getGitRemoteUrl(repoPath) {
     let stdout = '';
     let stderr = '';
 
-    gitProcess.stdout.on('data', (data) => {
+    gitProcess.stdout?.on('data', (data) => {
       stdout += data.toString();
     });
 
-    gitProcess.stderr.on('data', (data) => {
+    gitProcess.stderr?.on('data', (data) => {
       stderr += data.toString();
     });
 
@@ -41,7 +54,7 @@ async function getGitRemoteUrl(repoPath) {
  * @param {string} url - GitHub URL
  * @returns {string} - Normalized URL
  */
-function normalizeGitHubUrl(url) {
+function normalizeGitHubUrl(url: string): string {
   // Remove .git suffix
   let normalized = url.replace(/\.git$/, '');
   // Convert SSH to HTTPS format for comparison
@@ -56,7 +69,7 @@ function normalizeGitHubUrl(url) {
  * @param {string} url - GitHub URL (HTTPS or SSH)
  * @returns {{owner: string, repo: string}} - Parsed owner and repo
  */
-function parseGitHubUrl(url) {
+function parseGitHubUrl(url: string): { owner: string; repo: string } {
   // Handle HTTPS URLs: https://github.com/owner/repo or https://github.com/owner/repo.git
   // Handle SSH URLs: git@github.com:owner/repo or git@github.com:owner/repo.git
   const match = url.match(/github\.com[:/]([^/]+)\/([^/]+?)(?:\.git)?$/);
@@ -74,7 +87,7 @@ function parseGitHubUrl(url) {
  * @param {string} message - The agent message
  * @returns {string} - Generated branch name
  */
-function autogenerateBranchName(message) {
+function autogenerateBranchName(message: string): string {
   // Convert to lowercase, replace spaces/special chars with hyphens
   let branchName = message
     .toLowerCase()
@@ -123,7 +136,7 @@ function autogenerateBranchName(message) {
  * @param {string} branchName - Branch name to validate
  * @returns {{valid: boolean, error?: string}} - Validation result
  */
-function validateBranchName(branchName) {
+function validateBranchName(branchName: string): { valid: boolean; error?: string } {
   if (!branchName || branchName.trim() === '') {
     return { valid: false, error: 'Branch name cannot be empty' };
   }
@@ -162,8 +175,8 @@ function validateBranchName(branchName) {
  * @param {number} limit - Number of commits to retrieve (default: 5)
  * @returns {Promise<string[]>} - Array of commit messages
  */
-async function getCommitMessages(projectPath, limit = 5) {
-  return new Promise((resolve, reject) => {
+async function getCommitMessages(projectPath: string, limit = 5): Promise<string[]> {
+  return new Promise<string[]>((resolve, reject) => {
     const gitProcess = spawn('git', ['log', `-${limit}`, '--pretty=format:%s'], {
       cwd: projectPath,
       stdio: ['pipe', 'pipe', 'pipe']
@@ -172,11 +185,11 @@ async function getCommitMessages(projectPath, limit = 5) {
     let stdout = '';
     let stderr = '';
 
-    gitProcess.stdout.on('data', (data) => {
+    gitProcess.stdout?.on('data', (data) => {
       stdout += data.toString();
     });
 
-    gitProcess.stderr.on('data', (data) => {
+    gitProcess.stderr?.on('data', (data) => {
       stderr += data.toString();
     });
 
@@ -204,7 +217,7 @@ async function getCommitMessages(projectPath, limit = 5) {
  * @param {string} baseBranch - Base branch to branch from (default: 'main')
  * @returns {Promise<void>}
  */
-async function createGitHubBranch(octokit, owner, repo, branchName, baseBranch = 'main') {
+async function createGitHubBranch(octokit: Octokit, owner: string, repo: string, branchName: string, baseBranch = 'main'): Promise<void> {
   try {
     // Get the SHA of the base branch
     const { data: ref } = await octokit.git.getRef({
@@ -225,7 +238,8 @@ async function createGitHubBranch(octokit, owner, repo, branchName, baseBranch =
 
     console.log(`✅ Created branch '${branchName}' on GitHub`);
   } catch (error) {
-    if (error.status === 422 && error.message.includes('Reference already exists')) {
+    const apiError = error as GitHubApiError;
+    if (apiError.status === 422 && apiError.message.includes('Reference already exists')) {
       console.log(`ℹ️ Branch '${branchName}' already exists on GitHub`);
     } else {
       throw error;
@@ -244,7 +258,7 @@ async function createGitHubBranch(octokit, owner, repo, branchName, baseBranch =
  * @param {string} baseBranch - Base branch (default: 'main')
  * @returns {Promise<{number: number, url: string}>} - PR number and URL
  */
-async function createGitHubPR(octokit, owner, repo, branchName, title, body, baseBranch = 'main') {
+async function createGitHubPR(octokit: Octokit, owner: string, repo: string, branchName: string, title: string, body: string, baseBranch = 'main'): Promise<{ number: number; url: string }> {
   const { data: pr } = await octokit.pulls.create({
     owner,
     repo,
@@ -269,8 +283,8 @@ async function createGitHubPR(octokit, owner, repo, branchName, title, body, bas
  * @param {string} projectPath - Path for cloning the repository
  * @returns {Promise<string>} - Path to the cloned repository
  */
-async function cloneGitHubRepo(githubUrl, githubToken = null, projectPath) {
-  return new Promise(async (resolve, reject) => {
+async function cloneGitHubRepo(githubUrl: string, githubToken: string | null = null, projectPath: string): Promise<string> {
+  return new Promise<string>(async (resolve, reject) => {
     try {
       // Validate GitHub URL
       if (!githubUrl || !githubUrl.includes('github.com')) {
@@ -323,11 +337,11 @@ async function cloneGitHubRepo(githubUrl, githubToken = null, projectPath) {
       let stdout = '';
       let stderr = '';
 
-      gitProcess.stdout.on('data', (data) => {
+      gitProcess.stdout?.on('data', (data) => {
         stdout += data.toString();
       });
 
-      gitProcess.stderr.on('data', (data) => {
+      gitProcess.stderr?.on('data', (data) => {
         stderr += data.toString();
         console.log('Git stderr:', data.toString());
       });
@@ -356,7 +370,7 @@ async function cloneGitHubRepo(githubUrl, githubToken = null, projectPath) {
  * @param {string} projectPath - Path to the project directory
  * @param {string} sessionId - Session ID to clean up
  */
-async function cleanupProject(projectPath, sessionId = null) {
+async function cleanupProject(projectPath: string, sessionId: string | null = null): Promise<void> {
   try {
     // Only clean up projects in the external-projects directory
     if (!projectPath.includes('.claude/external-projects')) {
@@ -376,7 +390,7 @@ async function cleanupProject(projectPath, sessionId = null) {
         await fs.rm(sessionPath, { recursive: true, force: true });
         console.log('✅ Session directory cleaned up');
       } catch (error) {
-        console.error('⚠️ Failed to clean up session directory:', error.message);
+        console.error('⚠️ Failed to clean up session directory:', errorMessage(error));
       }
     }
   } catch (error) {
@@ -388,14 +402,19 @@ async function cleanupProject(projectPath, sessionId = null) {
  * SSE Stream Writer - Adapts SDK/CLI output to Server-Sent Events
  */
 class SSEStreamWriter {
-  constructor(res, userId = null) {
+  readonly res: Response;
+  sessionId: string | null;
+  readonly userId: number | null;
+  readonly isSSEStreamWriter: true;
+
+  constructor(res: Response, userId: number | null = null) {
     this.res = res;
     this.sessionId = null;
     this.userId = userId;
     this.isSSEStreamWriter = true;  // Marker for transport detection
   }
 
-  send(data) {
+  send(data: unknown): void {
     if (this.res.writableEnded) {
       return;
     }
@@ -404,19 +423,19 @@ class SSEStreamWriter {
     this.res.write(`data: ${JSON.stringify(data)}\n\n`);
   }
 
-  end() {
+  end(): void {
     if (!this.res.writableEnded) {
       this.res.write('data: {"type":"done"}\n\n');
       this.res.end();
     }
   }
 
-  setSessionId(sessionId) {
+  setSessionId(sessionId: string): void {
     this.sessionId = sessionId;
     this.send({ type: 'session-id', sessionId });
   }
 
-  getSessionId() {
+  getSessionId(): string | null {
     return this.sessionId;
   }
 }
@@ -425,13 +444,17 @@ class SSEStreamWriter {
  * Non-streaming response collector
  */
 class ResponseCollector {
-  constructor(userId = null) {
+  readonly messages: unknown[];
+  sessionId: string | null;
+  readonly userId: number | null;
+
+  constructor(userId: number | null = null) {
     this.messages = [];
     this.sessionId = null;
     this.userId = userId;
   }
 
-  send(data) {
+  send(data: unknown): void {
     // Store ALL messages for now - we'll filter when returning
     this.messages.push(data);
 
@@ -445,36 +468,37 @@ class ResponseCollector {
       } catch (e) {
         // Not JSON, ignore
       }
-    } else if (data && data.sessionId) {
-      this.sessionId = data.sessionId;
+    } else {
+      const record = asRecord(data);
+      if (typeof record.sessionId === 'string') this.sessionId = record.sessionId;
     }
   }
 
-  end() {
+  end(): void {
     // Do nothing - we'll collect all messages
   }
 
-  setSessionId(sessionId) {
+  setSessionId(sessionId: string): void {
     this.sessionId = sessionId;
   }
 
-  getSessionId() {
+  getSessionId(): string | null {
     return this.sessionId;
   }
 
-  getMessages() {
+  getMessages(): unknown[] {
     return this.messages;
   }
 
   /**
    * Get filtered assistant messages only
    */
-  getAssistantMessages() {
-    const assistantMessages = [];
+  getAssistantMessages(): unknown[] {
+    const assistantMessages: unknown[] = [];
 
     for (const msg of this.messages) {
       // Skip initial status message
-      if (msg && msg.type === 'status') {
+      if (asRecord(msg).type === 'status') {
         continue;
       }
 
@@ -498,7 +522,7 @@ class ResponseCollector {
   /**
    * Calculate total tokens from all messages
    */
-  getTotalTokens() {
+  getTotalTokens(): { inputTokens: number; outputTokens: number; cacheReadTokens: number; cacheCreationTokens: number; totalTokens: number } {
     let totalInput = 0;
     let totalOutput = 0;
     let totalCacheRead = 0;
@@ -517,15 +541,14 @@ class ResponseCollector {
       }
 
       // Extract usage from claude-response messages
-      if (data && data.type === 'claude-response' && data.data) {
-        const msgData = data.data;
-        if (msgData.message && msgData.message.usage) {
-          const usage = msgData.message.usage;
-          totalInput += usage.input_tokens || 0;
-          totalOutput += usage.output_tokens || 0;
-          totalCacheRead += usage.cache_read_input_tokens || 0;
-          totalCacheCreation += usage.cache_creation_input_tokens || 0;
-        }
+      const dataRecord = asRecord(data);
+      if (dataRecord.type === 'claude-response') {
+        const msgData = asRecord(dataRecord.data);
+        const usage = asRecord(asRecord(msgData.message).usage);
+        totalInput += Number(usage.input_tokens) || 0;
+        totalOutput += Number(usage.output_tokens) || 0;
+        totalCacheRead += Number(usage.cache_read_input_tokens) || 0;
+        totalCacheCreation += Number(usage.cache_creation_input_tokens) || 0;
       }
     }
 
