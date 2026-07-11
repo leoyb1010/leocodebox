@@ -307,6 +307,33 @@
     }
   },
   "agents": {
+
+      "cliTools": {
+        "title": "本機代理",
+        "refresh": "重新整理",
+        "versionCheck": "版本檢查：{{time}}",
+        "cacheHint": "登錄檔結果快取 24 小時",
+        "updateAvailable": "有新版本",
+        "latest": "最新",
+        "notRunnable": "無法執行",
+        "notInstalled": "未安裝",
+        "currentVersion": "目前 {{version}} · {{source}}",
+        "unknownVersion": "未知",
+        "unknownSource": "來源未知",
+        "latestVersionLabel": "最新 {{version}}",
+        "commandDetectedFailed": "已偵測到指令，但版本檢查失敗",
+        "commandMissing": "找不到本機指令 {{command}}",
+        "update": "更新",
+        "install": "安裝",
+        "installationGuide": "安裝說明",
+        "loadFailed": "無法讀取本機代理狀態",
+        "installSuccess": "{{tool}} 已安裝（{{version}}）。",
+        "updateSuccess": "{{tool}} 已更新至 {{version}}。",
+        "alreadyLatest": "{{tool}} 已是最新版本（{{version}}）。",
+        "latestVersion": "最新版本",
+        "actionFailed": "{{tool}} {{action}}失敗：{{error}}",
+        "unknownError": "未知錯誤"
+      },
     "authStatus": {
       "checking": "檢查中...",
       "connected": "已連線",

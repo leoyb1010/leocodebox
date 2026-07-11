@@ -304,6 +304,33 @@
     }
   },
   "agents": {
+
+      "cliTools": {
+        "title": "Lokale Agents",
+        "refresh": "Aktualisieren",
+        "versionCheck": "Version checked: {{time}}",
+        "cacheHint": "registry results cached for 24 hours",
+        "updateAvailable": "Update verfügbar",
+        "latest": "Aktuell",
+        "notRunnable": "Nicht ausführbar",
+        "notInstalled": "Nicht installiert",
+        "currentVersion": "Current {{version}} · {{source}}",
+        "unknownVersion": "unknown",
+        "unknownSource": "unknown source",
+        "latestVersionLabel": "latest {{version}}",
+        "commandDetectedFailed": "Command found, but version check failed",
+        "commandMissing": "Local command {{command}} was not found",
+        "update": "Aktualisieren",
+        "install": "Installieren",
+        "installationGuide": "Installationsanleitung",
+        "loadFailed": "Status der lokalen Agents konnte nicht gelesen werden",
+        "installSuccess": "{{tool}} installed ({{version}}).",
+        "updateSuccess": "{{tool}} updated to {{version}}.",
+        "alreadyLatest": "{{tool}} is already current ({{version}}).",
+        "latestVersion": "latest version",
+        "actionFailed": "{{tool}} {{action}} failed: {{error}}",
+        "unknownError": "unknown error"
+      },
     "authStatus": {
       "checking": "Wird überprüft...",
       "connected": "Verbunden",

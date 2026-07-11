@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowDownToLine, ArrowUpCircle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { apiRequest } from '../../../../../utils/api';
 import { cn } from '../../../../../lib/utils';
@@ -41,6 +42,7 @@ type CliActionResponse = {
  * newer version exists on the registry, and a one-click self-update button.
  */
 export default function CliToolsSection() {
+  const { t, i18n } = useTranslation('settings');
   const [tools, setTools] = useState<CliToolStatus[]>([]);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState<string | null>(null);
@@ -59,15 +61,15 @@ export default function CliToolsSection() {
       }
     } catch (error) {
       console.error('Failed to load CLI status:', error);
-      setLoadError(error instanceof Error ? error.message : '无法读取本机智能体状态');
+      setLoadError(error instanceof Error ? error.message : t('agents.cliTools.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     void load(false);
-  }, [load]);
+  }, [load, t]);
 
   const runAction = useCallback(async (tool: CliToolStatus, action: 'install' | 'update') => {
     setUpdating(tool.id);
@@ -78,37 +80,37 @@ export default function CliToolsSection() {
       }) as CliActionResponse;
       if (data?.success) {
         setMessage(action === 'install'
-          ? `${tool.label} 已安装${data.currentVersion ? ` (${data.currentVersion})` : ''}。`
+          ? t('agents.cliTools.installSuccess', { tool: tool.label, version: data.currentVersion || '' })
           : data.changed
-            ? `${tool.label} 已更新到 ${data.currentVersion ?? '最新版本'}。`
-            : `${tool.label} 已是最新版本 (${data.currentVersion ?? tool.currentVersion ?? ''})。`);
+            ? t('agents.cliTools.updateSuccess', { tool: tool.label, version: data.currentVersion ?? t('agents.cliTools.latestVersion') })
+            : t('agents.cliTools.alreadyLatest', { tool: tool.label, version: data.currentVersion ?? tool.currentVersion ?? '' }));
       } else {
-        setMessage(`${tool.label} ${action === 'install' ? '安装' : '更新'}失败：${data?.error ?? '未知错误'}`);
+        setMessage(t('agents.cliTools.actionFailed', { tool: tool.label, action: t(`agents.cliTools.${action}`), error: data?.error ?? t('agents.cliTools.unknownError') }));
       }
     } catch (error) {
-      setMessage(`${tool.label} ${action === 'install' ? '安装' : '更新'}失败：${error instanceof Error ? error.message : '未知错误'}`);
+      setMessage(t('agents.cliTools.actionFailed', { tool: tool.label, action: t(`agents.cliTools.${action}`), error: error instanceof Error ? error.message : t('agents.cliTools.unknownError') }));
     } finally {
       setUpdating(null);
       void load(true);
     }
-  }, [load]);
+  }, [load, t]);
 
   return (
     <div className="border-b border-border/60 bg-muted/20 px-4 py-3 md:px-6">
       <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-sm font-medium text-foreground">本机智能体</h3>
+        <h3 className="text-sm font-medium text-foreground">{t('agents.cliTools.title')}</h3>
         <button
           onClick={() => void load(true)}
           className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          title="刷新"
+          title={t('agents.cliTools.refresh')}
         >
           <RefreshCw className={cn('h-3 w-3', loading && 'animate-spin')} />
-          刷新
+          {t('agents.cliTools.refresh')}
         </button>
       </div>
       {checkedAt && (
         <p className="mb-2 text-[11px] text-muted-foreground">
-          版本检查：{new Date(checkedAt).toLocaleString()} · 注册表结果缓存 24 小时
+          {t('agents.cliTools.versionCheck', { time: new Date(checkedAt).toLocaleString(i18n.language) })} · {t('agents.cliTools.cacheHint')}
         </p>
       )}
 
@@ -125,30 +127,30 @@ export default function CliToolsSection() {
                   tool.updateAvailable ? (
                     <span className="inline-flex items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
                       <ArrowUpCircle className="h-3 w-3" />
-                      有新版本
+                      {t('agents.cliTools.updateAvailable')}
                     </span>
                   ) : (
                     <span className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
                       <CheckCircle2 className="h-3 w-3" />
-                      最新
+                      {t('agents.cliTools.latest')}
                     </span>
                   )
                 ) : tool.installed ? (
-                  <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] text-red-700 dark:text-red-300">不可运行</span>
+                  <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] text-red-700 dark:text-red-300">{t('agents.cliTools.notRunnable')}</span>
                 ) : (
-                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">未安装</span>
+                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{t('agents.cliTools.notInstalled')}</span>
                 )}
               </div>
               <div className="mt-0.5 truncate text-xs text-muted-foreground">
                 {tool.installed && tool.runnable ? (
                   <>
-                    当前 {tool.currentVersion ?? '未知'} · {tool.installSource || '来源未知'}
-                    {tool.updateAvailable && tool.latestVersion ? ` → 最新 ${tool.latestVersion}` : ''}
+                    {t('agents.cliTools.currentVersion', { version: tool.currentVersion ?? t('agents.cliTools.unknownVersion'), source: tool.installSource || t('agents.cliTools.unknownSource') })}
+                    {tool.updateAvailable && tool.latestVersion ? ` → ${t('agents.cliTools.latestVersionLabel', { version: tool.latestVersion })}` : ''}
                   </>
                 ) : tool.installed ? (
-                  <span title={tool.error ?? undefined}>{tool.error || '已检测到命令，但版本检查失败'}</span>
+                  <span title={tool.error ?? undefined}>{tool.error || t('agents.cliTools.commandDetectedFailed')}</span>
                 ) : (
-                  <span>未找到本机命令 {tool.command}</span>
+                  <span>{t('agents.cliTools.commandMissing', { command: tool.command })}</span>
                 )}
               </div>
             </div>
@@ -160,7 +162,7 @@ export default function CliToolsSection() {
                 className="inline-flex flex-shrink-0 items-center gap-1 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
               >
                 {updating === tool.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <ArrowUpCircle className="h-3 w-3" />}
-                更新
+                {t('agents.cliTools.update')}
               </button>
             )}
             {!tool.installed && tool.canInstall && (
@@ -170,7 +172,7 @@ export default function CliToolsSection() {
                 className="inline-flex flex-shrink-0 items-center gap-1 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
               >
                 {updating === tool.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <ArrowDownToLine className="h-3 w-3" />}
-                安装
+                {t('agents.cliTools.install')}
               </button>
             )}
             {!tool.installed && !tool.canInstall && tool.docsUrl && (
@@ -180,14 +182,14 @@ export default function CliToolsSection() {
                 rel="noreferrer"
                 className="flex-shrink-0 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium text-foreground hover:bg-accent"
               >
-                安装说明
+                {t('agents.cliTools.installationGuide')}
               </a>
             )}
           </div>
         ))}
       </div>
 
-      {loadError && <p role="alert" className="mt-2 text-xs text-destructive">无法读取本机智能体状态：{loadError}</p>}
+      {loadError && <p role="alert" className="mt-2 text-xs text-destructive">{t('agents.cliTools.loadFailed')}: {loadError}</p>}
       {message && <p className="mt-2 text-xs text-muted-foreground">{message}</p>}
     </div>
   );

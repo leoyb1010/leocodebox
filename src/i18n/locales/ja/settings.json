@@ -304,6 +304,33 @@
     }
   },
   "agents": {
+
+      "cliTools": {
+        "title": "ローカルエージェント",
+        "refresh": "更新",
+        "versionCheck": "Version checked: {{time}}",
+        "cacheHint": "registry results cached for 24 hours",
+        "updateAvailable": "更新あり",
+        "latest": "最新",
+        "notRunnable": "実行不可",
+        "notInstalled": "未インストール",
+        "currentVersion": "Current {{version}} · {{source}}",
+        "unknownVersion": "unknown",
+        "unknownSource": "unknown source",
+        "latestVersionLabel": "latest {{version}}",
+        "commandDetectedFailed": "Command found, but version check failed",
+        "commandMissing": "Local command {{command}} was not found",
+        "update": "更新",
+        "install": "インストール",
+        "installationGuide": "インストール手順",
+        "loadFailed": "ローカルエージェントの状態を取得できません",
+        "installSuccess": "{{tool}} installed ({{version}}).",
+        "updateSuccess": "{{tool}} updated to {{version}}.",
+        "alreadyLatest": "{{tool}} is already current ({{version}}).",
+        "latestVersion": "latest version",
+        "actionFailed": "{{tool}} {{action}} failed: {{error}}",
+        "unknownError": "unknown error"
+      },
     "authStatus": {
       "checking": "確認中...",
       "connected": "接続済み",

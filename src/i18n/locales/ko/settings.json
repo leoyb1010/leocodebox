@@ -304,6 +304,33 @@
     }
   },
   "agents": {
+
+      "cliTools": {
+        "title": "로컬 에이전트",
+        "refresh": "새로고침",
+        "versionCheck": "Version checked: {{time}}",
+        "cacheHint": "registry results cached for 24 hours",
+        "updateAvailable": "업데이트 있음",
+        "latest": "최신",
+        "notRunnable": "실행 불가",
+        "notInstalled": "설치되지 않음",
+        "currentVersion": "Current {{version}} · {{source}}",
+        "unknownVersion": "unknown",
+        "unknownSource": "unknown source",
+        "latestVersionLabel": "latest {{version}}",
+        "commandDetectedFailed": "Command found, but version check failed",
+        "commandMissing": "Local command {{command}} was not found",
+        "update": "업데이트",
+        "install": "설치",
+        "installationGuide": "설치 안내",
+        "loadFailed": "로컬 에이전트 상태를 읽을 수 없습니다",
+        "installSuccess": "{{tool}} installed ({{version}}).",
+        "updateSuccess": "{{tool}} updated to {{version}}.",
+        "alreadyLatest": "{{tool}} is already current ({{version}}).",
+        "latestVersion": "latest version",
+        "actionFailed": "{{tool}} {{action}} failed: {{error}}",
+        "unknownError": "unknown error"
+      },
     "authStatus": {
       "checking": "확인 중...",
       "connected": "연결됨",
