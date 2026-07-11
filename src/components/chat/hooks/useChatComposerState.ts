@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type {
   ChangeEvent,
-  ClipboardEvent,
   Dispatch,
   FormEvent,
   KeyboardEvent,
@@ -9,7 +8,6 @@ import type {
   SetStateAction,
   TouchEvent,
 } from 'react';
-import { useDropzone } from 'react-dropzone';
 
 import { authenticatedFetch } from '../../../utils/api';
 import type { MarkSessionProcessing } from '../../../hooks/useSessionProtection';
@@ -31,6 +29,9 @@ import type { Project, ProjectSession, LLMProvider, ProviderModelsCacheInfo } fr
 import { escapeRegExp } from '../utils/chatFormatting';
 
 import { useFileMentions } from './useFileMentions';
+import { useChatImageAttachments } from './useChatImageAttachments';
+import { useChatTextareaLayout } from './useChatTextareaLayout';
+import { getNotificationSessionSummary, useChatSendOptions } from './useChatSendOptions';
 import { type SlashCommand, useSlashCommands } from './useSlashCommands';
 
 interface UseChatComposerStateArgs {
@@ -167,23 +168,7 @@ const restoreQueuedDraft = (sessionKey: string): QueuedDraft | null => {
   return saved ? { content: saved.content, images: [], options: saved.options } : null;
 };
 
-const getNotificationSessionSummary = (
-  selectedSession: ProjectSession | null,
-  fallbackInput: string,
-): string | null => {
-  const sessionSummary = selectedSession?.summary || selectedSession?.name || selectedSession?.title;
-  if (typeof sessionSummary === 'string' && sessionSummary.trim()) {
-    const normalized = sessionSummary.replace(/\s+/g, ' ').trim();
-    return normalized.length > 80 ? `${normalized.slice(0, 77)}...` : normalized;
-  }
 
-  const normalizedFallback = fallbackInput.replace(/\s+/g, ' ').trim();
-  if (!normalizedFallback) {
-    return null;
-  }
-
-  return normalizedFallback.length > 80 ? `${normalizedFallback.slice(0, 77)}...` : normalizedFallback;
-};
 
 export function useChatComposerState({
   selectedProject,
@@ -221,16 +206,30 @@ export function useChatComposerState({
     }
     return '';
   });
-  const [attachedImages, setAttachedImages] = useState<File[]>([]);
-  const [uploadingImages, setUploadingImages] = useState<Map<string, number>>(new Map());
-  const [imageErrors, setImageErrors] = useState<Map<string, string>>(new Map());
-  const [isTextareaExpanded, setIsTextareaExpanded] = useState(false);
+  const {
+    attachedImages,
+    setAttachedImages,
+    uploadingImages,
+    imageErrors,
+    handlePaste,
+    resetImageAttachments,
+    getRootProps,
+    getInputProps,
+    isDragActive,
+    openImagePicker,
+  } = useChatImageAttachments();
+  const {
+    textareaRef,
+    inputHighlightRef,
+    isTextareaExpanded,
+    isInputFocused,
+    resizeTextarea,
+    collapseTextarea,
+    syncInputOverlayScroll,
+    handleInputFocusChange,
+  } = useChatTextareaLayout({ input, onInputFocusChange });
   const [commandModalPayload, setCommandModalPayload] = useState<CommandModalPayload | null>(null);
 
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const inputHighlightRef = useRef<HTMLDivElement>(null);
-  const textareaLineHeightRef = useRef<number | null>(null);
-  const lastAutosizedInputRef = useRef<string | null>(null);
   const handleSubmitRef = useRef<
     ((event: FormEvent<HTMLFormElement> | MouseEvent | TouchEvent | KeyboardEvent<HTMLTextAreaElement>) => Promise<void>) | null
   >(null);
@@ -489,159 +488,17 @@ export function useChatComposerState({
     textareaRef,
   });
 
-  const syncInputOverlayScroll = useCallback((target: HTMLTextAreaElement) => {
-    if (!inputHighlightRef.current || !target) {
-      return;
-    }
-    inputHighlightRef.current.scrollTop = target.scrollTop;
-    inputHighlightRef.current.scrollLeft = target.scrollLeft;
-  }, []);
-
-  const resizeTextarea = useCallback((target: HTMLTextAreaElement) => {
-    target.style.height = 'auto';
-    const nextHeight = Math.max(22, target.scrollHeight);
-    target.style.height = `${nextHeight}px`;
-
-    let lineHeight = textareaLineHeightRef.current;
-    if (!lineHeight) {
-      lineHeight = parseInt(window.getComputedStyle(target).lineHeight);
-      textareaLineHeightRef.current = Number.isFinite(lineHeight) ? lineHeight : 24;
-    }
-
-    const expanded = nextHeight > (textareaLineHeightRef.current || 24) * 2;
-    setIsTextareaExpanded((previous) => previous === expanded ? previous : expanded);
-    lastAutosizedInputRef.current = target.value;
-  }, []);
-
-  const handleImageFiles = useCallback((files: File[]) => {
-    const validFiles = files.filter((file) => {
-      try {
-        if (!file || typeof file !== 'object') {
-          console.warn('Invalid file object:', file);
-          return false;
-        }
-
-        if (!file.type || !file.type.startsWith('image/')) {
-          return false;
-        }
-
-        if (!file.size || file.size > 5 * 1024 * 1024) {
-          const fileName = file.name || 'Unknown file';
-          setImageErrors((previous) => {
-            const next = new Map(previous);
-            next.set(fileName, 'File too large (max 5MB)');
-            return next;
-          });
-          return false;
-        }
-
-        return true;
-      } catch (error) {
-        console.error('Error validating file:', error, file);
-        return false;
-      }
-    });
-
-    if (validFiles.length > 0) {
-      setAttachedImages((previous) => [...previous, ...validFiles].slice(0, 5));
-    }
-  }, []);
-
-  const handlePaste = useCallback(
-    (event: ClipboardEvent<HTMLTextAreaElement>) => {
-      const items = Array.from(event.clipboardData.items);
-
-      items.forEach((item) => {
-        if (!item.type.startsWith('image/')) {
-          return;
-        }
-        const file = item.getAsFile();
-        if (file) {
-          handleImageFiles([file]);
-        }
-      });
-
-      if (items.length === 0 && event.clipboardData.files.length > 0) {
-        const files = Array.from(event.clipboardData.files);
-        const imageFiles = files.filter((file) => file.type.startsWith('image/'));
-        if (imageFiles.length > 0) {
-          handleImageFiles(imageFiles);
-        }
-      }
-    },
-    [handleImageFiles],
-  );
-
-  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
-    accept: {
-      'image/*': ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'],
-    },
-    maxSize: 5 * 1024 * 1024,
-    maxFiles: 5,
-    onDrop: handleImageFiles,
-    noClick: true,
-    noKeyboard: true,
-  });
-
-  // Snapshot of everything `chat.send` needs beyond the text itself. Built at
-  // send time for immediate sends and at queue time for queued ones, so a
-  // queued message keeps the provider settings it was composed under even if
-  // it is later dispatched outside this composer (app-level auto-send).
-  const buildSendOptions = useCallback((currentInput: string): QueuedSendOptions => {
-    const getToolsSettings = () => {
-      try {
-        const settingsKey =
-          provider === 'cursor'
-            ? 'cursor-tools-settings'
-            : provider === 'codex'
-              ? 'codex-settings'
-              : provider === 'opencode'
-                  ? 'opencode-settings'
-                : 'claude-settings';
-        const savedSettings = safeLocalStorage.getItem(settingsKey);
-        if (savedSettings) {
-          return JSON.parse(savedSettings);
-        }
-      } catch (error) {
-        console.error('Error loading tools settings:', error);
-      }
-
-      return {
-        allowedTools: [],
-        disallowedTools: [],
-        skipPermissions: false,
-      };
-    };
-
-    const toolsSettings = getToolsSettings();
-    const model =
-      provider === 'cursor'
-        ? cursorModel
-        : provider === 'codex'
-          ? codexModel
-          : provider === 'opencode'
-            ? opencodeModel
-            : claudeModel;
-
-    return {
-      model,
-      effort: currentProviderEffort,
-      permissionMode: resolvePermissionModeForProvider(provider, permissionMode),
-      toolsSettings,
-      skipPermissions: toolsSettings?.skipPermissions || false,
-      sessionSummary: getNotificationSessionSummary(selectedSession, currentInput),
-    };
-  }, [
+  const buildSendOptions = useChatSendOptions({
+    provider,
+    permissionMode,
+    resolvePermissionModeForProvider,
+    cursorModel,
     claudeModel,
     codexModel,
-    currentProviderEffort,
-    cursorModel,
     opencodeModel,
-    permissionMode,
-    provider,
-    resolvePermissionModeForProvider,
+    currentProviderEffort,
     selectedSession,
-  ]);
+  });
 
   const handleSubmit = useCallback(
     async (
@@ -665,14 +522,9 @@ export function useChatComposerState({
         });
         setInput('');
         inputValueRef.current = '';
-        setAttachedImages([]);
-        setUploadingImages(new Map());
-        setImageErrors(new Map());
+        resetImageAttachments();
         resetCommandMenuState();
-        setIsTextareaExpanded(false);
-        if (textareaRef.current) {
-          textareaRef.current.style.height = 'auto';
-        }
+        collapseTextarea();
         // selectedProject is guaranteed by the guard at the top of handleSubmit.
         safeLocalStorage.removeItem(`draft_input_${selectedProject.projectId}`);
         return;
@@ -701,14 +553,9 @@ export function useChatComposerState({
           executeCommand(matchedCommand, isHelpAlias ? '/help' : commandInput);
           setInput('');
           inputValueRef.current = '';
-          setAttachedImages([]);
-          setUploadingImages(new Map());
-          setImageErrors(new Map());
+          resetImageAttachments();
           resetCommandMenuState();
-          setIsTextareaExpanded(false);
-          if (textareaRef.current) {
-            textareaRef.current.style.height = 'auto';
-          }
+          collapseTextarea();
           return;
         }
       }
@@ -831,14 +678,8 @@ export function useChatComposerState({
       setInput('');
       inputValueRef.current = '';
       resetCommandMenuState();
-      setAttachedImages([]);
-      setUploadingImages(new Map());
-      setImageErrors(new Map());
-      setIsTextareaExpanded(false);
-
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
-      }
+      resetImageAttachments();
+      collapseTextarea();
 
       safeLocalStorage.removeItem(`draft_input_${selectedProject.projectId}`);
     },
@@ -846,6 +687,7 @@ export function useChatComposerState({
       selectedSession,
       attachedImages,
       buildSendOptions,
+      collapseTextarea,
       currentSessionId,
       executeCommand,
       isLoading,
@@ -853,6 +695,7 @@ export function useChatComposerState({
       onSessionEstablished,
       provider,
       resetCommandMenuState,
+      resetImageAttachments,
       scrollToBottom,
       selectedProject,
       sendMessage,
@@ -910,7 +753,7 @@ export function useChatComposerState({
       }, 0);
     }, delay);
     return () => clearTimeout(timer);
-  }, [isLoading, queuedDraft, sessionKey, setInput]);
+  }, [isLoading, queuedDraft, sessionKey, setAttachedImages, setInput]);
 
   const editQueuedDraft = useCallback(() => {
     if (!queuedDraft) {
@@ -921,7 +764,7 @@ export function useChatComposerState({
     inputValueRef.current = queuedDraft.content;
     setAttachedImages(queuedDraft.images);
     textareaRef.current?.focus();
-  }, [queuedDraft]);
+  }, [queuedDraft, setAttachedImages, textareaRef]);
 
   const deleteQueuedDraft = useCallback(() => {
     setQueuedDraft(null);
@@ -992,26 +835,6 @@ export function useChatComposerState({
     setQueuedDraft(restoreQueuedDraft(sessionKey));
   }, [sessionKey]);
 
-  useEffect(() => {
-    if (!textareaRef.current) {
-      return;
-    }
-    if (lastAutosizedInputRef.current === input) {
-      return;
-    }
-    // Re-run for restored drafts and programmatic input changes. User typing is
-    // already resized in onInput, so this avoids doing the same forced layout twice.
-    resizeTextarea(textareaRef.current);
-  }, [input, resizeTextarea]);
-
-  useEffect(() => {
-    if (!textareaRef.current || input.trim()) {
-      return;
-    }
-    textareaRef.current.style.height = 'auto';
-    setIsTextareaExpanded(false);
-  }, [input]);
-
   const handleInputChange = useCallback(
     (event: ChangeEvent<HTMLTextAreaElement>) => {
       const newValue = event.target.value;
@@ -1022,15 +845,14 @@ export function useChatComposerState({
       setCursorPosition(cursorPos);
 
       if (!newValue.trim()) {
-        event.target.style.height = 'auto';
-        setIsTextareaExpanded(false);
+        collapseTextarea();
         resetCommandMenuState();
         return;
       }
 
       handleCommandInputChange(newValue, cursorPos);
     },
-    [handleCommandInputChange, resetCommandMenuState, setCursorPosition],
+    [collapseTextarea, handleCommandInputChange, resetCommandMenuState, setCursorPosition],
   );
 
   const handleKeyDown = useCallback(
@@ -1095,12 +917,8 @@ export function useChatComposerState({
     setInput('');
     inputValueRef.current = '';
     resetCommandMenuState();
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.focus();
-    }
-    setIsTextareaExpanded(false);
-  }, [resetCommandMenuState]);
+    collapseTextarea(true);
+  }, [collapseTextarea, resetCommandMenuState]);
 
   const handleAbortSession = useCallback(() => {
     if (!canAbortSession) {
@@ -1160,15 +978,7 @@ export function useChatComposerState({
     [sendMessage, setPendingPermissionRequests],
   );
 
-  const [isInputFocused, setIsInputFocused] = useState(false);
 
-  const handleInputFocusChange = useCallback(
-    (focused: boolean) => {
-      setIsInputFocused(focused);
-      onInputFocusChange?.(focused);
-    },
-    [onInputFocusChange],
-  );
 
   return {
     input,
@@ -1197,7 +1007,7 @@ export function useChatComposerState({
     getRootProps,
     getInputProps,
     isDragActive,
-    openImagePicker: open,
+    openImagePicker,
     handleSubmit,
     queuedDraft,
     editQueuedDraft,
