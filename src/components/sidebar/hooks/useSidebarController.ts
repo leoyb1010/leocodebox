@@ -23,46 +23,9 @@ import {
   sortProjects,
 } from '../utils/utils';
 
-type SnippetHighlight = {
-  start: number;
-  end: number;
-};
+import { useConversationSearch } from './useConversationSearch';
 
-type ConversationMatch = {
-  role: string;
-  snippet: string;
-  highlights: SnippetHighlight[];
-  timestamp: string | null;
-  provider?: string;
-  messageUuid?: string | null;
-};
-
-type ConversationSession = {
-  sessionId: string;
-  sessionSummary: string;
-  provider?: string;
-  matches: ConversationMatch[];
-};
-
-type ConversationProjectResult = {
-  // Emitted by the provider search service so the sidebar can map a
-  // match back to the Project in its current state by projectId.
-  projectId: string | null;
-  projectName: string;
-  projectDisplayName: string;
-  sessions: ConversationSession[];
-};
-
-export type ConversationSearchResults = {
-  results: ConversationProjectResult[];
-  totalMatches: number;
-  query: string;
-};
-
-export type SearchProgress = {
-  scannedProjects: number;
-  totalProjects: number;
-};
+export type { ConversationSearchResults, SearchProgress } from './useConversationSearch';
 
 type ArchivedSessionsApiPayload = {
   success?: boolean;
@@ -133,20 +96,21 @@ export function useSidebarController({
   const [sessionDeleteConfirmation, setSessionDeleteConfirmation] = useState<SessionDeleteConfirmation | null>(null);
   const [showVersionModal, setShowVersionModal] = useState(false);
   const [searchMode, setSearchMode] = useState<SidebarSearchMode>('projects');
-  const [conversationResults, setConversationResults] = useState<ConversationSearchResults | null>(null);
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchProgress, setSearchProgress] = useState<SearchProgress | null>(null);
   const [archivedProjects, setArchivedProjects] = useState<ArchivedProjectListItem[]>([]);
   const [archivedSessions, setArchivedSessions] = useState<ArchivedSessionListItem[]>([]);
   const [isArchivedSessionsLoading, setIsArchivedSessionsLoading] = useState(false);
-  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [optimisticStarByProjectId, setOptimisticStarByProjectId] = useState<Map<string, boolean>>(new Map());
   const [loadingMoreProjects, setLoadingMoreProjects] = useState<Set<string>>(new Set());
-  const searchSeqRef = useRef(0);
-  const conversationSearchAbortRef = useRef<AbortController | null>(null);
   const starToggleSequenceByProjectRef = useRef<Map<string, number>>(new Map());
   const migrationStartedRef = useRef(false);
   const onRefreshRef = useRef(onRefresh);
+  const {
+    conversationResults,
+    isSearching,
+    searchProgress,
+    debouncedSearchQuery,
+    clearConversationResults,
+  } = useConversationSearch(searchFilter, searchMode);
 
   const isSidebarCollapsed = !isMobile && !sidebarVisible;
   const activeSessionIds = useMemo(() => new Set(activeSessions.keys()), [activeSessions]);
@@ -326,95 +290,6 @@ export function useSidebarController({
       return changed ? next : previous;
     });
   }, [projects]);
-
-  // Debounce search text updates so both project filtering and conversation
-  // SSE requests avoid running on every keypress.
-  useEffect(() => {
-    const timeout = setTimeout(() => {
-      setDebouncedSearchQuery(searchFilter.trim());
-    }, 300);
-
-    return () => {
-      clearTimeout(timeout);
-    };
-  }, [searchFilter]);
-
-  // Debounced conversation search with SSE streaming
-  useEffect(() => {
-    conversationSearchAbortRef.current?.abort();
-    conversationSearchAbortRef.current = null;
-
-    const query = debouncedSearchQuery;
-    if (searchMode !== 'conversations' || query.length < 2) {
-      searchSeqRef.current += 1;
-      setConversationResults(null);
-      setSearchProgress(null);
-      setIsSearching(false);
-      return;
-    }
-
-    setIsSearching(true);
-    const seq = ++searchSeqRef.current;
-
-    if (seq !== searchSeqRef.current) {
-      return;
-    }
-
-    const controller = new AbortController();
-    conversationSearchAbortRef.current = controller;
-
-    const accumulated: ConversationProjectResult[] = [];
-    let totalMatches = 0;
-    const finish = () => {
-      if (seq !== searchSeqRef.current) return;
-      if (conversationSearchAbortRef.current === controller) conversationSearchAbortRef.current = null;
-      setIsSearching(false);
-      setSearchProgress(null);
-      if (accumulated.length === 0) {
-        setConversationResults({ results: [], totalMatches: 0, query });
-      }
-    };
-
-    void api.streamConversationSearch(query, {
-      result: (eventData: string) => {
-        if (seq !== searchSeqRef.current) { controller.abort(); return; }
-        try {
-          const data = JSON.parse(eventData) as {
-            projectResult: ConversationProjectResult;
-            totalMatches: number;
-            scannedProjects: number;
-            totalProjects: number;
-          };
-          accumulated.push(data.projectResult);
-          totalMatches = data.totalMatches;
-          setConversationResults({ results: [...accumulated], totalMatches, query });
-          setSearchProgress({ scannedProjects: data.scannedProjects, totalProjects: data.totalProjects });
-        } catch {
-          // Ignore malformed SSE data.
-        }
-      },
-      progress: (eventData: string) => {
-        if (seq !== searchSeqRef.current) { controller.abort(); return; }
-        try {
-          const data = JSON.parse(eventData) as { totalMatches: number; scannedProjects: number; totalProjects: number };
-          totalMatches = data.totalMatches;
-          setSearchProgress({ scannedProjects: data.scannedProjects, totalProjects: data.totalProjects });
-        } catch {
-          // Ignore malformed SSE data.
-        }
-      },
-      done: finish,
-    }, 50, controller.signal).catch((error: unknown) => {
-      if (!(error instanceof DOMException && error.name === 'AbortError')) {
-        console.warn('Conversation search failed:', error);
-      }
-    }).finally(finish);
-
-    return () => {
-      conversationSearchAbortRef.current?.abort();
-      conversationSearchAbortRef.current = null;
-    };
-  }, [debouncedSearchQuery, searchMode]);
 
   // All sidebar state keys (expanded, starred, loading, etc.) use the DB
   // `projectId` as their identifier after the migration.
@@ -968,14 +843,7 @@ export function useSidebarController({
     conversationResults,
     isSearching,
     searchProgress,
-    clearConversationResults: useCallback(() => {
-      searchSeqRef.current += 1;
-      conversationSearchAbortRef.current?.abort();
-      conversationSearchAbortRef.current = null;
-      setIsSearching(false);
-      setSearchProgress(null);
-      setConversationResults(null);
-    }, []),
+    clearConversationResults,
     setSearchFilter,
     setDeleteConfirmation,
     setSessionDeleteConfirmation,
