@@ -3,7 +3,7 @@
  * =============================
  *
  * This module provides integration with the OpenAI Codex SDK for non-interactive
- * chat sessions. It mirrors the pattern used in claude-sdk.js for consistency.
+ * chat sessions. It mirrors the pattern used in claude-runtime.js for consistency.
  *
  * ## Usage
  *
@@ -15,12 +15,12 @@
 
 import { Codex } from '@openai/codex-sdk';
 
-import { buildCodexInputItems, normalizeImageDescriptors } from './shared/image-attachments.js';
-import { notifyRunFailed, notifyRunStopped } from './services/notification-orchestrator.js';
-import { sessionsService } from './modules/providers/services/sessions.service.js';
-import { providerAuthService } from './modules/providers/services/provider-auth.service.js';
-import { providerModelsService } from './modules/providers/services/provider-models.service.js';
-import { createCompleteMessage, createNormalizedMessage } from './shared/utils.js';
+import { buildCodexInputItems, normalizeImageDescriptors } from '@/shared/image-attachments.js';
+import { notifyRunFailed, notifyRunStopped } from '@/services/notification-orchestrator.js';
+import { sessionsService } from '@/modules/providers/services/sessions.service.js';
+import { providerAuthService } from '@/modules/providers/services/provider-auth.service.js';
+import { providerModelsService } from '@/modules/providers/services/provider-models.service.js';
+import { createCompleteMessage, createNormalizedMessage } from '@/shared/utils.js';
 
 const activeCodexSessions = new Map();
 
@@ -521,8 +521,9 @@ function sendMessage(ws, data) {
   }
 }
 
-// Clean up old completed sessions periodically
-setInterval(() => {
+// Clean up old completed sessions periodically. The timer is maintenance-only
+// and must not keep CLI commands or the Node test runner alive.
+const completedSessionCleanupTimer = setInterval(() => {
   const now = Date.now();
   const maxAge = 30 * 60 * 1000; // 30 minutes
 
@@ -535,3 +536,4 @@ setInterval(() => {
     }
   }
 }, 5 * 60 * 1000); // Every 5 minutes
+completedSessionCleanupTimer.unref?.();

@@ -19,19 +19,20 @@ import path from 'path';
 
 import { query } from '@anthropic-ai/claude-agent-sdk';
 
-import { buildClaudeUserContent, normalizeImageDescriptors } from './shared/image-attachments.js';
-import { isMissingCliExecutableError } from './shared/provider-errors.js';
-import { CLAUDE_FALLBACK_MODELS } from './modules/providers/list/claude/claude-models.provider.js';
-import { providerModelsService } from './modules/providers/services/provider-models.service.js';
-import { resolveClaudeCodeExecutablePath } from './shared/claude-cli-path.js';
+import { buildClaudeUserContent, normalizeImageDescriptors } from '@/shared/image-attachments.js';
+import { isMissingCliExecutableError } from '@/shared/provider-errors.js';
+import { providerModelsService } from '@/modules/providers/services/provider-models.service.js';
+import { resolveClaudeCodeExecutablePath } from '@/shared/claude-cli-path.js';
 import {
   createNotificationEvent,
   notifyRunFailed,
   notifyRunStopped,
   notifyUserIfEnabled
-} from './services/notification-orchestrator.js';
-import { sessionsService } from './modules/providers/services/sessions.service.js';
-import { createCompleteMessage, createNormalizedMessage } from './shared/utils.js';
+} from '@/services/notification-orchestrator.js';
+import { sessionsService } from '@/modules/providers/services/sessions.service.js';
+import { createCompleteMessage, createNormalizedMessage } from '@/shared/utils.js';
+
+import { CLAUDE_FALLBACK_MODELS } from './claude-models.provider.js';
 
 const activeSessions = new Map();
 const pendingToolApprovals = new Map();

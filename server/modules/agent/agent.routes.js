@@ -8,16 +8,18 @@ import spawn from 'cross-spawn';
 import express from 'express';
 import { Octokit } from '@octokit/rest';
 
-import { userDb, apiKeysDb, githubTokensDb, projectsDb } from '../modules/database/index.js';
-import { queryClaudeSDK } from '../claude-sdk.js';
-import { spawnCursor } from '../cursor-cli.js';
-import { queryCodex } from '../openai-codex.js';
-import { spawnOpenCode } from '../opencode-cli.js';
-import { providerModelsService } from '../modules/providers/services/provider-models.service.js';
-import { IS_PLATFORM } from '../constants/config.js';
-import { normalizeProjectPath, validateWorkspacePath } from '../shared/utils.js';
+import { userDb, apiKeysDb, githubTokensDb, projectsDb } from '@/modules/database/index.js';
+import {
+  providerModelsService,
+  queryClaudeSDK,
+  queryCodex,
+  spawnCursor,
+  spawnOpenCode,
+} from '@/modules/providers/index.js';
+import { normalizeProjectPath, validateWorkspacePath } from '@/shared/utils.js';
 
 const router = express.Router();
+const IS_PLATFORM = process.env.VITE_IS_PLATFORM === 'true';
 
 /**
  * Middleware to authenticate agent API requests.

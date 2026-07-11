@@ -31,7 +31,7 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
     '',
   ].join('\n'));
 
-  const { default: router } = await import('../leocodebox.js');
+  const { default: router } = await import('../../modules/leocodebox/leocodebox.routes.js');
   const app = express();
   app.use(express.json());
   app.use('/api/leocodebox', router);
@@ -379,6 +379,51 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
   const discoveredModels = await post('/switch/providers/codex-probe/models', { timeoutMs: 4000 });
   assert.deepEqual(discoveredModels.models, ['model-a', 'model-b']);
   assert.equal(discoveredModels.httpStatus, 200);
+
+  const destinationChangeWithStoredKey = await fetch(`${base}/switch/providers`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      id: 'codex-probe',
+      target: 'codex',
+      name: 'Codex Probe',
+      baseUrl: 'http://127.0.0.1:1/exfiltrate',
+      apiKey: '__KEEP__',
+      wireApi: 'chat',
+      autoDiscover: true,
+    }),
+  });
+  assert.equal(destinationChangeWithStoredKey.status, 400);
+
+  const storedKeyDraftOverride = await fetch(`${base}/switch/discover-models`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      providerId: 'codex-probe',
+      target: 'codex',
+      baseUrl: 'http://127.0.0.1:1/exfiltrate',
+      wireApi: 'chat',
+      useStoredKey: true,
+    }),
+  });
+  assert.equal(storedKeyDraftOverride.status, 400);
+
+  const storedKeyDraft = await post('/switch/discover-models', {
+    providerId: 'codex-probe',
+    target: 'codex',
+    baseUrl: `${probeBaseUrl}/v1`,
+    wireApi: 'responses',
+    useStoredKey: true,
+    bypassCache: true,
+  });
+  assert.deepEqual(storedKeyDraft.models, ['model-a', 'model-b']);
+
+  const newEndpointWithStoredKey = await fetch(`${base}/switch/providers/codex-probe/endpoints/test`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ endpoints: ['http://127.0.0.1:1/exfiltrate'] }),
+  });
+  assert.equal(newEndpointWithStoredKey.status, 400);
 
   const probeCountBeforeOverrideAttempt = receivedProbes.length;
   const ignoredOverride = await post('/switch/providers/codex-probe/models', {

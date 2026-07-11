@@ -67,7 +67,7 @@ const RUNTIME_UI_CAPABILITIES: Record<LLMProvider, ProviderCapabilities> = {
     provider: 'opencode',
     // Mapped by the runtime onto OpenCode's controls: `--agent plan` (plan),
     // `--auto` (bypassPermissions) and the OPENCODE_PERMISSION env var
-    // (acceptEdits). See resolveOpenCodePermissionOptions in opencode-cli.js.
+    // (acceptEdits). See resolveOpenCodePermissionOptions in opencode-runtime.js.
     permissionModes: ['default', 'acceptEdits', 'bypassPermissions', 'plan'],
     defaultPermissionMode: 'default',
     supportsImages: true,

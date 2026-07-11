@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { parseGitLogWithStats, parseGitStatusOutput } from './git.js';
+import { parseGitLogWithStats, parseGitStatusOutput } from '../modules/git/index.js';
 
 // Builds `git status --porcelain=v1 -z` output: NUL-separated entries with a
 // trailing NUL, exactly as git emits it.

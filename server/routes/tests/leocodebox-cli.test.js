@@ -5,7 +5,7 @@ import {
   detectCliInstallSource,
   resolveCliUpdateCommand,
   withCliMutation,
-} from '../leocodebox.js';
+} from '../../modules/leocodebox/leocodebox.routes.js';
 
 const opencode = {
   id: 'opencode',

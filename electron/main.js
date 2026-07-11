@@ -34,7 +34,10 @@ const AUTH_CALLBACK_TTL_MS = 10 * 60 * 1000;
 const tabs = new TabsController();
 
 if (LOCAL_ONLY_MODE) {
-  const localProfilePath = path.join(app.getPath('appData'), APP_NAME, 'LocalProfile');
+  const configuredProfilePath = String(process.env.LEOCODEBOX_USER_DATA_DIR || '').trim();
+  const localProfilePath = configuredProfilePath
+    ? path.resolve(configuredProfilePath)
+    : path.join(app.getPath('appData'), APP_NAME, 'LocalProfile');
   mkdirSync(localProfilePath, { recursive: true });
   app.setPath('userData', localProfilePath);
 }

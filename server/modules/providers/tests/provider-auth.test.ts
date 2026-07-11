@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { resolveCursorPermissionArgs } from '../../../cursor-cli.js';
+import { resolveCursorPermissionArgs } from '../list/cursor/cursor-runtime.js';
 import type { CliCommandRunner } from '../services/cli-version.util.js';
 import {
   ClaudeProviderAuth,

@@ -14,9 +14,9 @@ import {
   getGeminiHome,
   getHermesHome,
   getOpenCodeConfigDir,
-} from '../shared/provider-runtime-paths.js';
-import { findAppRoot, getModuleDir } from '../utils/runtime-paths.js';
-import { PROVIDER_TEMPLATES } from '../shared/provider-templates.js';
+} from '../../shared/provider-runtime-paths.js';
+import { findAppRoot, getModuleDir } from '../../utils/runtime-paths.js';
+import { PROVIDER_TEMPLATES } from '../../shared/provider-templates.js';
 
 const router = express.Router();
 
@@ -1274,7 +1274,8 @@ async function testProviderConnectivity(provider) {
     return { reachable: false, latencyMs: null, httpStatus: null, note: '未配置 Base URL，无法测试连通性。' };
   }
 
-  const probe = buildProviderProbe(provider, rawBase);
+  const validatedBase = validateProviderBaseUrl(rawBase);
+  const probe = buildProviderProbe(provider, validatedBase);
 
   const startedAt = Date.now();
   try {
@@ -1495,6 +1496,7 @@ async function benchmarkProviderModel(provider, options = {}) {
     error.statusCode = 400;
     throw error;
   }
+  validateProviderBaseUrl(provider.baseUrl);
   const attempts = parseBoundedInteger(options.attempts, 1, 1, 5);
   const timeoutMs = parseBoundedInteger(options.timeoutMs, 8000, 1000, 30000);
   const results = [];
@@ -1555,7 +1557,8 @@ async function testProviderEndpoints(provider, options = {}) {
   const timeoutMs = parseBoundedInteger(options.timeoutMs, 8000, 1000, 30000);
   const results = [];
   for (const endpoint of endpoints) {
-    const probe = buildModelListProbe(provider, endpoint);
+    const validatedEndpoint = validateProviderBaseUrl(endpoint);
+    const probe = buildModelListProbe(provider, validatedEndpoint);
     const startedAt = Date.now();
     try {
       const response = await fetch(probe.url, {
@@ -1988,6 +1991,25 @@ router.get('/switch/status', async (_req, res, next) => {
   }
 });
 
+function validateProviderDestinations(provider) {
+  if (provider.baseUrl) validateProviderBaseUrl(provider.baseUrl);
+  for (const endpoint of normalizeEndpointUrls(provider, provider, provider.baseUrl)) {
+    validateProviderBaseUrl(endpoint);
+  }
+}
+
+function providerCredentialDestinationFingerprint(provider) {
+  const endpoints = normalizeEndpointUrls(provider, provider, provider.baseUrl)
+    .map((endpoint) => validateProviderBaseUrl(endpoint))
+    .sort();
+  return crypto.createHash('sha256').update(JSON.stringify({
+    target: provider.target,
+    baseUrl: provider.baseUrl ? validateProviderBaseUrl(provider.baseUrl) : '',
+    wireApi: provider.wireApi,
+    endpoints,
+  })).digest('hex');
+}
+
 function providerDiscoveryConfigFingerprint(provider) {
   return crypto.createHash('sha256').update(JSON.stringify({
     target: provider.target,
@@ -2038,6 +2060,13 @@ router.post('/switch/providers', async (req, res, next) => {
       const store = await readStore();
       const existing = req.body?.id ? store.providers.find((item) => item.id === req.body.id) : null;
       const savedProvider = normalizeProvider(req.body, existing);
+      validateProviderDestinations(savedProvider);
+      if (existing?.apiKey && savedProvider.apiKey === existing.apiKey
+        && providerCredentialDestinationFingerprint(savedProvider) !== providerCredentialDestinationFingerprint(existing)) {
+        const error = new Error('修改请求地址、协议或端点时必须重新输入 API Key。');
+        error.statusCode = 400;
+        throw error;
+      }
       upsertProviderInStore(store, savedProvider);
       await writeStore(store);
       return savedProvider;
@@ -2213,7 +2242,23 @@ router.post('/switch/discover-models', async (req, res, next) => {
     let apiKey = req.body?.apiKey;
     if (!apiKey && req.body?.useStoredKey === true && req.body?.providerId) {
       const store = await readStore();
-      apiKey = store.providers.find((item) => item.id === req.body.providerId)?.apiKey || '';
+      const storedProvider = store.providers.find((item) => item.id === req.body.providerId);
+      if (!storedProvider) {
+        res.status(404).json({ success: false, error: 'Provider not found.' });
+        return;
+      }
+      const draftDestination = normalizeProvider({
+        ...storedProvider,
+        target: req.body?.target,
+        baseUrl: req.body?.baseUrl,
+        wireApi: req.body?.wireApi,
+        apiKey: storedProvider.apiKey,
+      }, storedProvider);
+      if (providerCredentialDestinationFingerprint(draftDestination) !== providerCredentialDestinationFingerprint(storedProvider)) {
+        res.status(400).json({ success: false, error: '修改请求地址或协议后必须重新输入 API Key。' });
+        return;
+      }
+      apiKey = storedProvider.apiKey || '';
     }
     const provider = normalizeProvider({
       id: 'draft-model-discovery',
@@ -2293,6 +2338,12 @@ router.post('/switch/providers/:id/endpoints/test', async (req, res, next) => {
       const requestedEndpoints = Array.isArray(req.body?.endpoints)
         ? req.body.endpoints.map((endpoint) => safeText(typeof endpoint === 'string' ? endpoint : endpoint?.url, 800).replace(/\/+$/, '')).filter(Boolean)
         : provider.endpoints;
+      const persistedEndpoints = new Set(normalizeEndpointUrls(provider, provider, provider.baseUrl));
+      const untrustedEndpoint = requestedEndpoints.find((endpoint) => !persistedEndpoints.has(endpoint));
+      if (untrustedEndpoint) {
+        res.status(400).json({ success: false, error: '测试新端点前必须编辑 Provider 并重新输入 API Key。' });
+        return;
+      }
       if (requestedEndpoints?.length && !requestedEndpoints.includes(provider.baseUrl)) {
         provider.baseUrl = requestedEndpoints[0];
       }

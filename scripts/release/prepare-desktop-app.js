@@ -96,7 +96,7 @@ function buildDesktopPackageJson(copiedOptionalDependencies) {
         'node_modules/**',
         // The Claude Agent SDK ships a ~226MB prebuilt CLI binary per platform,
         // but leocodebox always points the SDK at the user's own `claude`
-        // executable (see server/claude-sdk.js -> pathToClaudeCodeExecutable),
+        // executable (see server/modules/providers/list/claude/claude-runtime.js -> pathToClaudeCodeExecutable),
         // so the bundled binary is dead weight. Mirrors the exclusion in the
         // root package.json build.files that the staged config previously lost.
         '!**/node_modules/@anthropic-ai/claude-agent-sdk-{darwin,linux,win32}-*/**',

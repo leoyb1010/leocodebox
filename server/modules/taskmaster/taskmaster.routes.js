@@ -16,9 +16,9 @@ import express from 'express';
 // here since task-master/npx are .cmd shims on Windows.
 import spawn from 'cross-spawn';
 
-import { projectsDb } from '../modules/database/index.js';
-import { detectTaskMasterMCPServer } from '../utils/mcp-detector.js';
-import { broadcastTaskMasterProjectUpdate, broadcastTaskMasterTasksUpdate } from '../utils/taskmaster-websocket.js';
+import { projectsDb } from '../database/index.js';
+import { detectTaskMasterMCPServer } from '../../utils/mcp-detector.js';
+import { broadcastTaskMasterProjectUpdate, broadcastTaskMasterTasksUpdate } from '../../utils/taskmaster-websocket.js';
 
 /**
  * Resolve the absolute project directory from a DB-assigned `projectId`.
