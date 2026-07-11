@@ -1,4 +1,5 @@
 import { useCallback, useState, type ErrorInfo, type ReactNode } from 'react';
+import { CircleAlert, RotateCcw } from 'lucide-react';
 import {
   ErrorBoundary as ReactErrorBoundary,
   type FallbackProps,
@@ -30,41 +31,31 @@ function ErrorFallback({
   showDetails,
   componentStack,
 }: ErrorFallbackProps) {
+  const canShowDetails = showDetails && import.meta.env.DEV;
+
   return (
-    <div className="flex flex-col items-center justify-center p-8 text-center">
-      <div className="max-w-md rounded-lg border border-red-200 bg-red-50 p-6">
-        <div className="mb-4 flex items-center">
-          <div className="flex-shrink-0">
-            <svg className="h-5 w-5 text-red-400" viewBox="0 0 20 20" fill="currentColor">
-              <path
-                fillRule="evenodd"
-                d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z"
-                clipRule="evenodd"
-              />
-            </svg>
-          </div>
-          <h3 className="ml-3 text-sm font-medium text-red-800">Something went wrong</h3>
-        </div>
-        <div className="text-sm text-red-700">
-          <p className="mb-2">An error occurred while loading the chat interface.</p>
-          {showDetails && (
-            <details className="mt-4">
-              <summary className="cursor-pointer font-mono text-xs">Error Details</summary>
-              <pre className="mt-2 max-h-40 overflow-auto rounded bg-red-100 p-2 text-xs">
+    <div className="flex h-full min-h-48 items-center justify-center p-6 text-center">
+      <div className="w-full max-w-md rounded-md border border-destructive/30 bg-card p-6 shadow-sm">
+        <CircleAlert className="mx-auto h-7 w-7 text-destructive" aria-hidden="true" />
+        <h3 className="mt-3 text-sm font-semibold text-foreground">此区域暂时无法加载</h3>
+        <p className="mt-1 text-sm text-muted-foreground">可以重新加载该区域；其他项目和会话不会受到影响。</p>
+        {canShowDetails && (
+          <details className="mt-4 text-left">
+            <summary className="cursor-pointer text-xs font-medium text-muted-foreground">查看开发错误详情</summary>
+            <pre className="mt-2 max-h-40 overflow-auto rounded-md border border-border bg-muted p-3 font-mono text-xs text-muted-foreground">
                 {formatError(error)}
                 {componentStack}
-              </pre>
-            </details>
-          )}
-        </div>
-        <div className="mt-4">
-          <button
-            onClick={resetErrorBoundary}
-            className="rounded bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500"
-          >
-            Try Again
-          </button>
-        </div>
+            </pre>
+          </details>
+        )}
+        <button
+          type="button"
+          onClick={resetErrorBoundary}
+          className="mx-auto mt-5 inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <RotateCcw className="h-4 w-4" aria-hidden="true" />
+          重新加载
+        </button>
       </div>
     </div>
   );

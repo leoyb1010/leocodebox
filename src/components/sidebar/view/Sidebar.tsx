@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useDeviceSettings } from '../../../hooks/useDeviceSettings';
@@ -53,9 +53,20 @@ function Sidebar({
   const [localTool, setLocalTool] = useState<'leoapi' | 'feedback' | null>(null);
   const closeLocalTool = useCallback(() => setLocalTool(null), []);
 
-  useEffect(() => window.leocodeboxDesktopTools?.onOpenModal((tool) => {
-    if (tool === 'leoapi' || tool === 'feedback') setLocalTool(tool);
-  }), []);
+  useEffect(() => {
+    const unsubscribe = window.leocodeboxDesktopTools?.onOpenModal((tool) => {
+      if (tool === 'leoapi' || tool === 'feedback') setLocalTool(tool);
+    });
+    const handleLocalTool = (event: Event) => {
+      const tool = (event as CustomEvent<'leoapi' | 'feedback'>).detail;
+      if (tool === 'leoapi' || tool === 'feedback') setLocalTool(tool);
+    };
+    window.addEventListener('leocodebox:open-local-tool', handleLocalTool);
+    return () => {
+      unsubscribe?.();
+      window.removeEventListener('leocodebox:open-local-tool', handleLocalTool);
+    };
+  }, []);
 
   const {
     isSidebarCollapsed,
@@ -320,4 +331,7 @@ function Sidebar({
   );
 }
 
-export default Sidebar;
+// Props flow from `useProjectsState` (sidebarSharedProps is a memoized object,
+// its callbacks are stable useCallbacks), so a shallow-equal memo lets the
+// sidebar skip re-renders driven purely by unrelated app state (e.g. streaming).
+export default memo(Sidebar);

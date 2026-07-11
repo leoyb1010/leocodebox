@@ -1,6 +1,6 @@
 {
   "name": "leocodebox",
-  "version": "1.1.3",
+  "version": "1.37.0",
   "productName": "leocodebox",
   "description": "Local desktop controller for coding agents",
   "type": "module",
@@ -54,16 +54,14 @@
     "test": "npm run test:desktop && npm run test:client && npm run test:server",
     "test:desktop": "node --test electron/*.test.js",
     "test:clean-device": "node scripts/test-clean-device.mjs",
-    "test:client": "node --import tsx --test src/hooks/projectProviderCounts.test.ts src/components/git-panel/utils/commitGraph.test.ts",
+    "test:client": "node --import tsx --test src/hooks/projectProviderCounts.test.ts src/components/git-panel/utils/commitGraph.test.ts src/components/chat/utils/streamBuffers.test.ts",
     "test:server": "node scripts/test-server.mjs",
     "lint": "eslint src/ server/",
     "lint:fix": "eslint src/ server/ --fix",
     "start": "npm run build && npm run server",
-    "release": "./release.sh",
+    "release": "npm run desktop:dist:mac:signed && npm run desktop:notarize:mac",
     "prepublishOnly": "npm run build",
-    "postinstall": "node scripts/fix-node-pty.js",
-    "prepare": "husky",
-    "update:platform": "./update-platform.sh"
+    "postinstall": "node scripts/fix-node-pty.js"
   },
   "build": {
     "appId": "com.leoyuan.leocodebox",
@@ -182,10 +180,8 @@
     "jszip": "^3.10.1",
     "katex": "^0.16.25",
     "lucide-react": "^0.515.0",
-    "lucide-static": "^1.24.0",
     "mime-types": "^3.0.1",
     "multer": "^2.0.1",
-    "node-fetch": "^2.7.0",
     "node-pty": "^1.2.0-beta.12",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
@@ -200,6 +196,7 @@
     "remark-gfm": "^4.0.0",
     "remark-math": "^6.0.0",
     "tailwind-merge": "^3.3.1",
+    "tailwindcss-animate": "^1.0.7",
     "web-push": "^3.6.7",
     "ws": "^8.14.2"
   },
@@ -251,8 +248,7 @@
     "src/**/*.{ts,tsx,js,jsx}": "eslint",
     "server/**/*.{js,ts}": "eslint"
   },
-  "optionalDependencies": {
-    "@nut-tree-fork/nut-js": "^4.2.6",
-    "screenshot-desktop": "^1.15.4"
+  "engines": {
+    "node": ">=22"
   }
 }

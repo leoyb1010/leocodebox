@@ -5,44 +5,53 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>leocodebox Feedback</title>
   <link rel="icon" href="/favicon.png">
+  <script>
+    (() => {
+      if (new URLSearchParams(window.location.search).get("embedded") === "1") document.documentElement.dataset.embedded = "true";
+      const themeMode = localStorage.getItem("themeMode") || localStorage.getItem("theme") || "system";
+      const isDark = themeMode === "dark" || (themeMode === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+      document.documentElement.dataset.theme = isDark ? "dark" : "light";
+    })();
+  </script>
   <style>
     :root {
-      color-scheme: light dark;
-      --bg: #f6f7f9;
+      color-scheme: light;
+      --bg: #f8f9fa;
       --panel: #ffffff;
-      --panel-2: #eef2f6;
-      --text: #18212d;
-      --muted: #657184;
-      --line: #d8e0e8;
-      --accent: #2457d6;
+      --panel-2: #f1f3f4;
+      --text: #17191c;
+      --muted: #626870;
+      --line: #dce1e4;
+      --accent: #178f82;
       --ok: #0b7a46;
       --danger: #b42318;
       font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #101318;
-        --panel: #171c23;
-        --panel-2: #202733;
-        --text: #eef3f8;
-        --muted: #99a6b8;
-        --line: #2d3644;
-        --accent: #7aa2ff;
+    html[data-theme="dark"] {
+        color-scheme: dark;
+        --bg: #111316;
+        --panel: #181b1f;
+        --panel-2: #202429;
+        --text: #edf0f2;
+        --muted: #a0a7ae;
+        --line: #2d3238;
+        --accent: #36c9b7;
         --ok: #61d394;
         --danger: #ff8d85;
-      }
     }
     * { box-sizing: border-box; }
     body { margin: 0; background: var(--bg); color: var(--text); font-size: 14px; }
     button, input, select, textarea { font: inherit; }
-    .wrap { max-width: 980px; margin: 0 auto; padding: 22px; }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 24px; animation: feedback-enter .22s cubic-bezier(.2,0,0,1) both; }
+    html[data-embedded="true"] .wrap { padding-top: 18px; }
+    html[data-embedded="true"] header .toolbar { display: none; }
     header { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 18px; }
     .brand { display: flex; align-items: center; gap: 10px; }
     .brand img { width: 30px; height: 30px; }
     h1 { margin: 0; font-size: 20px; }
     p { margin: 0; color: var(--muted); line-height: 1.55; }
     main { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 18px; }
-    section, aside { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+    section, aside { background: transparent; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
     .head { padding: 14px 16px; border-bottom: 1px solid var(--line); background: var(--panel-2); }
     .body { padding: 16px; }
     .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -64,7 +73,8 @@
     .message.ok { color: var(--ok); }
     .message.error { color: var(--danger); }
     .list { display: grid; gap: 8px; }
-    .item { padding: 9px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); }
+    .item { padding: 9px 0; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; }
+    .item:last-child { border-bottom: 0; }
     .item strong { display: block; margin-bottom: 3px; }
     .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
     @media (max-width: 860px) {
@@ -72,6 +82,8 @@
       .grid2 { grid-template-columns: 1fr; }
       header { align-items: flex-start; flex-direction: column; }
     }
+    @keyframes feedback-enter { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    @media (prefers-reduced-motion: reduce) { .wrap { animation: none; } }
   </style>
 </head>
 <body>

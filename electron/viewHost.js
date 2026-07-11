@@ -4,8 +4,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import { isTrustedNavigationUrl } from './trustPolicy.js';
+
 const TARGET_LOAD_TIMEOUT_MS = 20000;
-const PLACEHOLDER_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), 'placeholder.html');
+const ELECTRON_ROOT = path.dirname(fileURLToPath(import.meta.url));
+const PLACEHOLDER_PATH = path.join(ELECTRON_ROOT, 'placeholder.html');
+const LAUNCHER_PATH = path.join(ELECTRON_ROOT, 'launcher', 'index.html');
 const PLACEHOLDER_URL = pathToFileURL(PLACEHOLDER_PATH).href;
 const CUSTOM_THEME_PATH = path.join(os.homedir(), '.leocodebox', 'custom-theme.css');
 const DEFAULT_CUSTOM_THEME = `/* leocodebox personal theme. Edit this file, then reload the app view. */
@@ -86,9 +90,43 @@ export class ViewHost {
       void this.openExternalUrl(url).catch((error) => this.showError('Could not open external link', error));
       return { action: 'deny' };
     });
+    // Renderer-initiated navigations (link clicks, window.location, form posts)
+    // must stay within app origins; otherwise the BrowserView would host an
+    // arbitrary external site parasitically inside the app shell. Programmatic
+    // loads (loadURL/loadFile) do not fire these events, so normal app startup
+    // and in-app SPA routing are unaffected.
+    webContents.on('will-navigate', (event, url) => {
+      this.guardNavigation(webContents, event, url, true);
+    });
+    // will-frame-navigate additionally covers sub-frames (Electron >= 22).
+    // Main-frame navigations are already handled by will-navigate above, so we
+    // only act on sub-frames here to avoid double-handling.
+    webContents.on('will-frame-navigate', (event) => {
+      if (!event || event.isMainFrame) return;
+      this.guardNavigation(webContents, event, event.url, false);
+    });
     webContents.on('did-finish-load', () => {
       void this.applyCustomTheme(webContents);
     });
+  }
+
+  isAllowedInAppNavigation(webContents, targetUrl) {
+    return isTrustedNavigationUrl({
+      currentUrl: webContents.getURL(),
+      targetUrl,
+      allowedFilePaths: [PLACEHOLDER_PATH, LAUNCHER_PATH],
+    });
+  }
+
+  guardNavigation(webContents, event, url, isMainFrame) {
+    if (this.isAllowedInAppNavigation(webContents, url)) return;
+    event.preventDefault();
+    // Send external http(s) destinations to the system browser. Sub-frame and
+    // non-http(s) navigations are simply blocked (opening them externally would
+    // be wrong/unsupported).
+    if (isMainFrame && isHttpUrl(url)) {
+      void this.openExternalUrl(url).catch((error) => this.showError('Could not open external link', error));
+    }
   }
 
   async applyCustomTheme(webContents) {

@@ -1,7 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 function isLeocodeboxAppOrigin(location) {
-  if (location.protocol === 'file:') return true;
+  if (isFirstPartyShellLocation(location)) return true;
 
   if (location.protocol === 'http:') {
     return location.hostname === '127.0.0.1' || location.hostname === 'localhost';
@@ -10,6 +10,11 @@ function isLeocodeboxAppOrigin(location) {
   return location.protocol === 'https:' && (
     location.hostname === 'leocodebox.local' || location.hostname.endsWith('.leocodebox.local')
   );
+}
+
+function isFirstPartyShellLocation(location) {
+  return location.protocol === 'file:'
+    && location.pathname.replace(/\\/g, '/').endsWith('/electron/launcher/index.html');
 }
 
 function isLocalHttpOrigin(location) {
@@ -80,6 +85,7 @@ if (isLocalHttpOrigin(window.location)) {
     },
   });
   contextBridge.exposeInMainWorld('leocodeboxDesktopTools', {
+    setThemeMode: (mode) => ipcRenderer.invoke('leocodebox-desktop:set-theme-mode', mode),
     onOpenModal: (callback) => {
       const listener = (_event, tool) => callback(tool);
       ipcRenderer.on('leocodebox-desktop:open-modal', listener);
@@ -88,7 +94,7 @@ if (isLocalHttpOrigin(window.location)) {
   });
 }
 
-if (window.location.protocol === 'file:') {
+if (isFirstPartyShellLocation(window.location)) {
   contextBridge.exposeInMainWorld('leocodeboxDesktop', {
     connectCloud: () => ipcRenderer.invoke('leocodebox-desktop:connect-cloud'),
     disconnectCloud: () => ipcRenderer.invoke('leocodebox-desktop:disconnect-cloud'),

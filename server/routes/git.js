@@ -49,15 +49,19 @@ function spawnAsync(command, args, options = {}) {
 
 // Input validation helpers (defense-in-depth)
 function validateCommitRef(commit) {
-  // Allow hex hashes, HEAD, HEAD~N, HEAD^N, tag names, branch names
-  if (!/^[a-zA-Z0-9._~^{}@\/-]+$/.test(commit)) {
+  // Allow hex hashes, HEAD, HEAD~N, HEAD^N, tag names, branch names.
+  // The leading `(?!-)` rejects refs that begin with a dash so they can never be
+  // smuggled into git as command-line options (e.g. `--upload-pack=...`).
+  if (!/^(?!-)[a-zA-Z0-9._~^{}@\/-]+$/.test(commit)) {
     throw new Error('Invalid commit reference');
   }
   return commit;
 }
 
 function validateBranchName(branch) {
-  if (!/^[a-zA-Z0-9._\/-]+$/.test(branch)) {
+  // Leading `(?!-)` rejects dash-prefixed names so they cannot be interpreted as
+  // git options when passed positionally.
+  if (!/^(?!-)[a-zA-Z0-9._\/-]+$/.test(branch)) {
     throw new Error('Invalid branch name');
   }
   return branch;
@@ -803,9 +807,12 @@ router.post('/checkout', async (req, res) => {
   try {
     const projectPath = await getActualProjectPath(project);
     
-    // Checkout the branch
+    // Checkout the branch. Trailing `--` marks the end of pathspecs so `branch`
+    // is always treated as a ref, never as an option (defense-in-depth on top of
+    // validateBranchName). Note: for `checkout`/`show` the `--` must follow the
+    // ref — a leading `--` would make git read the ref as a file path instead.
     validateBranchName(branch);
-    const { stdout } = await spawnAsync('git', ['checkout', branch], { cwd: projectPath });
+    const { stdout } = await spawnAsync('git', ['checkout', branch, '--'], { cwd: projectPath });
     
     res.json({ success: true, output: stdout });
   } catch (error) {
@@ -825,9 +832,10 @@ router.post('/create-branch', async (req, res) => {
   try {
     const projectPath = await getActualProjectPath(project);
     
-    // Create and checkout new branch
+    // Create and checkout new branch. Trailing `--` (after the new branch name)
+    // ends option/pathspec parsing so the name cannot be read as an option.
     validateBranchName(branch);
-    const { stdout } = await spawnAsync('git', ['checkout', '-b', branch], { cwd: projectPath });
+    const { stdout } = await spawnAsync('git', ['checkout', '-b', branch, '--'], { cwd: projectPath });
     
     res.json({ success: true, output: stdout });
   } catch (error) {
@@ -854,7 +862,10 @@ router.post('/delete-branch', async (req, res) => {
       return res.status(400).json({ error: 'Cannot delete the currently checked-out branch' });
     }
 
-    const { stdout } = await spawnAsync('git', ['branch', '-d', branch], { cwd: projectPath });
+    // `git branch` takes no pathspec, so a leading `--` here is a pure
+    // end-of-options marker: `branch` after it is always treated as a branch
+    // name, never as an option flag.
+    const { stdout } = await spawnAsync('git', ['branch', '-d', '--', branch], { cwd: projectPath });
     res.json({ success: true, output: stdout });
   } catch (error) {
     console.error('Git delete branch error:', error);
@@ -966,9 +977,12 @@ router.get('/commit-diff', async (req, res) => {
     // Validate commit reference (defense-in-depth)
     validateCommitRef(commit);
 
-    // Get diff for the commit
+    // Get diff for the commit. Trailing `--` (after the ref) ends pathspec
+    // parsing so `commit` is always treated as a revision, never as an option.
+    // The `--` must follow the ref here: a leading `--` would make git treat the
+    // ref as a file path and show the wrong thing.
     const { stdout } = await spawnAsync(
-      'git', ['show', commit],
+      'git', ['show', commit, '--'],
       { cwd: projectPath }
     );
 

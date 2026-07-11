@@ -94,6 +94,12 @@ function buildDesktopPackageJson(copiedOptionalDependencies) {
         'dist/**',
         'dist-server/**',
         'node_modules/**',
+        // The Claude Agent SDK ships a ~226MB prebuilt CLI binary per platform,
+        // but leocodebox always points the SDK at the user's own `claude`
+        // executable (see server/claude-sdk.js -> pathToClaudeCodeExecutable),
+        // so the bundled binary is dead weight. Mirrors the exclusion in the
+        // root package.json build.files that the staged config previously lost.
+        '!**/node_modules/@anthropic-ai/claude-agent-sdk-{darwin,linux,win32}-*/**',
         'package.json',
         'README.md',
         'README.zh-CN.md',
@@ -140,18 +146,6 @@ for (const [name, version] of Object.entries(packageJson.optionalDependencies ||
   if (await copyNodeModule(name)) {
     copiedOptionalDependencies[name] = version;
   }
-}
-
-for (const name of [
-  '@nut-tree-fork/default-clipboard-provider',
-  '@nut-tree-fork/libnut',
-  '@nut-tree-fork/provider-interfaces',
-  '@nut-tree-fork/shared',
-  'jimp',
-  'node-abort-controller',
-  'temp',
-]) {
-  await copyNodeModule(name);
 }
 
 await fs.writeFile(

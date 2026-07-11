@@ -11,6 +11,7 @@ import { useChatProviderState } from '../hooks/useChatProviderState';
 import { useChatSessionState } from '../hooks/useChatSessionState';
 import { useChatRealtimeHandlers } from '../hooks/useChatRealtimeHandlers';
 import { useChatComposerState } from '../hooks/useChatComposerState';
+import { disposeStreamBuffers, type StreamBufferEntry } from '../utils/streamBuffers';
 import { useSessionStore } from '../../../stores/useSessionStore';
 
 import ChatMessagesPane from './subcomponents/ChatMessagesPane';
@@ -42,8 +43,9 @@ function ChatInterface({
   const { t } = useTranslation('chat');
 
   const sessionStore = useSessionStore();
-  const streamTimerRef = useRef<number | null>(null);
-  const accumulatedStreamRef = useRef('');
+  // Streaming buffers isolated per session id so concurrent runs never share a
+  // single string (which caused cross-session text bleed) or a single timer.
+  const streamBuffersRef = useRef<Map<string, StreamBufferEntry>>(new Map());
   // When each session's `chat.subscribe` was last sent; idle acks older than
   // a later local request are discarded as stale.
   const statusCheckSentAtRef = useRef(new Map<string, number>());
@@ -53,11 +55,7 @@ function ChatInterface({
   const lastSeqRef = useRef(new Map<string, number>());
 
   const resetStreamingState = useCallback(() => {
-    if (streamTimerRef.current) {
-      clearTimeout(streamTimerRef.current);
-      streamTimerRef.current = null;
-    }
-    accumulatedStreamRef.current = '';
+    disposeStreamBuffers(streamBuffersRef.current);
   }, []);
 
   const {
@@ -128,7 +126,6 @@ function ChatInterface({
     newSessionTrigger,
     processingSessions,
     onSessionIdle,
-    resetStreamingState,
     statusCheckSentAtRef,
     lastSeqRef,
     sessionStore,
@@ -142,6 +139,12 @@ function ChatInterface({
     onSessionEstablished?.(sessionId, context);
     onNavigateToSession?.(sessionId);
   }, [setCurrentSessionId, onSessionEstablished, onNavigateToSession]);
+
+  // Stable identity so ChatMessagesPane (and its memoized children) don't
+  // re-render from a fresh inline closure on every ChatInterface render.
+  const handleSetProvider = useCallback((nextProvider: Provider) => {
+    setProvider(nextProvider);
+  }, [setProvider]);
 
   const {
     input,
@@ -245,8 +248,7 @@ function ChatInterface({
     setTokenBudget,
     pendingPermissionRequests,
     setPendingPermissionRequests,
-    streamTimerRef,
-    accumulatedStreamRef,
+    streamBuffersRef,
     lastSeqRef,
     statusCheckSentAtRef,
     onSessionProcessing,
@@ -329,7 +331,7 @@ function ChatInterface({
           selectedSession={selectedSession}
           currentSessionId={currentSessionId}
           provider={provider}
-          setProvider={(nextProvider) => setProvider(nextProvider as Provider)}
+          setProvider={handleSetProvider}
           textareaRef={textareaRef}
           claudeModel={claudeModel}
           setClaudeModel={setClaudeModel}

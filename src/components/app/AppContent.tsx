@@ -7,11 +7,15 @@ import MainContent from '../main-content/view/MainContent';
 import CommandPalette from '../command-palette/CommandPalette';
 import { useWebSocket } from '../../contexts/WebSocketContext';
 import { PaletteOpsProvider, usePaletteOpsRegister } from '../../contexts/PaletteOpsContext';
+import type { SessionEstablishedContext, SessionNavigationOptions } from '../chat/types/types';
 import { useDeviceSettings } from '../../hooks/useDeviceSettings';
 import { useSessionProtection } from '../../hooks/useSessionProtection';
 import { useProjectsState } from '../../hooks/useProjectsState';
 import { useQueuedMessageAutoSend } from '../../hooks/useQueuedMessageAutoSend';
 import { api } from '../../utils/api';
+
+import DesktopAppRail from './DesktopAppRail';
+import WorkspaceStatusBar from './WorkspaceStatusBar';
 
 type RunningSessionApiItem = {
   sessionId?: unknown;
@@ -210,10 +214,39 @@ function AppContentInner() {
     return () => vv.removeEventListener('resize', update);
   }, []);
 
+  const openLocalTool = useCallback((tool: 'leoapi' | 'feedback') => {
+    window.dispatchEvent(new CustomEvent('leocodebox:open-local-tool', { detail: tool }));
+  }, []);
+
+  // Stable identities so MainContent's React.memo isn't defeated by fresh inline
+  // closures on every AppContent re-render.
+  const handleOpenSidebar = useCallback(() => setSidebarOpen(true), [setSidebarOpen]);
+
+  const handleNavigateToSession = useCallback(
+    (targetSessionId: string, options?: SessionNavigationOptions) =>
+      navigate(`/session/${targetSessionId}`, { replace: Boolean(options?.replace) }),
+    [navigate],
+  );
+
+  const handleSessionEstablished = useCallback(
+    (targetSessionId: string, context: SessionEstablishedContext) =>
+      registerOptimisticSession({ sessionId: targetSessionId, ...context }),
+    [registerOptimisticSession],
+  );
+
   return (
-    <div className="fixed inset-0 flex bg-background" style={{ bottom: 'var(--keyboard-height, 0px)' }}>
+    <div className="leocodebox-app-shell fixed inset-0 flex bg-background" style={{ bottom: 'var(--keyboard-height, 0px)' }}>
+      {!isMobile && (
+        <DesktopAppRail
+          activeTab={activeTab}
+          onTabChange={setActiveTab}
+          onShowSettings={() => openSettings()}
+          onShowLeoapi={() => openLocalTool('leoapi')}
+          onShowLocalLog={() => openLocalTool('feedback')}
+        />
+      )}
       {!isMobile ? (
-        <div className="h-full flex-shrink-0 border-r border-border/50">
+        <div className="leocodebox-project-sidebar h-full flex-shrink-0 border-r border-border/70">
           <Sidebar {...sidebarSharedProps} />
         </div>
       ) : (
@@ -245,7 +278,7 @@ function AppContentInner() {
         </div>
       )}
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="leocodebox-workspace flex min-w-0 flex-1 flex-col">
         {projectsError ? (
           <main className="flex min-w-0 flex-1 items-center justify-center p-6">
             <div role="alert" className="max-w-lg border border-destructive/40 bg-card p-6 text-center">
@@ -268,22 +301,19 @@ function AppContentInner() {
           ws={ws}
           sendMessage={sendMessage}
           isMobile={isMobile}
-          onMenuClick={() => setSidebarOpen(true)}
+          onMenuClick={handleOpenSidebar}
           isLoading={isLoadingProjects}
           onInputFocusChange={setIsInputFocused}
           onSessionProcessing={markSessionProcessing}
           onSessionIdle={markSessionIdle}
           processingSessions={processingSessions}
-          onNavigateToSession={(targetSessionId: string, options) =>
-            navigate(`/session/${targetSessionId}`, { replace: Boolean(options?.replace) })
-          }
-          onSessionEstablished={(targetSessionId, context) =>
-            registerOptimisticSession({ sessionId: targetSessionId, ...context })
-          }
+          onNavigateToSession={handleNavigateToSession}
+          onSessionEstablished={handleSessionEstablished}
           onShowSettings={openSettings}
           externalMessageUpdate={externalMessageUpdate}
           newSessionTrigger={newSessionTrigger}
         />}
+        <WorkspaceStatusBar selectedProject={selectedProject} runningCount={processingSessions.size} />
       </div>
 
       <CommandPalette

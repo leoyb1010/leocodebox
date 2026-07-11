@@ -73,19 +73,19 @@ export default function MainContentTitle({
             <h2 title={getSessionTitle(selectedSession)} className="truncate text-sm font-semibold leading-tight text-foreground">
               {getSessionTitle(selectedSession)}
             </h2>
-            <div className="truncate text-[11px] leading-tight text-muted-foreground">{selectedProject.displayName}</div>
+            <div className="truncate font-mono text-[10px] leading-tight text-muted-foreground" title={selectedProject.fullPath}>{selectedProject.fullPath}</div>
           </div>
         ) : showChatNewSession ? (
           <div className="min-w-0">
             <h2 className="text-base font-semibold leading-tight text-foreground">{t('mainContent.newSession')}</h2>
-            <div className="truncate text-xs leading-tight text-muted-foreground">{selectedProject.displayName}</div>
+            <div className="truncate font-mono text-[10px] leading-tight text-muted-foreground" title={selectedProject.fullPath}>{selectedProject.fullPath}</div>
           </div>
         ) : (
           <div className="min-w-0">
             <h2 className="text-sm font-semibold leading-tight text-foreground">
               {getTabTitle(activeTab, shouldShowTasksTab, t, pluginDisplayName)}
             </h2>
-            <div className="truncate text-[11px] leading-tight text-muted-foreground">{selectedProject.displayName}</div>
+            <div className="truncate font-mono text-[10px] leading-tight text-muted-foreground" title={selectedProject.fullPath}>{selectedProject.fullPath}</div>
           </div>
         )}
       </div>

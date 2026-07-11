@@ -154,9 +154,30 @@ const wss = createWebSocketServer(server, {
 // Make WebSocket server available to routes
 app.locals.wss = wss;
 
+// Origins explicitly allowed when the server is NOT in local-only mode.
+// Comma-separated list in LEOCODEBOX_ALLOWED_ORIGINS; loopback origins are always
+// permitted so the desktop/localhost experience keeps working out of the box.
+const ALLOWED_ORIGINS = (process.env.LEOCODEBOX_ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => value.length > 0);
+
+function isAllowedOrigin(origin) {
+    if (IS_LOCAL_ONLY_AUTH) {
+        return isLoopbackOrigin(origin);
+    }
+    // Never reflect an arbitrary Origin back. Requests without an Origin header
+    // (same-origin/native clients) and loopback origins are always allowed;
+    // everything else must be on the explicit allow-list.
+    if (isLoopbackOrigin(origin)) {
+        return true;
+    }
+    return ALLOWED_ORIGINS.includes(origin);
+}
+
 app.use(cors({
     origin: (origin, callback) => {
-        callback(null, IS_LOCAL_ONLY_AUTH ? isLoopbackOrigin(origin) : true);
+        callback(null, isAllowedOrigin(origin));
     },
     exposedHeaders: ['X-Refreshed-Token'],
 }));
@@ -1676,9 +1697,13 @@ async function startServer() {
             });
         });
 
-        await closeSessionsWatcher();
         // Clean up plugin processes on shutdown
         const shutdownRuntimeServices = async () => {
+            try {
+                await closeSessionsWatcher();
+            } catch (err) {
+                console.error('[Sessions] Error closing sessions watcher during shutdown:', err?.message || err);
+            }
             try {
                 await browserUseService.stopAllSessions();
             } catch (err) {

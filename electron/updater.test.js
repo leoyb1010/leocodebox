@@ -100,7 +100,26 @@ test('version reset bridge updates legacy builds without looping on 1.1.3', asyn
   try {
     await controller.load();
     assert.equal(await updater.isUpdateSupported({ version: LEGACY_UPDATE_BRIDGE_VERSION }), false);
-    assert.equal(await updater.isUpdateSupported({ version: '1.1.4' }), true);
+    assert.equal(await updater.isUpdateSupported({ version: '1.37.0' }), true);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('v1.37.0 uses normal semver updates without the legacy bridge override', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'leocodebox-updater-current-'));
+  const updater = new FakeUpdater();
+  const controller = new DesktopUpdaterController({
+    appVersion: '1.37.0',
+    isPackaged: true,
+    settingsPath: path.join(root, 'updater.json'),
+    updater,
+    storage: fakeStorage,
+  });
+
+  try {
+    await controller.load();
+    assert.equal(typeof updater.isUpdateSupported, 'undefined');
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

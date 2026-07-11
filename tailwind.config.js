@@ -15,8 +15,11 @@ export default {
     },
     extend: {
       fontFamily: {
-        sans: ['"Encode Sans"', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', '"Helvetica Neue"', 'Arial', 'sans-serif'],
-        serif: ['Merriweather', 'Georgia', 'Cambria', '"Times New Roman"', 'serif'],
+        // System stack aligned with the body font in index.css (no bundled web
+        // fonts ship with the app, so the previously declared "Encode Sans" /
+        // Merriweather never loaded and silently fell back to serif/Georgia).
+        sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', '"PingFang SC"', '"Hiragino Sans GB"', '"Microsoft YaHei"', '"Helvetica Neue"', 'Arial', 'sans-serif'],
+        serif: ['-apple-system', 'BlinkMacSystemFont', '"PingFang SC"', 'Georgia', 'Cambria', 'serif'],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -83,5 +86,5 @@ export default {
       },
     },
   },
-  plugins: [require('@tailwindcss/typography')],
+  plugins: [require('@tailwindcss/typography'), require('tailwindcss-animate')],
 }

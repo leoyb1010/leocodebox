@@ -55,7 +55,8 @@ export const ThemeProvider = ({ children }) => {
     const statusBarMeta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
     statusBarMeta?.setAttribute('content', isDarkMode ? 'black-translucent' : 'default');
     const themeColorMeta = document.querySelector('meta[name="theme-color"]');
-    themeColorMeta?.setAttribute('content', isDarkMode ? '#141414' : '#f6f4ef');
+    themeColorMeta?.setAttribute('content', isDarkMode ? '#111316' : '#f8f9fa');
+    void window.leocodeboxDesktopTools?.setThemeMode(themeMode).catch(() => {});
   }, [isDarkMode, themeMode]);
 
   const setThemeMode = (nextMode) => {

@@ -28,6 +28,7 @@ export function Pill({ isActive, onClick, children, className }: PillProps) {
   return (
     <button
       onClick={onClick}
+      aria-pressed={isActive}
       className={cn(
         'flex touch-manipulation items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium transition-all duration-150',
         isActive

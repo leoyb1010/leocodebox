@@ -36,7 +36,7 @@ const PreferencesContext = createContext<PreferencesContextValue | null>(null);
 
 function applyPreferences(preferences: AppPreferences) {
   document.documentElement.dataset.density = preferences.density;
-  document.documentElement.dataset.accent = preferences.accent;
+  document.documentElement.dataset.accent = 'brand';
   document.documentElement.dataset.reduceMotion = String(preferences.reduceMotion);
   localStorage.setItem('selected-provider', preferences.defaultProvider);
   localStorage.setItem('permission-mode', preferences.permissionMode);

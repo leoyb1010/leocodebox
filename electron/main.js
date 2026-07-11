@@ -12,6 +12,7 @@ import { DesktopNotificationsController } from './desktopNotifications.js';
 import { LocalServerController } from './localServer.js';
 import { readProductVersion } from './productMetadata.js';
 import { TabsController } from './tabs.js';
+import { isFirstPartyShellUrl } from './trustPolicy.js';
 import { DesktopUpdaterController, clearUpdaterTokenEnvironment } from './updater.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -232,9 +233,20 @@ function isAllowedLocalAuthOrigin(origin) {
     return false;
   }
 
-  const port = localServer.getLocalServerPort();
-  if (!port || parsed.protocol !== 'http:') return false;
+  if (parsed.protocol !== 'http:') return false;
   const hostAllowed = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1' || parsed.hostname === '::1' || parsed.hostname === '[::1]';
+  if (!hostAllowed) return false;
+
+  if (process.env.ELECTRON_DEV_URL) {
+    try {
+      if (new URL(process.env.ELECTRON_DEV_URL).origin === parsed.origin) return true;
+    } catch {
+      // Ignore malformed development URLs and fall through to the server origin check.
+    }
+  }
+
+  const port = localServer.getLocalServerPort();
+  if (!port) return false;
   return hostAllowed && Number.parseInt(parsed.port || '80', 10) === port;
 }
 
@@ -259,6 +271,36 @@ function requireTrustedLocalIpcSender(event) {
   if (!isTrustedLocalIpcSender(event)) {
     throw new Error('Rejected privileged desktop request from an untrusted renderer.');
   }
+}
+
+// The first-party desktop shell chrome is loaded from disk (file://) and drives
+// the privileged leocodeboxDesktop bridge; it is not an http-loopback origin, so
+// isTrustedLocalIpcSender would reject it. Treat file:// as trusted here in
+// addition to the loopback local server (covered by isTrustedLocalIpcSender).
+function isFirstPartyShellSender(event) {
+  const senderUrl = event?.senderFrame?.url || event?.sender?.getURL?.() || '';
+  return isFirstPartyShellUrl(senderUrl, getLauncherPath());
+}
+
+function isTrustedDesktopUiSender(event) {
+  return isFirstPartyShellSender(event) || isTrustedLocalIpcSender(event);
+}
+
+function requireTrustedDesktopUiSender(event) {
+  if (!isTrustedDesktopUiSender(event)) {
+    throw new Error('Rejected privileged desktop request from an untrusted renderer.');
+  }
+}
+
+// Desktop state is also readable by remote *.leocodebox.local environment pages
+// (via the leocodeboxDesktopNotifications bridge). localStartupLogs leaks the
+// full PATH, absolute CLI paths, and the user's home directory, so strip it for
+// any caller that is not the trusted first-party shell / local server.
+function getDesktopStateForSender(event) {
+  const state = getDesktopState();
+  if (isTrustedDesktopUiSender(event)) return state;
+  const { localStartupLogs, ...safeState } = state;
+  return safeState;
 }
 
 async function showError(title, error) {
@@ -913,61 +955,85 @@ function registerProtocolHandler() {
 }
 
 function registerIpcHandlers() {
+  // Registers a handler that first rejects any sender that is not the trusted
+  // first-party desktop shell (file://) or the local leocodebox server (loopback
+  // in local-only mode). Used for privileged, side-effectful channels so a
+  // hijacked or navigated-away BrowserView cannot invoke them.
+  const trustedHandle = (channel, fn) =>
+    ipcMain.handle(channel, (event, ...args) => {
+      requireTrustedDesktopUiSender(event);
+      return fn(event, ...args);
+    });
+
   ipcMain.on('leocodebox:get-local-auth-token', (event, origin) => {
     event.returnValue = isTrustedLocalIpcSender(event, origin) ? localServer.getLocalAuthToken() : null;
   });
 
-  ipcMain.handle('leocodebox-desktop:connect-cloud', async () => ({
+  ipcMain.handle('leocodebox-desktop:set-theme-mode', async (event, mode) => {
+    requireTrustedLocalIpcSender(event);
+    if (!['system', 'light', 'dark'].includes(mode)) {
+      throw new Error('Invalid desktop theme mode.');
+    }
+    return updateDesktopSetting('themeMode', mode);
+  });
+
+  trustedHandle('leocodebox-desktop:connect-cloud', async () => ({
     ...getDesktopState(),
     connectUrl: await connectCloudAccount(),
   }));
 
-  ipcMain.handle('leocodebox-desktop:copy-diagnostics', async () => {
+  trustedHandle('leocodebox-desktop:copy-diagnostics', async () => {
     await copyDiagnostics();
     return getDesktopState();
   });
 
-  ipcMain.handle('leocodebox-desktop:copy-local-web-url', async () => copyLocalWebUrl());
-  ipcMain.handle('leocodebox-desktop:get-state', () => getDesktopState());
-  ipcMain.handle('leocodebox-desktop:open-cloud-dashboard', async () => openCloudDashboard());
-  ipcMain.handle('leocodebox-desktop:run-active-environment-action', async (_event, action) => runActiveEnvironmentAction(action));
-  ipcMain.handle('leocodebox-desktop:open-environment', async (_event, environmentId) => {
+  trustedHandle('leocodebox-desktop:copy-local-web-url', async () => copyLocalWebUrl());
+  // get-state is intentionally NOT gated with trustedHandle: it is also read by
+  // remote *.leocodebox.local environment pages via the notifications bridge.
+  // Those untrusted callers get a state with localStartupLogs stripped.
+  ipcMain.handle('leocodebox-desktop:get-state', (event) => getDesktopStateForSender(event));
+  trustedHandle('leocodebox-desktop:open-cloud-dashboard', async () => openCloudDashboard());
+  trustedHandle('leocodebox-desktop:run-active-environment-action', async (_event, action) => runActiveEnvironmentAction(action));
+  trustedHandle('leocodebox-desktop:open-environment', async (_event, environmentId) => {
     const environment = cloud.findEnvironment(environmentId);
     if (!environment) {
       throw new Error('Environment not found. Refresh and try again.');
     }
     return openEnvironmentInDesktop(environment);
   });
-  ipcMain.handle('leocodebox-desktop:open-local', async () => openLocalInDesktop());
-  ipcMain.handle('leocodebox-desktop:open-switch', async () => openSwitchInDesktop());
-  ipcMain.handle('leocodebox-desktop:open-local-web-ui', async () => openLocalWebUi());
-  ipcMain.handle('leocodebox-desktop:refresh-environments', async () => {
+  trustedHandle('leocodebox-desktop:open-local', async () => openLocalInDesktop());
+  trustedHandle('leocodebox-desktop:open-switch', async () => openSwitchInDesktop());
+  trustedHandle('leocodebox-desktop:open-local-web-ui', async () => openLocalWebUi());
+  trustedHandle('leocodebox-desktop:refresh-environments', async () => {
     await refreshCloudEnvironments({ showErrors: true });
     return getDesktopState();
   });
-  ipcMain.handle('leocodebox-desktop:disconnect-cloud', async () => clearCloudAccount());
-  ipcMain.handle('leocodebox-desktop:reload-active-tab', async () => desktopWindow.reloadActiveTab());
-  ipcMain.handle('leocodebox-desktop:show-environment-picker', async () => showEnvironmentPicker());
-  ipcMain.handle('leocodebox-desktop:show-launcher', async () => {
+  trustedHandle('leocodebox-desktop:disconnect-cloud', async () => clearCloudAccount());
+  trustedHandle('leocodebox-desktop:reload-active-tab', async () => desktopWindow.reloadActiveTab());
+  trustedHandle('leocodebox-desktop:show-environment-picker', async () => showEnvironmentPicker());
+  trustedHandle('leocodebox-desktop:show-launcher', async () => {
     await desktopWindow.showLauncher();
     return getDesktopState();
   });
-  ipcMain.handle('leocodebox-desktop:update-desktop-notifications', async (_event, settings) => {
-    if (LOCAL_ONLY_MODE) return getDesktopState();
+  // update-desktop-notifications is a designed-public app-origin channel (the
+  // leocodebox web UI, local or remote, manages its own notification prefs), so
+  // it is not sender-gated; its returned state is redacted for untrusted callers.
+  ipcMain.handle('leocodebox-desktop:update-desktop-notifications', async (event, settings) => {
+    if (LOCAL_ONLY_MODE) return getDesktopStateForSender(event);
     await desktopNotifications?.saveSettings(settings);
-    return getDesktopState();
+    return getDesktopStateForSender(event);
   });
-  ipcMain.handle('leocodebox-desktop:show-desktop-settings', async () => desktopWindow.showDesktopSettings());
-  ipcMain.handle('leocodebox-desktop:show-local-settings', async () => desktopWindow.showLocalSettings());
-  ipcMain.handle('leocodebox-desktop:close-settings-window', async () => {
+  trustedHandle('leocodebox-desktop:show-desktop-settings', async () => desktopWindow.showDesktopSettings());
+  trustedHandle('leocodebox-desktop:show-local-settings', async () => desktopWindow.showLocalSettings());
+  trustedHandle('leocodebox-desktop:close-settings-window', async () => {
     desktopWindow.closeSettingsWindow();
     return getDesktopState();
   });
-  ipcMain.handle('leocodebox-desktop:show-active-environment-actions-menu', async () => desktopWindow.showActiveEnvironmentActionsMenu());
-  ipcMain.handle('leocodebox-desktop:show-environment-actions-menu', async (_event, environmentId) => desktopWindow.showEnvironmentActionsMenu(environmentId));
-  ipcMain.handle('leocodebox-desktop:switch-tab', async (_event, tabId) => desktopWindow.switchDesktopTab(tabId));
-  ipcMain.handle('leocodebox-desktop:close-tab', async (_event, tabId) => desktopWindow.closeDesktopTab(tabId));
-  ipcMain.handle('leocodebox-desktop:update-setting', async (_event, key, value) => updateDesktopSetting(key, value));
+  trustedHandle('leocodebox-desktop:show-active-environment-actions-menu', async () => desktopWindow.showActiveEnvironmentActionsMenu());
+  trustedHandle('leocodebox-desktop:show-environment-actions-menu', async (_event, environmentId) => desktopWindow.showEnvironmentActionsMenu(environmentId));
+  trustedHandle('leocodebox-desktop:switch-tab', async (_event, tabId) => desktopWindow.switchDesktopTab(tabId));
+  trustedHandle('leocodebox-desktop:close-tab', async (_event, tabId) => desktopWindow.closeDesktopTab(tabId));
+  trustedHandle('leocodebox-desktop:update-setting', async (_event, key, value) => updateDesktopSetting(key, value));
   ipcMain.handle('leocodebox-desktop:update-get-state', (event) => {
     requireTrustedLocalIpcSender(event);
     return desktopUpdater.getState();

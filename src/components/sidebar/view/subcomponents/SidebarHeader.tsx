@@ -61,13 +61,9 @@ export default function SidebarHeader({
 
   const LogoBlock = () => (
     <div className="flex min-w-0 items-center gap-2.5">
-      <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-primary/90 shadow-sm">
-        <svg className="h-3.5 w-3.5 text-primary-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
-          <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-        </svg>
-      </div>
+      <img src="/logo-32.png" alt="" className="h-7 w-7 flex-shrink-0 rounded-md" />
       <h1
-        className="truncate text-sm font-bold tracking-tight text-foreground"
+        className="truncate text-sm font-semibold text-foreground"
         style={{ fontFamily: LEOCODEBOX_WORDMARK_FONT_FAMILY }}
       >
         {t('app.title')}
@@ -125,14 +121,14 @@ export default function SidebarHeader({
         {showSearchTools && (
           <div className="mt-2.5 space-y-2">
             {/* Search mode toggle */}
-            <div className="flex rounded-lg bg-muted/50 p-0.5">
+            <div className="flex rounded-md border border-border/60 bg-muted/35 p-0.5">
               <button
                 onClick={() => onSearchModeChange('projects')}
                 aria-pressed={searchMode === 'projects'}
                 className={cn(
-                  "flex-1 flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-normal transition-all",
+                  "flex-1 flex items-center justify-center gap-1.5 rounded px-2 py-1.5 text-xs font-normal",
                   searchMode === 'projects'
-                    ? "bg-background shadow-sm text-foreground"
+                    ? "bg-background text-foreground shadow-sm"
                     : "text-muted-foreground hover:text-foreground"
                 )}
               >
@@ -143,7 +139,7 @@ export default function SidebarHeader({
                 onClick={() => onSearchModeChange('conversations')}
                 aria-pressed={searchMode === 'conversations'}
                 className={cn(
-                  "flex-1 flex items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-xs font-normal transition-all",
+                  "flex-1 flex items-center justify-center gap-1.5 rounded px-2 py-1.5 text-xs font-normal",
                   searchMode === 'conversations'
                     ? "bg-background shadow-sm text-foreground"
                     : "text-muted-foreground hover:text-foreground"
@@ -199,7 +195,7 @@ export default function SidebarHeader({
                 placeholder={searchPlaceholder}
                 value={searchFilter}
                 onChange={(event) => onSearchFilterChange(event.target.value)}
-                className="nav-search-input h-9 rounded-xl border-0 pl-9 pr-14 text-sm transition-all duration-200 placeholder:text-muted-foreground/40 focus-visible:ring-0 focus-visible:ring-offset-0"
+                className="nav-search-input h-9 rounded-md border border-border/60 pl-9 pr-14 text-sm placeholder:text-muted-foreground/40 focus-visible:border-primary/50 focus-visible:ring-2 focus-visible:ring-primary/10 focus-visible:ring-offset-0"
               />
               {searchFilter ? (
                 <button

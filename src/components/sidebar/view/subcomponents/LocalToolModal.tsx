@@ -17,8 +17,8 @@ export default function LocalToolModal({ title, src, onClose }: LocalToolModalPr
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-[70] flex flex-col bg-background" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="flex h-12 shrink-0 items-center justify-between border-b border-border/70 px-4">
+    <div className="leocodebox-settings-dialog fixed inset-0 z-[70] flex flex-col bg-background" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="leocodebox-main-header flex h-14 shrink-0 items-center justify-between border-b border-border/70 px-4">
         <div className="flex min-w-0 items-baseline gap-2">
           <strong className="truncate text-sm font-semibold text-foreground">{title}</strong>
           <span className="hidden text-xs text-muted-foreground sm:inline">leocodebox</span>
@@ -33,7 +33,7 @@ export default function LocalToolModal({ title, src, onClose }: LocalToolModalPr
           <X className="h-4 w-4" />
         </button>
       </div>
-      <iframe className="min-h-0 flex-1 border-0 bg-background" src={src} title={title} />
+      <iframe className="min-h-0 flex-1 border-0 bg-background" src={src} title={title} allow="clipboard-read; clipboard-write" />
     </div>
   );
 }

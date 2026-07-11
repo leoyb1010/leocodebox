@@ -23,38 +23,38 @@
 
 @layer base {
   :root {
-    --background: 44 22% 96%;
-    --foreground: 36 25% 4%;
+    --background: 210 17% 98%;
+    --foreground: 220 14% 10%;
     --card: 0 0% 100%;
-    --card-foreground: 36 25% 4%;
+    --card-foreground: 220 14% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 36 25% 4%;
-    --primary: 221.2 83.2% 53.3%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 44 15% 91%;
-    --secondary-foreground: 36 15% 18%;
-    --muted: 44 15% 91%;
-    --muted-foreground: 40 5% 44%;
-    --accent: 44 15% 91%;
-    --accent-foreground: 36 15% 18%;
+    --popover-foreground: 220 14% 10%;
+    --primary: 174 72% 32%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 13% 94%;
+    --secondary-foreground: 220 12% 18%;
+    --muted: 210 13% 94%;
+    --muted-foreground: 215 8% 44%;
+    --accent: 210 13% 93%;
+    --accent-foreground: 220 12% 16%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 210 40% 98%;
-    --border: 44 14% 87%;
-    --input: 44 14% 87%;
-    --ring: 221.2 83.2% 53.3%;
+    --border: 215 13% 87%;
+    --input: 215 13% 87%;
+    --ring: 174 72% 32%;
     --radius: 0.5rem;
 
     /* Nav design tokens */
-    --nav-glass-bg: 44 22% 96% / 0.7;
-    --nav-glass-blur: 20px;
-    --nav-glass-saturate: 1.8;
-    --nav-tab-glow: 221.2 83.2% 53.3% / 0.18;
-    --nav-tab-ring: 221.2 83.2% 53.3% / 0.10;
+    --nav-glass-bg: 210 17% 98% / 0.82;
+    --nav-glass-blur: 18px;
+    --nav-glass-saturate: 1.25;
+    --nav-tab-glow: 174 72% 32% / 0.12;
+    --nav-tab-ring: 174 72% 32% / 0.12;
     --nav-float-shadow: 0 0% 0% / 0.06;
-    --nav-float-ring: 44 14% 87% / 0.5;
-    --nav-divider-color: 44 14% 87% / 0.5;
-    --nav-input-bg: 44 15% 91% / 0.5;
-    --nav-input-focus-ring: 221.2 83.2% 53.3% / 0.22;
+    --nav-float-ring: 215 13% 87% / 0.65;
+    --nav-divider-color: 215 13% 87% / 0.72;
+    --nav-input-bg: 210 13% 94% / 0.76;
+    --nav-input-focus-ring: 174 72% 32% / 0.2;
 
     /* Safe area CSS variables */
     --safe-area-inset-top: env(safe-area-inset-top);
@@ -85,37 +85,37 @@
   }
 
   .dark {
-    --background: 0 0% 8%;
-    --foreground: 40 8% 93%;
-    --card: 0 0% 12%;
-    --card-foreground: 40 8% 93%;
-    --popover: 0 0% 12%;
-    --popover-foreground: 40 8% 93%;
-    --primary: 217.2 91.2% 59.8%;
-    --primary-foreground: 0 0% 8%;
-    --secondary: 0 0% 17%;
-    --secondary-foreground: 40 8% 93%;
-    --muted: 0 0% 17%;
-    --muted-foreground: 0 0% 60%;
-    --accent: 0 0% 17%;
-    --accent-foreground: 40 8% 93%;
+    --background: 220 10% 7%;
+    --foreground: 210 10% 92%;
+    --card: 220 9% 10%;
+    --card-foreground: 210 10% 92%;
+    --popover: 220 9% 11%;
+    --popover-foreground: 210 10% 92%;
+    --primary: 174 67% 47%;
+    --primary-foreground: 220 12% 7%;
+    --secondary: 220 8% 15%;
+    --secondary-foreground: 210 10% 92%;
+    --muted: 220 8% 15%;
+    --muted-foreground: 215 7% 62%;
+    --accent: 220 8% 16%;
+    --accent-foreground: 210 10% 94%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 40 8% 93%;
-    --border: 0 0% 17%;
-    --input: 0 0% 23%;
-    --ring: 217.2 91.2% 59.8%;
+    --border: 220 8% 20%;
+    --input: 220 8% 22%;
+    --ring: 174 67% 47%;
 
     /* Nav design tokens — dark overrides */
-    --nav-glass-bg: 0 0% 12% / 0.55;
-    --nav-glass-blur: 24px;
-    --nav-glass-saturate: 1.6;
-    --nav-tab-glow: 217.2 91.2% 59.8% / 0.25;
-    --nav-tab-ring: 217.2 91.2% 59.8% / 0.15;
+    --nav-glass-bg: 220 9% 10% / 0.86;
+    --nav-glass-blur: 18px;
+    --nav-glass-saturate: 1.15;
+    --nav-tab-glow: 174 67% 47% / 0.14;
+    --nav-tab-ring: 174 67% 47% / 0.16;
     --nav-float-shadow: 0 0% 0% / 0.35;
-    --nav-float-ring: 0 0% 17% / 0.3;
-    --nav-divider-color: 0 0% 17% / 0.5;
-    --nav-input-bg: 0 0% 17% / 0.5;
-    --nav-input-focus-ring: 217.2 91.2% 59.8% / 0.25;
+    --nav-float-ring: 220 8% 20% / 0.72;
+    --nav-divider-color: 220 8% 20% / 0.8;
+    --nav-input-bg: 220 8% 15% / 0.78;
+    --nav-input-focus-ring: 174 67% 47% / 0.22;
   }
 
   :root[data-accent="green"] {
@@ -143,7 +143,7 @@
   body {
     @apply bg-background text-foreground;
 
-    font-family: "Encode Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     margin: 0;
@@ -219,25 +219,27 @@
   }
   
   /* Global transition defaults */
-  button, 
+  button,
   a, 
   input, 
   textarea, 
   select,
   [role="button"],
   .transition-all {
-    transition: all 150ms cubic-bezier(0.4, 0, 0.2, 1);
+    transition-property: color, background-color, border-color, opacity, box-shadow, transform;
+    transition-duration: 140ms;
+    transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
   }
   
   /* Color transitions for theme switching - exclude interactive elements */
-  body, div, section, article, aside, header, footer, nav, main,
-  h1, h2, h3, h4, h5, h6, p, span, blockquote,
-  ul, ol, li, dl, dt, dd,
-  table, thead, tbody, tfoot, tr, td, th,
-  form, fieldset, legend, label {
-    transition: background-color 200ms ease-in-out, 
-                border-color 200ms ease-in-out,
-                color 200ms ease-in-out;
+  html,
+  body,
+  #root,
+  .leocodebox-app-shell,
+  .leocodebox-app-rail,
+  .leocodebox-project-sidebar,
+  .leocodebox-workspace {
+    transition: background-color 180ms ease-out, border-color 180ms ease-out, color 180ms ease-out;
   }
   
   /* Transform transitions */
@@ -594,6 +596,190 @@
   .dark textarea:-ms-input-placeholder {
     color: rgb(75 85 99) !important; /* gray-600 - darker gray */
     opacity: 1 !important;
+  }
+}
+
+/* leocodebox 1.2 visual system ------------------------------------------------ */
+@layer components {
+  .leocodebox-app-shell {
+    background: hsl(var(--background));
+    color: hsl(var(--foreground));
+  }
+
+  .leocodebox-app-rail {
+    background: color-mix(in srgb, hsl(var(--card)) 92%, hsl(var(--background)));
+  }
+
+  .leocodebox-rail-button {
+    position: relative;
+    display: flex;
+    width: 42px;
+    min-height: 42px;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    border-radius: 7px;
+    color: hsl(var(--muted-foreground));
+  }
+
+  .leocodebox-rail-button span {
+    max-width: 38px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 9px;
+    line-height: 1.15;
+  }
+
+  .leocodebox-rail-button:hover {
+    background: hsl(var(--accent));
+    color: hsl(var(--foreground));
+    transform: translateY(-1px);
+  }
+
+  .leocodebox-rail-button:active {
+    transform: translateY(0) scale(0.96);
+  }
+
+  .leocodebox-rail-button.is-active {
+    background: hsl(var(--primary) / 0.1);
+    color: hsl(var(--primary));
+  }
+
+  .leocodebox-rail-button.is-active::before {
+    position: absolute;
+    left: -8px;
+    width: 2px;
+    height: 22px;
+    border-radius: 0 2px 2px 0;
+    background: hsl(var(--primary));
+    content: '';
+  }
+
+  .leocodebox-project-sidebar {
+    background: color-mix(in srgb, hsl(var(--card)) 90%, hsl(var(--background)));
+  }
+
+  .leocodebox-project-sidebar > div,
+  .leocodebox-project-sidebar > div > div {
+    background-color: transparent;
+  }
+
+  .leocodebox-workspace {
+    min-width: 0;
+    background: hsl(var(--background));
+  }
+
+  .leocodebox-status-bar {
+    background: color-mix(in srgb, hsl(var(--card)) 82%, hsl(var(--background)));
+    font-variant-numeric: tabular-nums;
+  }
+
+  .leocodebox-main-header {
+    background: color-mix(in srgb, hsl(var(--background)) 88%, hsl(var(--card)));
+  }
+
+  .leocodebox-tab-bar {
+    gap: 2px;
+    border-radius: 0;
+    background: transparent;
+    padding: 0;
+  }
+
+  .leocodebox-tab {
+    position: relative;
+    border-radius: 5px;
+    box-shadow: none !important;
+  }
+
+  .leocodebox-tab[aria-pressed='true'],
+  .leocodebox-tab[data-state='active'] {
+    background: hsl(var(--primary) / 0.09);
+    color: hsl(var(--primary));
+  }
+
+  .leocodebox-workspace-enter {
+    animation: leocodebox-workspace-enter 220ms cubic-bezier(0.2, 0, 0, 1) both;
+  }
+
+  .leocodebox-activity-strip {
+    background: hsl(var(--primary) / 0.055);
+    animation: leocodebox-strip-enter 200ms cubic-bezier(0.2, 0, 0, 1) both;
+  }
+
+  .leocodebox-activity-trace {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .leocodebox-activity-trace::after {
+    position: absolute;
+    inset: 0;
+    width: 34%;
+    border-radius: 999px;
+    background: hsl(var(--primary));
+    content: '';
+    animation: leocodebox-trace 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  }
+
+  [data-slot='prompt-input'] {
+    border-radius: 8px;
+    background: color-mix(in srgb, hsl(var(--card)) 94%, transparent);
+    box-shadow: 0 1px 2px hsl(220 20% 2% / 0.05);
+  }
+
+  .dark [data-slot='prompt-input'] {
+    box-shadow: 0 10px 30px hsl(220 40% 2% / 0.18);
+  }
+
+  [data-slot='prompt-input']:focus-within {
+    border-color: hsl(var(--primary) / 0.48);
+    box-shadow: 0 0 0 3px hsl(var(--primary) / 0.08);
+  }
+
+  .leocodebox-settings-dialog {
+    background: color-mix(in srgb, hsl(var(--background)) 96%, hsl(var(--card)));
+    animation: leocodebox-dialog-enter 220ms cubic-bezier(0.2, 0, 0, 1) both;
+  }
+
+  .leocodebox-settings-nav {
+    background: color-mix(in srgb, hsl(var(--card)) 72%, hsl(var(--background)));
+  }
+}
+
+@keyframes leocodebox-workspace-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes leocodebox-strip-enter {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes leocodebox-trace {
+  from { transform: translateX(-120%); }
+  to { transform: translateX(320%); }
+}
+
+@keyframes leocodebox-dialog-enter {
+  from { opacity: 0; transform: translateY(10px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .leocodebox-workspace-enter,
+  .leocodebox-activity-strip,
+  .leocodebox-settings-dialog,
+  .leocodebox-activity-trace::after {
+    animation: none !important;
+  }
+}
+
+@media (max-width: 1100px) {
+  .leocodebox-project-sidebar > div {
+    width: 248px;
   }
 }
 

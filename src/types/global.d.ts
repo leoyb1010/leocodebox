@@ -5,6 +5,7 @@ declare global {
     __ROUTER_BASENAME__?: string;
     leocodeboxLocal?: { enabled: boolean; authReady?: boolean };
     leocodeboxDesktopTools?: {
+      setThemeMode: (mode: 'system' | 'light' | 'dark') => Promise<unknown>;
       onOpenModal: (callback: (tool: 'leoapi' | 'feedback') => void) => () => void;
     };
     leocodeboxDesktopUpdater?: {

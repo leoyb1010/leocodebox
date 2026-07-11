@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { api } from '../../../utils/api';
 import { useAuth } from '../../auth/context/AuthContext';
 import { useWebSocket } from '../../../contexts/WebSocketContext';
+import type { ServerEvent } from '../../../contexts/WebSocketContext';
 import type {
   TaskMasterContextError,
   TaskMasterContextValue,
@@ -58,7 +59,7 @@ export function useTaskMaster() {
 }
 
 export function TaskMasterProvider({ children }: { children: React.ReactNode }) {
-  const { latestMessage } = useWebSocket();
+  const { subscribe } = useWebSocket();
   const { user, token, isLoading: isAuthLoading } = useAuth();
 
   const [projects, setProjects] = useState<TaskMasterProject[]>([]);
@@ -338,30 +339,40 @@ export function TaskMasterProvider({ children }: { children: React.ReactNode }) 
     }
   }, [currentProject?.projectId, refreshTasks, token, user]);
 
+  // Subscribe directly to the websocket rather than reading a shared
+  // `latestMessage` state slot. TaskMaster broadcasts are low-frequency, and
+  // subscribing keeps this provider (and its consumers) from re-rendering on
+  // every high-rate chat frame. Only `taskmaster-*` frames are acted on; the
+  // handler re-binds whenever the viewed project or a refresh callback changes,
+  // so each closure always sees the current project id.
   useEffect(() => {
-    const message = latestMessage as TaskMasterWebSocketMessage | null;
-    if (!isTaskMasterMessage(message)) {
-      return;
-    }
-
-    // Broadcasts now identify projects by `projectId` (see taskmaster-websocket.js).
-    if (message.type === 'taskmaster-project-updated' && message.projectId) {
-      if (message.projectId === currentProjectIdRef.current) {
-        void refreshCurrentProjectTaskMaster(message.projectId);
+    const handleMessage = (event: ServerEvent) => {
+      const message = event as TaskMasterWebSocketMessage | null;
+      if (!isTaskMasterMessage(message)) {
+        return;
       }
-      void refreshProjects();
-      return;
-    }
 
-    if (message.type === 'taskmaster-tasks-updated' && message.projectId === currentProject?.projectId) {
-      void refreshTasks();
-      return;
-    }
+      // Broadcasts now identify projects by `projectId` (see taskmaster-websocket.js).
+      if (message.type === 'taskmaster-project-updated' && message.projectId) {
+        if (message.projectId === currentProjectIdRef.current) {
+          void refreshCurrentProjectTaskMaster(message.projectId);
+        }
+        void refreshProjects();
+        return;
+      }
 
-    if (message.type === 'taskmaster-mcp-status-changed') {
-      void refreshMCPStatus();
-    }
-  }, [currentProject?.projectId, latestMessage, refreshCurrentProjectTaskMaster, refreshMCPStatus, refreshProjects, refreshTasks]);
+      if (message.type === 'taskmaster-tasks-updated' && message.projectId === currentProject?.projectId) {
+        void refreshTasks();
+        return;
+      }
+
+      if (message.type === 'taskmaster-mcp-status-changed') {
+        void refreshMCPStatus();
+      }
+    };
+
+    return subscribe(handleMessage);
+  }, [subscribe, currentProject?.projectId, refreshCurrentProjectTaskMaster, refreshMCPStatus, refreshProjects, refreshTasks]);
 
   const contextValue = useMemo<TaskMasterContextValue>(
     () => ({

@@ -1,4 +1,4 @@
-window.__APP_VERSION__ = '1.1.3';
+window.__APP_VERSION__ = '1.37.0';
 window.__MOCK_STATE__ = {
   localOnly: true,
   account: { connected: false, email: null, authState: 'local_only' },
@@ -331,7 +331,7 @@ window.__MOCK_STATE__ = {
         return CC.closeSheet();
 	      case 'dashboard':
 	        if (CC.localOnly(CC.state)) return;
-	        return CC.run('Opening leocodebox dashboard...', function () { return bridge.openCloudDashboard(); });
+	        return CC.run('正在打开 leocodebox 仪表盘...', function () { return bridge.openCloudDashboard(); });
 	      case 'refresh-environments':
 	        if (CC.localOnly(CC.state)) return;
 	        return CC.run('Refreshing cloud environments...', function () { return bridge.refreshEnvironments(); });

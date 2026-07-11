@@ -30,14 +30,6 @@ type WebSocketContextType = {
    * dropped the way a single "latest message" state slot could.
    */
   subscribe: (listener: ServerEventListener) => () => void;
-  /**
-   * Legacy state-based access to the most recent frame.
-   *
-   * Kept only for low-frequency consumers (TaskMaster broadcasts). High-rate
-   * chat streams must use `subscribe` — React may batch state updates, which
-   * makes `latestMessage` lossy under load.
-   */
-  latestMessage: ServerEvent | null;
   isConnected: boolean;
 };
 
@@ -68,12 +60,23 @@ const useWebSocketProviderState = (): WebSocketContextType => {
    * re-renders of the provider tree.
    */
   const listenersRef = useRef(new Set<ServerEventListener>());
-  const [latestMessage, setLatestMessage] = useState<ServerEvent | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  /**
+   * Monotonic id for the current connection "generation". Bumped on every
+   * effect run and cleanup (token change / unmount), so async socket callbacks
+   * (onopen/onclose) from a superseded run can detect they are stale and bail —
+   * this is what prevents the token-refresh reconnect race from opening a
+   * second socket or nulling the live `wsRef`.
+   */
+  const generationRef = useRef(0);
   const { token } = useAuth();
 
   const dispatch = useCallback((event: ServerEvent) => {
+    // Synchronous fan-out to subscribers only. Intentionally holds NO React
+    // state: a per-frame setState here would re-render every `useWebSocket`
+    // consumer on every streamed delta. High-frequency consumers use
+    // `subscribe`; there is no `latestMessage` slot to keep in sync.
     for (const listener of listenersRef.current) {
       try {
         listener(event);
@@ -81,7 +84,6 @@ const useWebSocketProviderState = (): WebSocketContextType => {
         console.error('WebSocket listener error:', error);
       }
     }
-    setLatestMessage(event);
   }, []);
 
   useEffect(() => {
@@ -89,21 +91,30 @@ const useWebSocketProviderState = (): WebSocketContextType => {
     // re-run of the effect (e.g. on token refresh) would short-circuit connect()
     // at its unmounted guard and leave the socket permanently disconnected.
     unmountedRef.current = false;
-    connect();
+    // New generation for this effect run. Any socket/timer from the previous
+    // run now carries a stale generation and will self-cancel.
+    const generation = ++generationRef.current;
+    connect(generation);
 
     return () => {
       unmountedRef.current = true;
+      // Invalidate this run's generation so an old socket's late onclose can't
+      // schedule a reconnect or clobber a socket created by the next run.
+      generationRef.current += 1;
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
       }
       if (wsRef.current) {
         wsRef.current.close();
+        wsRef.current = null;
       }
     };
   }, [token]); // everytime token changes, we reconnect
 
-  const connect = useCallback(() => {
+  const connect = useCallback((generation: number) => {
     if (unmountedRef.current) return; // Prevent connection if unmounted
+    if (generation !== generationRef.current) return; // Superseded by a newer run
     try {
       // Construct WebSocket URL
       const wsUrl = buildWebSocketUrl(token);
@@ -113,6 +124,12 @@ const useWebSocketProviderState = (): WebSocketContextType => {
       const websocket = new WebSocket(wsUrl);
 
       websocket.onopen = () => {
+        if (generation !== generationRef.current) {
+          // A newer effect run superseded us between connect() and open.
+          // Close this orphan so it never becomes a second live socket.
+          websocket.close();
+          return;
+        }
         setIsConnected(true);
         wsRef.current = websocket;
         if (hasConnectedRef.current) {
@@ -132,13 +149,21 @@ const useWebSocketProviderState = (): WebSocketContextType => {
       };
 
       websocket.onclose = () => {
+        // Ignore closes from a superseded run: they must not touch shared state
+        // (isConnected/wsRef) or schedule reconnects for the new generation.
+        if (generation !== generationRef.current) return;
+        // Only the socket currently referenced drives reconnection. If a newer
+        // socket of the same generation already took over, leave it untouched.
+        if (wsRef.current && wsRef.current !== websocket) return;
+
         setIsConnected(false);
         wsRef.current = null;
 
         // Attempt to reconnect after 3 seconds
         reconnectTimeoutRef.current = setTimeout(() => {
           if (unmountedRef.current) return; // Prevent reconnection if unmounted
-          connect();
+          if (generation !== generationRef.current) return; // Superseded meanwhile
+          connect(generation);
         }, 3000);
       };
 
@@ -172,9 +197,8 @@ const useWebSocketProviderState = (): WebSocketContextType => {
     ws: wsRef.current,
     sendMessage,
     subscribe,
-    latestMessage,
     isConnected
-  }), [sendMessage, subscribe, latestMessage, isConnected]);
+  }), [sendMessage, subscribe, isConnected]);
 
   return value;
 };

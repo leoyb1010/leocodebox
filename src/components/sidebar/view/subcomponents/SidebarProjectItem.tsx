@@ -59,12 +59,12 @@ const getSessionCountDisplay = (project: Project, sessions: SessionWithProvider[
   return String(total);
 };
 
-const PROVIDER_BADGE_META: Record<string, { label: string; dot: string; text: string }> = {
-  claude: { label: 'Claude', dot: 'bg-orange-500', text: 'text-orange-700 dark:text-orange-300' },
-  codex: { label: 'Codex', dot: 'bg-emerald-500', text: 'text-emerald-700 dark:text-emerald-300' },
-  cursor: { label: 'Cursor', dot: 'bg-sky-500', text: 'text-sky-700 dark:text-sky-300' },
-  opencode: { label: 'OpenCode', dot: 'bg-violet-500', text: 'text-violet-700 dark:text-violet-300' },
-  gemini: { label: 'Gemini', dot: 'bg-blue-500', text: 'text-blue-700 dark:text-blue-300' },
+const PROVIDER_BADGE_META: Record<string, { label: string }> = {
+  claude: { label: 'Claude' },
+  codex: { label: 'Codex' },
+  cursor: { label: 'Cursor' },
+  opencode: { label: 'OpenCode' },
+  gemini: { label: 'Gemini' },
 };
 
 // Per-provider session breakdown, so a project is visibly classified by which
@@ -79,21 +79,14 @@ function ProviderBadges({ counts }: { counts?: Record<string, number> }) {
   return (
     <div className="mt-0.5 flex flex-wrap items-center gap-1">
       {entries.map(([provider, count]) => {
-        const meta = PROVIDER_BADGE_META[provider.toLowerCase()] || {
-          label: provider,
-          dot: 'bg-gray-400',
-          text: 'text-gray-600 dark:text-gray-300',
-        };
+        const meta = PROVIDER_BADGE_META[provider.toLowerCase()] || { label: provider };
         return (
           <span
             key={provider}
-            className={cn(
-              'inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] font-medium bg-muted/50',
-              meta.text,
-            )}
+            className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground"
             title={`${meta.label}: ${count}`}
           >
-            <span className={cn('h-1.5 w-1.5 rounded-full', meta.dot)} />
+            <span className="h-1 w-1 rounded-full bg-muted-foreground/55" />
             {meta.label} {count}
           </span>
         );
@@ -308,11 +301,11 @@ export default function SidebarProjectItem({
         <Button
           variant="ghost"
           className={cn(
-            'hidden md:flex w-full justify-between p-2 h-auto font-normal hover:bg-accent/50',
-            isSelected && 'bg-accent text-accent-foreground',
+            'relative hidden h-auto w-full justify-between rounded-md border-l-2 border-l-transparent px-2 py-2 font-normal hover:bg-accent/55 md:flex',
+            isSelected && 'border-l-primary bg-primary/[0.07] text-foreground',
             isStarred &&
               !isSelected &&
-              'bg-yellow-50/50 dark:bg-yellow-900/10 hover:bg-yellow-100/50 dark:hover:bg-yellow-900/20',
+              'bg-muted/40 hover:bg-accent/55',
           )}
           onClick={selectAndToggleProject}
         >
@@ -321,7 +314,7 @@ export default function SidebarProjectItem({
               className={cn(
                 'w-6 h-6 flex items-center justify-center rounded cursor-pointer transition-all duration-200',
                 isStarred
-                  ? 'hover:bg-yellow-50 dark:hover:bg-yellow-900/20'
+                  ? 'hover:bg-primary/10'
                   : 'opacity-40 hover:opacity-100 hover:bg-accent',
               )}
               onClick={(event) => {
@@ -334,7 +327,7 @@ export default function SidebarProjectItem({
                 className={cn(
                   'w-3 h-3 transition-colors',
                   isStarred
-                    ? 'text-yellow-600 dark:text-yellow-400 fill-current'
+                    ? 'fill-current text-primary'
                     : 'text-muted-foreground',
                 )}
               />

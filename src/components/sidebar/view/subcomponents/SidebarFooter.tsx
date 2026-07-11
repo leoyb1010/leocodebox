@@ -45,7 +45,7 @@ export default function SidebarFooter({
           <span className="truncate">{releaseInfo?.title || `可更新到 v${latestVersion}`}</span>
         </button>
       )}
-      <div className="grid grid-cols-3 gap-1">
+      <div className="grid grid-cols-3 gap-1 md:hidden">
         <button
           type="button"
           onClick={onShowFeedback}
@@ -67,7 +67,10 @@ export default function SidebarFooter({
           <Settings className="h-3.5 w-3.5" />设置
         </button>
       </div>
-      <div className="px-2.5 pt-1 text-[10px] text-muted-foreground/50">leocodebox v{currentVersion}</div>
+      <div className="flex items-center justify-between px-2.5 pt-1 text-[10px] text-muted-foreground/50">
+        <span>leocodebox v{currentVersion}</span>
+        <span className="hidden items-center gap-1 md:inline-flex"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />本机模式</span>
+      </div>
     </div>
   );
 }

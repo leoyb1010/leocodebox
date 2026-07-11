@@ -260,7 +260,12 @@ export class LocalServerController {
     this.localServerUrl = null;
     this.localServerPort = null;
     this.ownedServerProcess = null;
-    this.localAuthToken = randomBytes(32).toString('base64url');
+    // Single-flight guard so concurrent startup requests reuse one in-flight
+    // resolution instead of each spawning (and orphaning) a bundled server.
+    this.startupPromise = null;
+    this.localAuthToken = process.env.LEOCODEBOX_LOCAL_AUTH_TOKEN
+      || process.env.CLOUDCLI_DESKTOP_LOCAL_AUTH_TOKEN
+      || randomBytes(32).toString('base64url');
     this.startupLogs = [];
     this.desktopSettings = {
       keepLocalServerRunning: false,
@@ -534,10 +539,26 @@ export class LocalServerController {
       this.localServerUrl = null;
       this.localServerPort = null;
     }
-    if (!this.localServerUrl) {
-      this.localServerUrl = await this.resolveLocalServerUrl();
+    if (this.localServerUrl) {
+      return this.localServerUrl;
     }
-    return this.localServerUrl;
+    // Concurrent callers must not each spawn a bundled server: the process is
+    // only recorded on this.ownedServerProcess and localServerUrl is not set
+    // until the very end of startup, so parallel entries would each spawn and
+    // clobber ownedServerProcess, leaking orphans. Reuse a single in-flight
+    // startup promise and clear it on settle (success or failure) so a later
+    // call can retry.
+    if (!this.startupPromise) {
+      this.startupPromise = this.resolveLocalServerUrl()
+        .then((url) => {
+          this.localServerUrl = url;
+          return url;
+        })
+        .finally(() => {
+          this.startupPromise = null;
+        });
+    }
+    return this.startupPromise;
   }
 
   async getResolvedTarget() {
@@ -598,6 +619,8 @@ export class LocalServerController {
     });
     this.localServerUrl = null;
     this.localServerPort = null;
+    // Clear any settled/in-flight startup guard so a restart re-resolves cleanly.
+    this.startupPromise = null;
     this.onChange?.();
   }
 }

@@ -9,7 +9,14 @@ const appName = 'leocodebox.app';
 const outputDir = path.resolve('release/desktop');
 const sourceApp = path.join(outputDir, 'mac-arm64', appName);
 const packageJson = JSON.parse(await readFile(new URL('../../package.json', import.meta.url), 'utf8'));
-const outputDmg = path.join(outputDir, `leocodebox-${packageJson.version}-mac-arm64.dmg`);
+// Developer ID signing gates everything downstream. Without a real identity the
+// build is only good for local smoke-testing, so it MUST NOT masquerade as a
+// distributable release: it is renamed "-unsigned" and no updater ZIP/feed is
+// produced (an ad-hoc app fails Gatekeeper on other Macs and breaks the
+// Squirrel signature-continuity check on update).
+const signIdentityEarly = (process.env.LEOCODEBOX_SIGN_IDENTITY || '').trim();
+const dmgSuffix = signIdentityEarly ? '' : '-unsigned';
+const outputDmg = path.join(outputDir, `leocodebox-${packageJson.version}-mac-arm64${dmgSuffix}.dmg`);
 const outputZipName = `leocodebox-${packageJson.version}-mac-arm64.zip`;
 const outputZip = path.join(outputDir, outputZipName);
 const updateMetadataPath = path.join(outputDir, 'latest-mac.yml');
@@ -75,22 +82,34 @@ try {
   } else {
     run('/usr/bin/codesign', ['--force', '--deep', '--sign', '-', signedApp]);
     run('/usr/bin/codesign', ['--verify', '--deep', '--strict', '--verbose=2', signedApp]);
+    console.warn('WARNING: LEOCODEBOX_SIGN_IDENTITY is not set — producing an AD-HOC (unsigned) build.');
+    console.warn('         This build will NOT open on other Macs and MUST NOT be distributed or used as an update source.');
   }
 
-  await rm(outputZip, { force: true });
-  run('/usr/bin/ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', signedApp, outputZip]);
-  const [zipSha512, zipStats] = await Promise.all([hashFile(outputZip), stat(outputZip)]);
-  await writeFile(updateMetadataPath, [
-    `version: ${updateMetadataVersion}`,
-    'files:',
-    `  - url: ${outputZipName}`,
-    `    sha512: ${zipSha512}`,
-    `    size: ${zipStats.size}`,
-    `path: ${outputZipName}`,
-    `sha512: ${zipSha512}`,
-    `releaseDate: '${new Date().toISOString()}'`,
-    '',
-  ].join('\n'));
+  // Only a Developer-ID-signed app is safe to distribute and to feed the
+  // auto-updater. For ad-hoc builds we skip the ZIP + latest-mac.yml entirely so
+  // a broken update artifact can never be uploaded by accident.
+  if (signIdentity) {
+    await rm(outputZip, { force: true });
+    run('/usr/bin/ditto', ['-c', '-k', '--sequesterRsrc', '--keepParent', signedApp, outputZip]);
+    const [zipSha512, zipStats] = await Promise.all([hashFile(outputZip), stat(outputZip)]);
+    await writeFile(updateMetadataPath, [
+      `version: ${updateMetadataVersion}`,
+      'files:',
+      `  - url: ${outputZipName}`,
+      `    sha512: ${zipSha512}`,
+      `    size: ${zipStats.size}`,
+      `path: ${outputZipName}`,
+      `sha512: ${zipSha512}`,
+      `releaseDate: '${new Date().toISOString()}'`,
+      '',
+    ].join('\n'));
+  } else {
+    // Stale metadata from a previous signed build must not linger next to an
+    // unsigned DMG and get mistaken for this build's release artifacts.
+    await rm(outputZip, { force: true });
+    await rm(updateMetadataPath, { force: true });
+  }
 
   run('/usr/bin/ditto', ['--norsrc', '--noqtn', signedApp, path.join(dmgRoot, appName)]);
   await symlink('/Applications', path.join(dmgRoot, 'Applications'));
@@ -100,9 +119,11 @@ try {
     '-ov', '-format', 'UDZO', outputDmg,
   ]);
   run('/usr/bin/hdiutil', ['verify', outputDmg]);
-  console.log(`Created signed DMG: ${outputDmg}`);
-  console.log(`Created updater ZIP: ${outputZip}`);
-  console.log(`Created updater metadata: ${updateMetadataPath}`);
+  console.log(`Created ${signIdentity ? 'signed' : 'UNSIGNED'} DMG: ${outputDmg}`);
+  if (signIdentity) {
+    console.log(`Created updater ZIP: ${outputZip}`);
+    console.log(`Created updater metadata: ${updateMetadataPath}`);
+  }
 } finally {
   await rm(tempRoot, { recursive: true, force: true });
 }

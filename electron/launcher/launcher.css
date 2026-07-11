@@ -24,9 +24,9 @@ body.cc-modal-window {
   --tx: #f5f7fa;
   --tx2: #adb8c5;
   --tx3: #7f8b98;
-  --brand: #0a66d9;
-  --brand-2: #5fa5ff;
-  --brand-faint: rgba(10, 102, 217, 0.14);
+  --brand: #36c9b7;
+  --brand-2: #5fe0cf;
+  --brand-faint: rgba(54, 201, 183, 0.14);
   --ok: #2aa775;
   --warn: #d48b20;
   --err: #d65252;
@@ -48,9 +48,9 @@ body.cc-modal-window {
   --tx: #11151a;
   --tx2: #566171;
   --tx3: #7f8b98;
-  --brand: #0a66d9;
-  --brand-2: #0f5fc6;
-  --brand-faint: rgba(10, 102, 217, 0.09);
+  --brand: #178f82;
+  --brand-2: #0f766e;
+  --brand-faint: rgba(23, 143, 130, 0.10);
   --ok: #1f8e61;
   --warn: #b67515;
   --err: #c24747;

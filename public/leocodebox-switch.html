@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f6f4ef">
+  <meta name="theme-color" content="#f8f9fa">
   <title>leocodebox Leoapi</title>
   <link rel="icon" href="/favicon.png">
   <script>
@@ -17,40 +17,40 @@
   <style>
     :root {
       color-scheme: light;
-      --bg: #f6f4ef;
+      --bg: #f8f9fa;
       --surface: #ffffff;
-      --surface-hover: #f3f2ef;
-      --surface-strong: #eceae6;
-      --text: #202124;
-      --muted: #62646a;
-      --subtle: #85878d;
-      --line: #d8d6d0;
-      --line-strong: #bbb9b3;
-      --blue: #2e72ea;
-      --blue-hover: #1f64dc;
-      --blue-soft: #edf4ff;
-      --orange: #ff7112;
+      --surface-hover: #f1f3f4;
+      --surface-strong: #e9edef;
+      --text: #17191c;
+      --muted: #626870;
+      --subtle: #858b93;
+      --line: #dce1e4;
+      --line-strong: #c2c9cd;
+      --blue: #178f82;
+      --blue-hover: #117a70;
+      --blue-soft: #e8f6f3;
+      --orange: #178f82;
       --green: #178a55;
       --red: #c93b36;
-      --focus: #4b91ff;
-      --toolbar: #ebe9e5;
-      --toolbar-line: #d8d6d0;
+      --focus: #178f82;
+      --toolbar: #eef1f2;
+      --toolbar-line: #dce1e4;
       --tab-active: #ffffff;
       --tab-hover: #f7f6f3;
-      --card-selected: #f3f7ff;
-      --mark-bg: #f4f3f0;
-      --mark-line: #d7d5cf;
+      --card-selected: #eff8f6;
+      --mark-bg: #f0f2f3;
+      --mark-line: #dce1e4;
       --mark-text: #55575d;
-      --active-mark-bg: #e5efff;
-      --active-mark-line: #a9c7f7;
-      --active-mark-text: #215fb9;
-      --chip-bg: #e8f1ff;
-      --chip-text: #235caa;
+      --active-mark-bg: #dff3ef;
+      --active-mark-line: #9dd8cf;
+      --active-mark-text: #116e65;
+      --chip-bg: #dff3ef;
+      --chip-text: #116e65;
       --input-bg: #ffffff;
       --dialog-bg: #ffffff;
       --menu-bg: #ffffff;
       --menu-hover: #f1f0ed;
-      --row-line: #e4e2dd;
+      --row-line: #e5e9eb;
       --toast-bg: #ffffff;
       --icon-filter: brightness(0) opacity(.58);
       --icon-filter-hover: brightness(0) opacity(.82);
@@ -59,39 +59,39 @@
     }
     html[data-theme="dark"] {
       color-scheme: dark;
-      --bg: #1b1b1e;
-      --surface: #242428;
-      --surface-hover: #29292e;
-      --surface-strong: #303036;
-      --text: #f5f5f7;
-      --muted: #a6a6ae;
-      --subtle: #73737c;
-      --line: #3c3c43;
-      --line-strong: #50505a;
-      --blue: #2e72ea;
-      --blue-hover: #3c80f4;
-      --blue-soft: #26334b;
+      --bg: #111316;
+      --surface: #181b1f;
+      --surface-hover: #202429;
+      --surface-strong: #252a2f;
+      --text: #edf0f2;
+      --muted: #a0a7ae;
+      --subtle: #747c84;
+      --line: #2d3238;
+      --line-strong: #414850;
+      --blue: #36c9b7;
+      --blue-hover: #48d5c3;
+      --blue-soft: #183b37;
       --green: #44c985;
       --red: #ff665f;
-      --toolbar: #2a2a2f;
-      --toolbar-line: #313136;
-      --tab-active: #1f1f23;
-      --tab-hover: #323238;
-      --card-selected: #272a31;
-      --mark-bg: #2b2b30;
-      --mark-line: #45454c;
+      --toolbar: #1d2125;
+      --toolbar-line: #2d3238;
+      --tab-active: #252a2f;
+      --tab-hover: #252a2f;
+      --card-selected: #172c2a;
+      --mark-bg: #23282d;
+      --mark-line: #3a4148;
       --mark-text: #c9c9cf;
-      --active-mark-bg: #263752;
-      --active-mark-line: #3d5b8d;
-      --active-mark-text: #8cb8ff;
-      --chip-bg: #33445f;
-      --chip-text: #bcd5ff;
-      --input-bg: #1d1d21;
-      --dialog-bg: #242428;
-      --menu-bg: #29292e;
-      --menu-hover: #393940;
-      --row-line: #36363c;
-      --toast-bg: #303036;
+      --active-mark-bg: #183b37;
+      --active-mark-line: #27645d;
+      --active-mark-text: #72e3d5;
+      --chip-bg: #183b37;
+      --chip-text: #8ce9de;
+      --input-bg: #14171a;
+      --dialog-bg: #181b1f;
+      --menu-bg: #202429;
+      --menu-hover: #2a3036;
+      --row-line: #292f34;
+      --toast-bg: #24292e;
       --icon-filter: brightness(0) invert(.72);
       --icon-filter-hover: brightness(0) invert(1);
       --shadow: rgba(0, 0, 0, .4);
@@ -99,7 +99,7 @@
     * { box-sizing: border-box; }
     html, body { min-height: 100%; }
     body { margin: 0; background: var(--bg); color: var(--text); font-size: 14px; }
-    html[data-embedded="true"] .app-shell { padding-top: 14px; }
+    html[data-embedded="true"] .app-shell { padding: 16px 22px 28px; }
     html[data-embedded="true"] #backToMain { display: none; }
     button, input, select, textarea { font: inherit; letter-spacing: 0; }
     button, summary, select { cursor: pointer; }
@@ -107,10 +107,10 @@
       outline: 2px solid var(--focus); outline-offset: 2px;
     }
     button:disabled { cursor: not-allowed; opacity: .45; }
-    .app-shell { min-height: 100vh; padding: 28px 34px 44px; }
+    .app-shell { min-height: 100vh; padding: 18px 28px 36px; animation: surface-enter .22s cubic-bezier(.2, 0, 0, 1) both; }
     .topbar {
-      min-height: 74px; display: grid; grid-template-columns: minmax(170px, 1fr) auto minmax(170px, 1fr);
-      align-items: center; gap: 20px; margin-bottom: 28px;
+      min-height: 54px; display: grid; grid-template-columns: minmax(170px, 1fr) auto minmax(170px, 1fr);
+      align-items: center; gap: 18px; margin-bottom: 20px; border-bottom: 1px solid var(--line); padding-bottom: 14px;
     }
     .brand { display: flex; align-items: center; gap: 10px; min-width: 0; }
     .brand img { width: 34px; height: 34px; border-radius: 8px; }
@@ -122,15 +122,15 @@
     .back-button img { width: 18px; height: 18px; border-radius: 0; filter: var(--icon-filter); }
     .back-button:hover img { filter: var(--icon-filter-hover); }
     .brand-copy { min-width: 0; }
-    .brand-name { font-size: 25px; line-height: 1.1; font-weight: 650; color: #4291ff; }
+    .brand-name { font-size: 18px; line-height: 1.1; font-weight: 650; color: var(--text); }
     .brand-meta { margin-top: 4px; color: var(--subtle); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     .agent-tabs {
-      display: flex; align-items: center; gap: 6px; max-width: min(760px, 58vw); padding: 7px;
-      border: 1px solid var(--toolbar-line); border-radius: 8px; background: var(--toolbar); overflow-x: auto; scrollbar-width: none;
+      display: flex; align-items: center; gap: 3px; max-width: min(760px, 58vw); padding: 3px;
+      border: 1px solid var(--toolbar-line); border-radius: 7px; background: var(--toolbar); overflow-x: auto; scrollbar-width: none;
     }
     .agent-tabs::-webkit-scrollbar { display: none; }
     .agent-tab {
-      flex: 0 0 auto; min-height: 42px; border: 0; border-radius: 7px; padding: 0 15px;
+      flex: 0 0 auto; min-height: 34px; border: 0; border-radius: 5px; padding: 0 13px;
       background: transparent; color: var(--muted); font-weight: 600;
     }
     .agent-tab:hover { color: var(--text); background: var(--tab-hover); }
@@ -146,13 +146,11 @@
     .icon-button img, .button-icon { width: 19px; height: 19px; filter: var(--icon-filter); }
     .icon-button:hover img { filter: var(--icon-filter-hover); }
     .primary-button .button-icon, .add-button .button-icon { filter: brightness(0) invert(1); }
-    .add-button {
-      width: 48px; height: 48px; border-radius: 50%; background: var(--orange); color: #fff;
-      box-shadow: 0 8px 22px rgba(255, 113, 18, .28);
-    }
-    .add-button:hover { background: #ff812b; }
-    .add-button img { width: 24px; height: 24px; filter: brightness(0) invert(1); }
-    .workspace { max-width: 1600px; margin: 0 auto; }
+    .add-button { width: 40px; height: 40px; border-radius: 7px; background: var(--blue); color: #fff; box-shadow: none; }
+    .add-button:hover { background: var(--blue-hover); transform: translateY(-1px); }
+    .add-button:active { transform: translateY(0) scale(.97); }
+    .add-button img { width: 20px; height: 20px; filter: brightness(0) invert(1); }
+    .workspace { max-width: 1260px; margin: 0 auto; }
     .context-row { display: flex; align-items: end; justify-content: space-between; gap: 18px; margin-bottom: 16px; }
     .context-row h1 { margin: 0; font-size: 18px; line-height: 1.3; font-weight: 650; }
     .context-row p { margin: 5px 0 0; color: var(--subtle); font-size: 13px; }
@@ -165,29 +163,30 @@
     .primary-button { border: 1px solid var(--blue); background: var(--blue); color: #fff; }
     .primary-button:hover { background: var(--blue-hover); }
     .danger-button { border: 1px solid rgba(255, 102, 95, .5); background: transparent; color: var(--red); }
-    .provider-list { display: grid; gap: 14px; }
+    .provider-list { display: grid; gap: 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
     .provider-card {
-      position: relative; min-height: 116px; display: grid; grid-template-columns: 34px 54px minmax(0, 1fr) auto;
-      align-items: center; gap: 16px; padding: 20px 24px; border: 1px solid var(--line); border-radius: 8px;
-      background: var(--surface); transition: border-color .16s ease, background .16s ease;
+      position: relative; min-height: 88px; display: grid; grid-template-columns: 28px 44px minmax(0, 1fr) auto;
+      align-items: center; gap: 14px; padding: 15px 18px; border: 0; border-bottom: 1px solid var(--row-line); border-radius: 0;
+      background: transparent; transition: background .16s ease;
     }
-    .provider-card:hover, .provider-card.is-selected { border-color: #2789ff; background: var(--card-selected); }
-    .provider-card.is-active { border-color: #2789ff; background: var(--blue-soft); }
+    .provider-card:last-child { border-bottom: 0; }
+    .provider-card:hover, .provider-card.is-selected { background: var(--surface-hover); }
+    .provider-card.is-active { background: var(--card-selected); box-shadow: inset 2px 0 var(--blue); }
     .drag-handle { display: grid; place-items: center; user-select: none; }
     .drag-handle img { width: 20px; height: 20px; filter: var(--icon-filter); }
     .provider-mark {
-      width: 48px; height: 48px; display: grid; place-items: center; border-radius: 8px;
-      border: 1px solid var(--mark-line); background: var(--mark-bg); color: var(--mark-text); font-size: 19px; font-weight: 700;
+      width: 38px; height: 38px; display: grid; place-items: center; border-radius: 7px;
+      border: 1px solid var(--mark-line); background: var(--mark-bg); color: var(--mark-text); font-size: 15px; font-weight: 700;
     }
     .provider-card.is-active .provider-mark { border-color: var(--active-mark-line); background: var(--active-mark-bg); color: var(--active-mark-text); }
     .provider-info { min-width: 0; }
     .provider-title { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
-    .provider-title strong { font-size: 18px; line-height: 1.25; font-weight: 650; }
+    .provider-title strong { font-size: 15px; line-height: 1.25; font-weight: 650; }
     .provider-url {
       display: block; max-width: 100%; margin-top: 8px; padding: 0; border: 0; background: transparent;
-      color: #48a0ff; font-size: 15px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      color: var(--blue); font-size: 12px; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    .provider-url:hover { color: #78b8ff; text-decoration: underline; text-underline-offset: 3px; }
+    .provider-url:hover { color: var(--blue-hover); text-decoration: underline; text-underline-offset: 3px; }
     .state-chip { min-height: 25px; display: inline-flex; align-items: center; padding: 0 9px; border-radius: 6px; background: var(--chip-bg); color: var(--chip-text); font-size: 12px; }
     .state-chip.readonly { background: #34343a; color: var(--muted); }
     .card-actions {
@@ -319,6 +318,8 @@
     @media (hover: none) {
       .card-actions { opacity: 1; pointer-events: auto; }
     }
+    @keyframes surface-enter { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+    @media (prefers-reduced-motion: reduce) { .app-shell { animation: none; } }
   </style>
 </head>
 <body>

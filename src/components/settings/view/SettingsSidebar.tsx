@@ -35,8 +35,8 @@ export default function SettingsSidebar({ activeTab, onChange }: SettingsSidebar
   return (
     <>
       {/* Desktop sidebar */}
-      <aside className="hidden w-56 flex-shrink-0 border-r border-border bg-muted/30 md:flex md:flex-col">
-        <nav className="flex flex-col gap-1 p-3">
+      <aside className="leocodebox-settings-nav hidden w-52 flex-shrink-0 border-r border-border md:flex md:flex-col">
+        <nav className="flex flex-col gap-0.5 p-3">
           {NAV_ITEMS.map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
@@ -46,10 +46,10 @@ export default function SettingsSidebar({ activeTab, onChange }: SettingsSidebar
                 key={item.id}
                 onClick={() => onChange(item.id)}
                 className={cn(
-                  'flex items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors duration-150',
+                  'flex items-center gap-3 rounded-md border-l-2 px-3 py-2 text-left text-sm font-medium',
                   isActive
-                    ? 'bg-accent text-accent-foreground'
-                    : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground active:bg-accent/50',
+                    ? 'border-l-primary bg-primary/[0.07] text-foreground'
+                    : 'border-l-transparent text-muted-foreground hover:bg-accent/50 hover:text-foreground active:bg-accent/50',
                 )}
               >
                 <Icon className="h-4 w-4 flex-shrink-0" />

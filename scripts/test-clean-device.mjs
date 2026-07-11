@@ -7,6 +7,7 @@ import path from 'node:path';
 import electronPath from 'electron';
 
 const appRoot = process.cwd();
+const expectedAppVersion = JSON.parse(await fs.readFile(path.join(appRoot, 'package.json'), 'utf8')).version;
 const tempHome = await fs.mkdtemp(path.join(os.tmpdir(), 'leocodebox-clean-device-'));
 const fakeBin = path.join(tempHome, '.local', 'bin');
 const markerPath = path.join(tempHome, '.leocodebox', 'local-server.json');
@@ -90,7 +91,7 @@ try {
   const ready = await waitFor(readMarker);
   marker = ready.marker;
   assert.equal(ready.health.status, 'ok');
-  assert.equal(ready.health.version, '1.1.3');
+  assert.equal(ready.health.version, expectedAppVersion);
 
   const token = await waitFor(async () => readLocalToken(marker.pid));
   const authStatus = await fetchJson(`${marker.url}/api/auth/status`, token);

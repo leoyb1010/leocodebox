@@ -21,6 +21,8 @@ import { TaskMasterPanel } from '../../task-master';
 import MainContentHeader from './subcomponents/MainContentHeader';
 import MainContentStateView from './subcomponents/MainContentStateView';
 import ErrorBoundary from './ErrorBoundary';
+import WorkspaceActivityStrip from './subcomponents/WorkspaceActivityStrip';
+import WorkspaceRunInspector from './subcomponents/WorkspaceRunInspector';
 
 type TaskMasterContextValue = {
   currentProject?: Project | null;
@@ -140,8 +142,12 @@ function MainContent({
     return <MainContentStateView mode="empty" isMobile={isMobile} onMenuClick={onMenuClick} />;
   }
 
+  const selectedActivity = selectedSession
+    ? processingSessions.get(selectedSession.id) ?? null
+    : null;
+
   return (
-    <div className="flex h-full flex-col">
+    <div className="leocodebox-workspace-enter flex h-full flex-col">
       <MainContentHeader
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -152,6 +158,8 @@ function MainContent({
         isMobile={isMobile}
         onMenuClick={onMenuClick}
       />
+
+      <WorkspaceActivityStrip session={selectedSession} activity={selectedActivity} />
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className={`flex min-h-0 min-w-[200px] flex-col overflow-hidden ${editorExpanded ? 'hidden' : ''} flex-1`}>
@@ -182,59 +190,83 @@ function MainContent({
 
           {activeTab === 'files' && (
             <div className="h-full overflow-hidden">
-              <FileTree selectedProject={selectedProject} onFileOpen={handleFileOpen} />
+              <ErrorBoundary showDetails>
+                <FileTree selectedProject={selectedProject} onFileOpen={handleFileOpen} />
+              </ErrorBoundary>
             </div>
           )}
 
           {activeTab === 'shell' && (
             <div className="h-full w-full overflow-hidden">
-              <StandaloneShell
-                project={selectedProject}
-                session={selectedSession}
-                showHeader={false}
-                isActive={activeTab === 'shell'}
-              />
+              <ErrorBoundary showDetails>
+                <StandaloneShell
+                  project={selectedProject}
+                  session={selectedSession}
+                  showHeader={false}
+                  isActive={activeTab === 'shell'}
+                />
+              </ErrorBoundary>
             </div>
           )}
 
           {activeTab === 'git' && (
             <div className="h-full overflow-hidden">
-              <GitPanel selectedProject={selectedProject} isMobile={isMobile} onFileOpen={handleFileOpen} />
+              <ErrorBoundary showDetails>
+                <GitPanel selectedProject={selectedProject} isMobile={isMobile} onFileOpen={handleFileOpen} />
+              </ErrorBoundary>
             </div>
           )}
 
-          {shouldShowTasksTab && <TaskMasterPanel isVisible={activeTab === 'tasks'} />}
+          {shouldShowTasksTab && (
+            <ErrorBoundary showDetails>
+              <TaskMasterPanel isVisible={activeTab === 'tasks'} />
+            </ErrorBoundary>
+          )}
 
           {shouldShowBrowserTab && activeTab === 'browser' && (
             <div className="h-full overflow-hidden">
-              <BrowserUsePanel isVisible={activeTab === 'browser'} onShowSettings={onShowSettings} />
+              <ErrorBoundary showDetails>
+                <BrowserUsePanel isVisible={activeTab === 'browser'} onShowSettings={onShowSettings} />
+              </ErrorBoundary>
             </div>
           )}
 
           {activeTab.startsWith('plugin:') && (
             <div className="h-full overflow-hidden">
-              <PluginTabContent
-                pluginName={activeTab.replace('plugin:', '')}
-                selectedProject={selectedProject}
-                selectedSession={selectedSession}
-              />
+              <ErrorBoundary showDetails>
+                <PluginTabContent
+                  pluginName={activeTab.replace('plugin:', '')}
+                  selectedProject={selectedProject}
+                  selectedSession={selectedSession}
+                />
+              </ErrorBoundary>
             </div>
           )}
         </div>
 
-        <EditorSidebar
-          editingFile={editingFile}
-          isMobile={isMobile}
-          editorExpanded={editorExpanded}
-          editorWidth={editorWidth}
-          hasManualWidth={hasManualWidth}
-          resizeHandleRef={resizeHandleRef}
-          onResizeStart={handleResizeStart}
-          onCloseEditor={handleCloseEditor}
-          onToggleEditorExpand={handleToggleEditorExpand}
-          projectPath={selectedProject.path}
-          fillSpace={activeTab === 'files'}
-        />
+        <ErrorBoundary showDetails>
+          <EditorSidebar
+            editingFile={editingFile}
+            isMobile={isMobile}
+            editorExpanded={editorExpanded}
+            editorWidth={editorWidth}
+            hasManualWidth={hasManualWidth}
+            resizeHandleRef={resizeHandleRef}
+            onResizeStart={handleResizeStart}
+            onCloseEditor={handleCloseEditor}
+            onToggleEditorExpand={handleToggleEditorExpand}
+            projectPath={selectedProject.path}
+            fillSpace={activeTab === 'files'}
+          />
+        </ErrorBoundary>
+        {activeTab === 'chat' && !editingFile && selectedActivity && (
+          <WorkspaceRunInspector
+            project={selectedProject}
+            session={selectedSession}
+            activity={selectedActivity}
+            runningCount={processingSessions.size}
+          />
+        )}
       </div>
     </div>
   );

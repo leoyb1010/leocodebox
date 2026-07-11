@@ -13,7 +13,7 @@ import { spawnOpenCode } from '../opencode-cli.js';
 import { Octokit } from '@octokit/rest';
 import { providerModelsService } from '../modules/providers/services/provider-models.service.js';
 import { IS_PLATFORM } from '../constants/config.js';
-import { normalizeProjectPath } from '../shared/utils.js';
+import { normalizeProjectPath, validateWorkspacePath } from '../shared/utils.js';
 
 const router = express.Router();
 
@@ -861,15 +861,18 @@ router.post('/', validateExternalApiKey, async (req, res) => {
   const createBranch = branchName ? true : (req.body.createBranch === true || req.body.createBranch === 'true');
   const createPR = req.body.createPR === true || req.body.createPR === 'true';
 
-  // Permission mode for the headless run. Non-interactive API runs default to
-  // bypassPermissions (an interactive prompt would hang a headless run), but the
-  // caller may explicitly request a safer, validated mode instead of it being
-  // hardcoded to full bypass on every provider.
+  // Permission mode for the headless run. A caller may explicitly request any
+  // allowed mode (including bypassPermissions when they knowingly need it), but
+  // when none is specified we fall back to acceptEdits rather than a full
+  // permission bypass: acceptEdits keeps file edits flowing without an
+  // interactive prompt (which would hang a headless run) while still refusing
+  // unbounded, unreviewed actions by default. ALLOWED_PERMISSION_MODES is
+  // unchanged so explicit bypassPermissions requests still work.
   const ALLOWED_PERMISSION_MODES = new Set(['default', 'plan', 'acceptEdits', 'bypassPermissions']);
   const requestedPermissionMode = typeof req.body.permissionMode === 'string' ? req.body.permissionMode.trim() : '';
   const permissionMode = ALLOWED_PERMISSION_MODES.has(requestedPermissionMode)
     ? requestedPermissionMode
-    : 'bypassPermissions';
+    : 'acceptEdits';
   const skipPermissions = permissionMode === 'bypassPermissions';
 
   // Validate inputs
@@ -923,6 +926,17 @@ router.post('/', validateExternalApiKey, async (req, res) => {
     }
 
     finalProjectPath = normalizeProjectPath(finalProjectPath);
+
+    // Enforce the same workspace containment check the UI applies when creating a
+    // project. Without this, a caller could register (and then operate on) an
+    // arbitrary path outside WORKSPACES_ROOT via projectPath, bypassing the
+    // guard used by the createProject route.
+    const workspaceValidation = await validateWorkspacePath(finalProjectPath);
+    if (!workspaceValidation.valid) {
+      return res.status(400).json({
+        error: workspaceValidation.error || 'Invalid project path',
+      });
+    }
 
     // Register project path in DB (or reuse existing active registration)
     const registrationResult = projectsDb.createProjectPath(finalProjectPath, null);

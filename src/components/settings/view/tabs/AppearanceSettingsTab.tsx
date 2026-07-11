@@ -75,7 +75,7 @@ export default function AppearanceSettingsTab({
         </SettingsCard>
       </SettingsSection>
 
-      <SettingsSection title="界面密度与强调色">
+      <SettingsSection title="界面密度与动效">
         <SettingsCard divided>
           <SettingsRow label="信息密度" description="重度使用推荐紧凑模式">
             <select
@@ -86,18 +86,6 @@ export default function AppearanceSettingsTab({
             >
               <option value="compact">紧凑</option>
               <option value="comfortable">舒适</option>
-            </select>
-          </SettingsRow>
-          <SettingsRow label="强调色" description="用于选择、焦点和主要操作">
-            <select
-              value={preferences.accent}
-              disabled={saving}
-              onChange={(event) => void updatePreferences({ accent: event.target.value as typeof preferences.accent })}
-              className="w-full rounded-lg border border-input bg-card p-2.5 text-sm text-foreground focus:border-primary focus:ring-1 focus:ring-primary sm:w-36"
-            >
-              <option value="blue">蓝色</option>
-              <option value="green">绿色</option>
-              <option value="amber">琥珀色</option>
             </select>
           </SettingsRow>
           <SettingsRow label="减少动态效果" description="关闭非必要过渡和位移动画">
