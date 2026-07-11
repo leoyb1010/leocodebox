@@ -1,6 +1,6 @@
 {
   "name": "leocodebox",
-  "version": "1.37.0",
+  "version": "1.1.5",
   "productName": "leocodebox",
   "description": "Local desktop controller for coding agents",
   "type": "module",
@@ -54,14 +54,15 @@
     "test": "npm run test:desktop && npm run test:client && npm run test:server",
     "test:desktop": "node --test electron/*.test.js",
     "test:clean-device": "node scripts/test-clean-device.mjs",
-    "test:client": "node --import tsx --test src/hooks/projectProviderCounts.test.ts src/components/git-panel/utils/commitGraph.test.ts src/components/chat/utils/streamBuffers.test.ts",
+    "test:client": "node scripts/test-client.mjs",
     "test:server": "node scripts/test-server.mjs",
-    "lint": "eslint src/ server/",
-    "lint:fix": "eslint src/ server/ --fix",
+    "lint": "eslint src/ server/ electron/ scripts/ --max-warnings 0",
+    "lint:fix": "eslint src/ server/ electron/ scripts/ --fix",
     "start": "npm run build && npm run server",
     "release": "npm run desktop:dist:mac:signed && npm run desktop:notarize:mac",
     "prepublishOnly": "npm run build",
-    "postinstall": "node scripts/fix-node-pty.js"
+    "postinstall": "node scripts/fix-node-pty.js",
+    "prepare": "husky"
   },
   "build": {
     "appId": "com.leoyuan.leocodebox",
@@ -245,8 +246,10 @@
     "vite": "^7.0.4"
   },
   "lint-staged": {
-    "src/**/*.{ts,tsx,js,jsx}": "eslint",
-    "server/**/*.{js,ts}": "eslint"
+    "src/**/*.{ts,tsx,js,jsx}": "eslint --max-warnings 0",
+    "server/**/*.{js,ts}": "eslint --max-warnings 0",
+    "electron/**/*.js": "eslint --max-warnings 0",
+    "scripts/**/*.{js,mjs,cjs}": "eslint --max-warnings 0"
   },
   "engines": {
     "node": ">=22"

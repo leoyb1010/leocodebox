@@ -2,7 +2,7 @@ import { ClaudeProvider } from '@/modules/providers/list/claude/claude.provider.
 import { CodexProvider } from '@/modules/providers/list/codex/codex.provider.js';
 import { CursorProvider } from '@/modules/providers/list/cursor/cursor.provider.js';
 import { OpenCodeProvider } from '@/modules/providers/list/opencode/opencode.provider.js';
-import { PROVIDER_MANIFESTS, PROVIDER_TEMPLATES } from '@/modules/providers/provider.manifests.js';
+import { CHAT_PROVIDER_IDS, PROVIDER_MANIFESTS, PROVIDER_TEMPLATES } from '@/modules/providers/provider.manifests.js';
 import type { IProvider } from '@/shared/interfaces.js';
 import type {
   LLMProvider,
@@ -39,6 +39,12 @@ for (const provider of providers.keys()) {
   }
 }
 
+for (const provider of CHAT_PROVIDER_IDS) {
+  if (!providers.has(provider)) {
+    throw new Error(`Supported chat manifest "${provider}" does not have a runtime provider adapter.`);
+  }
+}
+
 const templates = new Map<ProviderTemplateId, ProviderTemplate>();
 for (const template of PROVIDER_TEMPLATES) {
   if (templates.has(template.id)) {
@@ -69,11 +75,12 @@ export const providerRegistry = {
   listManifests(options?: { includeHidden?: boolean }): ProviderManifest[] {
     return Array.from(manifests.values())
       .filter((manifest) => options?.includeHidden || manifest.visibility !== 'hidden')
-      .sort((a, b) => a.order - b.order);
+      .sort((a, b) => a.order - b.order)
+      .map((manifest) => ({ ...manifest, capabilities: { ...manifest.capabilities } }));
   },
 
   listTemplates(): ProviderTemplate[] {
-    return Array.from(templates.values());
+    return Array.from(templates.values(), (template) => ({ ...template }));
   },
 
   resolveTemplate(templateId: string): ProviderTemplate {

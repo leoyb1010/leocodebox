@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Check, ChevronDown, ChevronRight, Edit3, Star, Trash2, X } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
@@ -95,7 +96,7 @@ function ProviderBadges({ counts }: { counts?: Record<string, number> }) {
   );
 }
 
-export default function SidebarProjectItem({
+function SidebarProjectItem({
   project,
   selectedProject,
   selectedSession,
@@ -168,7 +169,15 @@ export default function SidebarProjectItem({
                 !isSelected &&
                 'bg-yellow-50/50 dark:bg-yellow-900/5 border-yellow-200/30 dark:border-yellow-800/30',
             )}
+            role="button"
+            tabIndex={0}
             onClick={toggleProject}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === ' ') {
+                event.preventDefault();
+                toggleProject();
+              }
+            }}
           >
             <div className="flex items-center justify-between">
               <div className="flex min-w-0 flex-1 items-center gap-3">
@@ -184,6 +193,7 @@ export default function SidebarProjectItem({
                     toggleStarProject();
                   }}
                   title={isStarred ? t('tooltips.removeFromFavorites') : t('tooltips.addToFavorites')}
+                  aria-label={isStarred ? t('tooltips.removeFromFavorites') : t('tooltips.addToFavorites')}
                 >
                   <Star
                     className={cn(
@@ -249,6 +259,7 @@ export default function SidebarProjectItem({
                         event.stopPropagation();
                         saveProjectName();
                       }}
+                      aria-label={t('common.save', 'Save')}
                     >
                       <Check className="h-4 w-4 text-white" />
                     </button>
@@ -258,6 +269,7 @@ export default function SidebarProjectItem({
                         event.stopPropagation();
                         onCancelEditingProject();
                       }}
+                      aria-label={t('common.cancel', 'Cancel')}
                     >
                       <X className="h-4 w-4 text-white" />
                     </button>
@@ -270,6 +282,7 @@ export default function SidebarProjectItem({
                         event.stopPropagation();
                         onDeleteProject(project);
                       }}
+                      aria-label={t('tooltips.deleteProject', 'Delete project')}
                     >
                       <Trash2 className="h-4 w-4 text-red-600 dark:text-red-400" />
                     </button>
@@ -280,6 +293,7 @@ export default function SidebarProjectItem({
                         event.stopPropagation();
                         onStartEditingProject(project);
                       }}
+                      aria-label={t('tooltips.editProject', 'Edit project')}
                     >
                       <Edit3 className="h-4 w-4 text-primary" />
                     </button>
@@ -457,3 +471,5 @@ export default function SidebarProjectItem({
     </div>
   );
 }
+
+export default memo(SidebarProjectItem);

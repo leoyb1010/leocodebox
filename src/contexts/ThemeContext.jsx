@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 const ThemeContext = createContext();
 const THEME_MODES = new Set(['system', 'light', 'dark']);
@@ -59,16 +59,20 @@ export const ThemeProvider = ({ children }) => {
     void window.leocodeboxDesktopTools?.setThemeMode(themeMode).catch(() => {});
   }, [isDarkMode, themeMode]);
 
-  const setThemeMode = (nextMode) => {
+  const setThemeMode = useCallback((nextMode) => {
     if (THEME_MODES.has(nextMode)) setThemeModeState(nextMode);
-  };
+  }, []);
 
-  const toggleDarkMode = () => {
+  const toggleDarkMode = useCallback(() => {
     setThemeModeState(isDarkMode ? 'light' : 'dark');
-  };
+  }, [isDarkMode]);
+
+  const contextValue = useMemo(() => ({ isDarkMode, themeMode, setThemeMode, toggleDarkMode }), [
+    isDarkMode, themeMode, setThemeMode, toggleDarkMode,
+  ]);
 
   return (
-    <ThemeContext.Provider value={{ isDarkMode, themeMode, setThemeMode, toggleDarkMode }}>
+    <ThemeContext.Provider value={contextValue}>
       {children}
     </ThemeContext.Provider>
   );

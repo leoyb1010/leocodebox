@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+
+import { AppError } from '../../../shared/utils.js';
 import { providerRegistry } from '../provider.registry.js';
 
 const expectedChatProviders = ['claude', 'codex', 'cursor', 'opencode'];
@@ -50,4 +52,31 @@ test('registry methods remain safe when passed as callbacks', () => {
   assert.equal(resolveProvider('opencode').id, 'opencode');
   assert.equal(requireCapability('opencode', 'models').id, 'opencode');
   assert.equal(hasCapability('opencode', 'models'), true);
+});
+
+test('registry returns defensive metadata copies and structured capability errors', () => {
+  const manifests = providerRegistry.listManifests();
+  const claude = manifests.find((manifest) => manifest.id === 'claude');
+  assert.ok(claude);
+  claude.displayName = 'mutated';
+  claude.capabilities.chat = 'unsupported';
+  assert.equal(providerRegistry.resolveManifest('claude').displayName, 'Claude Code');
+  assert.equal(providerRegistry.resolveManifest('claude').capabilities.chat, 'supported');
+
+  const templates = providerRegistry.listTemplates();
+  templates[0].name = 'mutated';
+  assert.notEqual(providerRegistry.listTemplates()[0].name, 'mutated');
+
+  assert.throws(
+    () => providerRegistry.requireCapability('grok', 'mcp'),
+    (error) => error instanceof AppError && error.code === 'PROVIDER_CAPABILITY_UNSUPPORTED',
+  );
+  assert.throws(
+    () => providerRegistry.requireCapability('antigravity', 'chat'),
+    (error) => error instanceof AppError && error.code === 'PROVIDER_CAPABILITY_UNVERIFIED',
+  );
+  assert.throws(
+    () => providerRegistry.resolveTemplate('missing-template'),
+    (error) => error instanceof AppError && error.code === 'UNSUPPORTED_PROVIDER_TEMPLATE',
+  );
 });

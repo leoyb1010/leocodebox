@@ -50,3 +50,9 @@ spctl -a -vvv --type execute "$TMP_ROOT/leocodebox.app" # 应 accepted / Notariz
 - `scripts/release/notarize-mac.sh` — 公证 DMG、分别为 DMG 与 App 钉章，并重建热更新 ZIP/元数据。
 - `scripts/release/sign-macos-app.sh` — 逐个签名安装包中的 Mach-O、原生模块、Framework 与 Helper。
 - `scripts/release/verify-macos-signatures.sh` — 对所有嵌套 Mach-O 执行 Developer ID、时间戳和 hardened runtime 校验。
+
+## 为什么源码配置保持 `asar: false`
+
+当前桌面构建有意使用 `asar: false`，并在外部发布脚本中完成 Developer ID 签名、公证和 stapler。PTY、SQLite 原生模块、Provider CLI 以及插件资源需要真实文件路径；在完成 ASAR A/B 测试并证明启动、原生模块、签名与更新链路均不退化前，不应仅为缩小文件数量而开启 ASAR。
+
+`package.json` 中 `hardenedRuntime`/`notarize` 的基础值保持关闭也是有意设计：正式发布入口 `desktop:dist:mac:signed` 会通过 `prepare-desktop-app.js` 注入受控签名配置，随后由 `notarize-mac.sh` 执行公证。不要绕过这些脚本直接把未签名产物写入正式更新 feed。

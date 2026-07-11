@@ -1,10 +1,9 @@
-import { useMemo } from 'react';
+import { lazy, Suspense, useMemo } from 'react';
 import ReactDOM from 'react-dom';
 import { AlertTriangle, EyeOff, Trash2 } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 import { Button } from '../../../../shared/view/ui';
-import Settings from '../../../settings/view/Settings';
 import VersionUpgradeModal from '../../../version-upgrade/view';
 import type { Project } from '../../../../types/app';
 import { normalizeProjectForSettings } from '../../utils/utils';
@@ -12,6 +11,8 @@ import type { DeleteProjectConfirmation, SessionDeleteConfirmation, SettingsProj
 import ProjectCreationWizard from '../../../project-creation-wizard';
 
 import LocalToolModal from './LocalToolModal';
+
+const Settings = lazy(() => import('../../../settings/view/Settings'));
 
 type SidebarModalsProps = {
   projects: Project[];
@@ -94,12 +95,14 @@ export default function SidebarModals({
 
       {showSettings &&
         ReactDOM.createPortal(
-          <TypedSettings
-            isOpen={showSettings}
-            onClose={onCloseSettings}
-            projects={settingsProjects}
-            initialTab={settingsInitialTab}
-          />,
+          <Suspense fallback={<div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 text-sm text-muted-foreground">正在加载设置…</div>}>
+            <TypedSettings
+              isOpen={showSettings}
+              onClose={onCloseSettings}
+              projects={settingsProjects}
+              initialTab={settingsInitialTab}
+            />
+          </Suspense>,
           document.body,
         )}
 

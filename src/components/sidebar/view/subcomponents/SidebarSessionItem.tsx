@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import { Check, Edit2, Loader2, Trash2, X } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
@@ -61,7 +61,7 @@ const formatCompactSessionAge = (dateString: string, currentTime: Date): string 
   return `${diffInDays}d`;
 };
 
-export default function SidebarSessionItem({
+function SidebarSessionItem({
   project,
   session,
   selectedSession,
@@ -348,3 +348,5 @@ export default function SidebarSessionItem({
     </div>
   );
 }
+
+export default memo(SidebarSessionItem);

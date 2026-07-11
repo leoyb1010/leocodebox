@@ -33,3 +33,4 @@ node_modules/
 /.review-*
 /.claude/settings.local.json
 /.claude/worktrees/
+/.claude/*.diff

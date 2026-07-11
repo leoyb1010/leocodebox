@@ -164,7 +164,8 @@ export default tseslint.config(
             "server/shared/image-attachments.ts",
             "server/shared/provider-errors.ts",
             "server/shared/provider-runtime-paths.ts",
-            "server/shared/provider-templates.js",
+            "server/shared/provider-templates.ts",
+            "server/shared/network-hosts.js",
           ], // classify shared utility files so modules can depend on them explicitly
           mode: "file",
         },
@@ -249,6 +250,31 @@ export default tseslint.config(
         },
       ],
       "boundaries/no-unknown": "error", // fail fast if boundaries cannot classify a dependency, which prevents silent rule bypasses
+    },
+  },
+  {
+    ...js.configs.recommended,
+    files: ["electron/**/*.{js,cjs,mjs}", "scripts/**/*.{js,cjs,mjs}"],
+    languageOptions: {
+      globals: { ...globals.node, ...globals.browser },
+    },
+    rules: {
+      ...js.configs.recommended.rules,
+      "no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_", ignoreRestSiblings: true }],
+      eqeqeq: ["error", "always", { null: "ignore" }],
+    },
+  },
+  {
+    files: [
+      "src/contexts/**/*.{js,jsx,ts,tsx}",
+      "src/**/context/**/*.{js,jsx,ts,tsx}",
+      "src/components/auth/context/**/*.{js,jsx,ts,tsx}",
+      "src/shared/view/ui/**/*.{js,jsx,ts,tsx}",
+    ],
+    rules: {
+      // Context and UI barrel modules intentionally co-export hooks, variants,
+      // and components; splitting these public APIs only for HMR adds churn.
+      "react-refresh/only-export-components": "off",
     },
   },
   {

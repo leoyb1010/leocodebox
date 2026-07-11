@@ -1,11 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
 
-import ChatInterface from '../../chat/view/ChatInterface';
-import FileTree from '../../file-tree/view/FileTree';
-import StandaloneShell from '../../standalone-shell/view/StandaloneShell';
-import GitPanel from '../../git-panel/view/GitPanel';
-import PluginTabContent from '../../plugins/view/PluginTabContent';
-import { BrowserUsePanel } from '../../browser-use';
 import type { MainContentProps } from '../types/types';
 import { useTaskMaster } from '../../../contexts/TaskMasterContext';
 import { usePaletteOpsRegister } from '../../../contexts/PaletteOpsContext';
@@ -14,15 +8,24 @@ import { useUiPreferences } from '../../../hooks/useUiPreferences';
 import { useFileOpenResolver } from '../../../hooks/useFileOpenResolver';
 import { authenticatedFetch } from '../../../utils/api';
 import { useEditorSidebar } from '../../code-editor/hooks/useEditorSidebar';
-import EditorSidebar from '../../code-editor/view/EditorSidebar';
 import type { Project } from '../../../types/app';
-import { TaskMasterPanel } from '../../task-master';
 
 import MainContentHeader from './subcomponents/MainContentHeader';
 import MainContentStateView from './subcomponents/MainContentStateView';
 import ErrorBoundary from './ErrorBoundary';
 import WorkspaceActivityStrip from './subcomponents/WorkspaceActivityStrip';
 import WorkspaceRunInspector from './subcomponents/WorkspaceRunInspector';
+
+const ChatInterface = React.lazy(() => import('../../chat/view/ChatInterface'));
+const FileTree = React.lazy(() => import('../../file-tree/view/FileTree'));
+const StandaloneShell = React.lazy(() => import('../../standalone-shell/view/StandaloneShell'));
+const GitPanel = React.lazy(() => import('../../git-panel/view/GitPanel'));
+const PluginTabContent = React.lazy(() => import('../../plugins/view/PluginTabContent'));
+const BrowserUsePanel = React.lazy(() => import('../../browser-use/view/BrowserUsePanel'));
+const EditorSidebar = React.lazy(() => import('../../code-editor/view/EditorSidebar'));
+const TaskMasterPanel = React.lazy(() => import('../../task-master/view/TaskMasterPanel'));
+
+const panelFallback = <div className="flex h-full items-center justify-center text-sm text-muted-foreground">正在加载工作区…</div>;
 
 type TaskMasterContextValue = {
   currentProject?: Project | null;
@@ -165,6 +168,7 @@ function MainContent({
         <div className={`flex min-h-0 min-w-[200px] flex-col overflow-hidden ${editorExpanded ? 'hidden' : ''} flex-1`}>
           <div className={`h-full ${activeTab === 'chat' ? 'block' : 'hidden'}`}>
             <ErrorBoundary showDetails>
+              <React.Suspense fallback={panelFallback}>
               <ChatInterface
                 selectedProject={selectedProject}
                 selectedSession={selectedSession}
@@ -185,13 +189,16 @@ function MainContent({
                 newSessionTrigger={newSessionTrigger}
                 onShowAllTasks={tasksEnabled ? () => setActiveTab('tasks') : null}
               />
+              </React.Suspense>
             </ErrorBoundary>
           </div>
 
           {activeTab === 'files' && (
             <div className="h-full overflow-hidden">
               <ErrorBoundary showDetails>
+              <React.Suspense fallback={panelFallback}>
                 <FileTree selectedProject={selectedProject} onFileOpen={handleFileOpen} />
+              </React.Suspense>
               </ErrorBoundary>
             </div>
           )}
@@ -199,12 +206,14 @@ function MainContent({
           {activeTab === 'shell' && (
             <div className="h-full w-full overflow-hidden">
               <ErrorBoundary showDetails>
+              <React.Suspense fallback={panelFallback}>
                 <StandaloneShell
                   project={selectedProject}
                   session={selectedSession}
                   showHeader={false}
                   isActive={activeTab === 'shell'}
                 />
+              </React.Suspense>
               </ErrorBoundary>
             </div>
           )}
@@ -212,21 +221,27 @@ function MainContent({
           {activeTab === 'git' && (
             <div className="h-full overflow-hidden">
               <ErrorBoundary showDetails>
+              <React.Suspense fallback={panelFallback}>
                 <GitPanel selectedProject={selectedProject} isMobile={isMobile} onFileOpen={handleFileOpen} />
+              </React.Suspense>
               </ErrorBoundary>
             </div>
           )}
 
           {shouldShowTasksTab && (
             <ErrorBoundary showDetails>
+              <React.Suspense fallback={panelFallback}>
               <TaskMasterPanel isVisible={activeTab === 'tasks'} />
+              </React.Suspense>
             </ErrorBoundary>
           )}
 
           {shouldShowBrowserTab && activeTab === 'browser' && (
             <div className="h-full overflow-hidden">
               <ErrorBoundary showDetails>
+              <React.Suspense fallback={panelFallback}>
                 <BrowserUsePanel isVisible={activeTab === 'browser'} onShowSettings={onShowSettings} />
+              </React.Suspense>
               </ErrorBoundary>
             </div>
           )}
@@ -234,17 +249,20 @@ function MainContent({
           {activeTab.startsWith('plugin:') && (
             <div className="h-full overflow-hidden">
               <ErrorBoundary showDetails>
+              <React.Suspense fallback={panelFallback}>
                 <PluginTabContent
                   pluginName={activeTab.replace('plugin:', '')}
                   selectedProject={selectedProject}
                   selectedSession={selectedSession}
                 />
+              </React.Suspense>
               </ErrorBoundary>
             </div>
           )}
         </div>
 
-        <ErrorBoundary showDetails>
+        {editingFile && <ErrorBoundary showDetails>
+          <React.Suspense fallback={panelFallback}>
           <EditorSidebar
             editingFile={editingFile}
             isMobile={isMobile}
@@ -258,7 +276,8 @@ function MainContent({
             projectPath={selectedProject.path}
             fillSpace={activeTab === 'files'}
           />
-        </ErrorBoundary>
+          </React.Suspense>
+        </ErrorBoundary>}
         {activeTab === 'chat' && !editingFile && selectedActivity && (
           <WorkspaceRunInspector
             project={selectedProject}

@@ -1,9 +1,8 @@
 import type {
   LLMProvider,
   ProviderManifest,
-  ProviderTemplate,
 } from '@/shared/types.js';
-import { PROVIDER_TEMPLATES as SHARED_PROVIDER_TEMPLATES } from '../../shared/provider-templates.js';
+export { PROVIDER_TEMPLATES } from '../../shared/provider-templates.js';
 
 const supportedCapabilities = {
   auth: 'supported',
@@ -72,8 +71,6 @@ export const PROVIDER_MANIFESTS = [
     },
   },
 ] satisfies ProviderManifest[];
-
-export const PROVIDER_TEMPLATES = SHARED_PROVIDER_TEMPLATES as ProviderTemplate[];
 
 export const CHAT_PROVIDER_IDS = PROVIDER_MANIFESTS
   .filter((manifest) => manifest.capabilities.chat === 'supported')

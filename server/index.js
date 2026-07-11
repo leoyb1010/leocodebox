@@ -15,8 +15,7 @@ import { AppError, WORKSPACES_ROOT, getOpenCodeDatabasePath, validateWorkspacePa
 import { closeSessionsWatcher, initializeSessionsWatcher } from '@/modules/providers/index.js';
 import { createWebSocketServer } from '@/modules/websocket/index.js';
 
-import { getConnectableHost } from '../shared/networkHosts.js';
-
+import { getConnectableHost } from './shared/network-hosts.js';
 import { findAppRoot, getModuleDir } from './utils/runtime-paths.js';
 import {
     queryClaudeSDK,
@@ -665,7 +664,7 @@ async function assertRealPathWithinRoot(projectRoot, resolvedPath, { allowMissin
     // Walk up to the nearest existing ancestor, canonicalize that, then re-append
     // the missing tail — so a symlinked existing ancestor is still caught.
     const missingTail = [];
-    // eslint-disable-next-line no-constant-condition
+
     while (true) {
         try {
             realTarget = await fsPromises.realpath(candidate);
@@ -1667,11 +1666,11 @@ async function startServer() {
         console.log('');
 
         if (isProduction) {
-            console.log(`${c.info('[INFO]')} To run in production mode, go to http://${DISPLAY_HOST}:${SERVER_PORT}`);            
+            console.log(`${c.info('[INFO]')} To run in production mode, go to http://${DISPLAY_HOST}:${SERVER_PORT}`);
         }
 
         console.log(`${c.info('[INFO]')} To run in development mode with hot-module replacement, go to http://${DISPLAY_HOST}:${VITE_PORT}`);
-   
+
         server.listen(SERVER_PORT, HOST, async () => {
             const appInstallPath = APP_ROOT;
             await writeLocalServerMarker().catch((error) => {

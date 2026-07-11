@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+
 import { authenticatedFetch } from '../utils/api';
 
 export type Plugin = {
@@ -149,8 +150,12 @@ export function PluginsProvider({ children }: { children: ReactNode }) {
     }
   }, [refreshPlugins]);
 
+  const contextValue = useMemo(() => ({
+    plugins, loading, pluginsError, refreshPlugins, installPlugin, uninstallPlugin, updatePlugin, togglePlugin,
+  }), [plugins, loading, pluginsError, refreshPlugins, installPlugin, uninstallPlugin, updatePlugin, togglePlugin]);
+
   return (
-    <PluginsContext.Provider value={{ plugins, loading, pluginsError, refreshPlugins, installPlugin, uninstallPlugin, updatePlugin, togglePlugin }}>
+    <PluginsContext.Provider value={contextValue}>
       {children}
     </PluginsContext.Provider>
   );

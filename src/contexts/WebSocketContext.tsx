@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+
 import { useAuth } from '../components/auth/context/AuthContext';
 import { IS_PLATFORM } from '../constants/config';
 
@@ -86,32 +87,6 @@ const useWebSocketProviderState = (): WebSocketContextType => {
     }
   }, []);
 
-  useEffect(() => {
-    // The cleanup below sets unmountedRef = true. Without this reset, every
-    // re-run of the effect (e.g. on token refresh) would short-circuit connect()
-    // at its unmounted guard and leave the socket permanently disconnected.
-    unmountedRef.current = false;
-    // New generation for this effect run. Any socket/timer from the previous
-    // run now carries a stale generation and will self-cancel.
-    const generation = ++generationRef.current;
-    connect(generation);
-
-    return () => {
-      unmountedRef.current = true;
-      // Invalidate this run's generation so an old socket's late onclose can't
-      // schedule a reconnect or clobber a socket created by the next run.
-      generationRef.current += 1;
-      if (reconnectTimeoutRef.current) {
-        clearTimeout(reconnectTimeoutRef.current);
-        reconnectTimeoutRef.current = null;
-      }
-      if (wsRef.current) {
-        wsRef.current.close();
-        wsRef.current = null;
-      }
-    };
-  }, [token]); // everytime token changes, we reconnect
-
   const connect = useCallback((generation: number) => {
     if (unmountedRef.current) return; // Prevent connection if unmounted
     if (generation !== generationRef.current) return; // Superseded by a newer run
@@ -176,6 +151,32 @@ const useWebSocketProviderState = (): WebSocketContextType => {
     }
   }, [token, dispatch]); // everytime token changes, we reconnect
 
+
+  useEffect(() => {
+    // The cleanup below sets unmountedRef = true. Without this reset, every
+    // re-run of the effect (e.g. on token refresh) would short-circuit connect()
+    // at its unmounted guard and leave the socket permanently disconnected.
+    unmountedRef.current = false;
+    // New generation for this effect run. Any socket/timer from the previous
+    // run now carries a stale generation and will self-cancel.
+    const generation = ++generationRef.current;
+    connect(generation);
+
+    return () => {
+      unmountedRef.current = true;
+      // Invalidate this run's generation so an old socket's late onclose can't
+      // schedule a reconnect or clobber a socket created by the next run.
+      generationRef.current += 1;
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+    };
+  }, [connect, token]); // every time token changes, reconnect
   const sendMessage = useCallback((message: unknown) => {
     const socket = wsRef.current;
     if (socket && socket.readyState === WebSocket.OPEN) {

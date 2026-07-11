@@ -4,6 +4,7 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { useTranslation } from 'react-i18next';
+
 import { normalizeInlineCodeFences } from '../../utils/chatFormatting';
 import { copyTextToClipboard } from '../../../../utils/clipboard';
 import { usePaletteOps } from '../../../../contexts/PaletteOpsContext';
@@ -56,7 +57,7 @@ type CodeBlockProps = {
   children?: React.ReactNode;
 };
 
-const LazySyntaxHighlighter = lazy(() => import('./LazySyntaxHighlighter'));
+const LazySyntaxHighlighter = lazy(() => import('../../../../shared/view/ui/LazySyntaxHighlighter'));
 const MAX_HIGHLIGHT_CHARS = 50_000;
 
 const CodeBlock = ({ node, inline, className, children, ...props }: CodeBlockProps) => {
@@ -86,7 +87,7 @@ const CodeBlock = ({ node, inline, className, children, ...props }: CodeBlockPro
   return (
     <div className="group relative my-2">
       {language && language !== 'text' && (
-        <div className="absolute left-3 top-2 z-10 text-xs font-medium uppercase text-gray-400">{language}</div>
+        <div className="absolute left-3 top-2 z-10 text-xs font-medium uppercase text-muted-foreground">{language}</div>
       )}
 
       <button

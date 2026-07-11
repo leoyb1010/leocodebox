@@ -6,7 +6,6 @@ import net from 'node:net';
 import os from 'node:os';
 import path from 'node:path';
 
-import { ServerInstaller } from './serverInstaller.js';
 import {
   getAgentCliDiagnostics,
   getDesktopRuntimePath,
@@ -182,20 +181,6 @@ async function pathExists(filePath) {
     return true;
   } catch {
     return false;
-  }
-}
-
-async function readServerBundleConfig(appRoot) {
-  try {
-    const raw = await fs.readFile(path.join(appRoot, 'electron', 'server-bundle-config.json'), 'utf8');
-    const config = JSON.parse(raw);
-    return {
-      releaseTag: typeof config.releaseTag === 'string' && config.releaseTag.trim()
-        ? config.releaseTag.trim()
-        : '',
-    };
-  } catch {
-    return { releaseTag: '' };
   }
 }
 

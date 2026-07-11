@@ -31,58 +31,55 @@ export function useSessionMessageSearch(
 ) {
   const [items, setItems] = useState<SessionMessageMatch[]>([]);
   const seqRef = useRef(0);
-  const esRef = useRef<EventSource | null>(null);
+  const searchAbortRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
     const trimmed = query.trim();
     if (!enabled || !projectId || trimmed.length < MIN_QUERY) {
       setItems([]);
-      esRef.current?.close();
-      esRef.current = null;
+      searchAbortRef.current?.abort();
+      searchAbortRef.current = null;
       return;
     }
 
-    esRef.current?.close();
-    esRef.current = null;
+    searchAbortRef.current?.abort();
+    searchAbortRef.current = null;
     seqRef.current++;
 
     const handle = setTimeout(() => {
       const seq = ++seqRef.current;
-      const url = api.searchConversationsUrl(trimmed);
-      const es = new EventSource(url);
-      esRef.current = es;
+      const controller = new AbortController();
+      searchAbortRef.current = controller;
       const accumulated: SessionMessageMatch[] = [];
 
-      es.addEventListener('result', (evt) => {
-        if (seq !== seqRef.current) {
-          es.close();
-          return;
-        }
-        try {
-          const data = JSON.parse((evt as MessageEvent).data) as { projectResult: ProjectResult };
-          const pr = data.projectResult;
-          if (pr.projectId !== projectId) return;
-          for (const s of pr.sessions) {
-            accumulated.push({
-              sessionId: s.sessionId,
-              label: s.sessionSummary || s.sessionId,
-              snippet: s.matches[0]?.snippet ?? '',
-              provider: s.provider,
-            });
+      void api.streamConversationSearch(trimmed, {
+        result: (eventData: string) => {
+          if (seq !== seqRef.current) { controller.abort(); return; }
+          try {
+            const data = JSON.parse(eventData) as { projectResult: ProjectResult };
+            const pr = data.projectResult;
+            if (pr.projectId !== projectId) return;
+            for (const session of pr.sessions) {
+              accumulated.push({
+                sessionId: session.sessionId,
+                label: session.sessionSummary || session.sessionId,
+                snippet: session.matches[0]?.snippet ?? '',
+                provider: session.provider,
+              });
+            }
+            setItems([...accumulated]);
+          } catch {
+            // Ignore malformed SSE data.
           }
-          setItems([...accumulated]);
-        } catch {
-          // ignore malformed
+        },
+        done: () => controller.abort(),
+      }, 50, controller.signal).catch((error: unknown) => {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) {
+          console.warn('Conversation search failed:', error);
         }
+      }).finally(() => {
+        if (searchAbortRef.current === controller) searchAbortRef.current = null;
       });
-
-      const finish = () => {
-        if (seq !== seqRef.current) return;
-        es.close();
-        esRef.current = null;
-      };
-      es.addEventListener('done', finish);
-      es.addEventListener('error', finish);
     }, DEBOUNCE_MS);
 
     return () => {
@@ -92,8 +89,8 @@ export function useSessionMessageSearch(
 
   useEffect(() => {
     return () => {
-      esRef.current?.close();
-      esRef.current = null;
+      searchAbortRef.current?.abort();
+      searchAbortRef.current = null;
     };
   }, []);
 

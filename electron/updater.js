@@ -4,8 +4,8 @@ import path from 'node:path';
 const DEFAULT_GITHUB_OWNER = 'leoyb1010';
 const DEFAULT_GITHUB_REPO = 'leocodebox';
 const UPDATE_CHECK_TIMEOUT_MS = 45_000;
-export const VERSION_RESET_TARGET = '1.1.3';
-export const LEGACY_UPDATE_BRIDGE_VERSION = '1.36.3';
+export { VERSION_RESET_TARGET, LEGACY_UPDATE_BRIDGE_VERSION } from './versionBridge.js';
+import { VERSION_RESET_TARGET, LEGACY_UPDATE_BRIDGE_VERSION } from './versionBridge.js';
 
 function displayUpdateVersion(version, appVersion) {
   return appVersion === VERSION_RESET_TARGET && version === LEGACY_UPDATE_BRIDGE_VERSION

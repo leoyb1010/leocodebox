@@ -436,7 +436,6 @@ export class DesktopWindowManager {
     if (!this.mainWindow) return;
     const cloudState = this.getCloudState();
     const localOnly = Boolean(cloudState.localOnly);
-    const localState = this.getLocalState();
     const remoteItems = localOnly ? [] : this.getRemoteEnvironmentMenuItems();
     const cloudAccountLabel = cloudState.account?.apiKey
       ? (cloudState.account?.email ? `Connected: ${cloudState.account.email}` : 'leocodebox Connected')

@@ -1,3 +1,5 @@
+import type { ProviderTemplate } from './types.js';
+
 // Shared provider-template metadata consumed by both the TypeScript registry and legacy JS routes.
 // Keep execution details (targets, CLI commands, config writers) out of this catalog.
 
@@ -18,4 +20,4 @@ export const PROVIDER_TEMPLATES = [
   { id: 'openai-compatible', name: 'OpenAI Compatible', vendor: 'Custom', target: 'codex', baseUrl: 'https://api.example.com/v1', defaultModel: '', wireApi: 'chat', status: 'preview' },
   { id: 'opencode-compatible', name: 'OpenCode Compatible', vendor: 'Custom', target: 'opencode', baseUrl: 'https://api.example.com/v1', defaultModel: '', wireApi: 'chat', status: 'preview' },
   { id: 'hermes-compatible', name: 'Hermes Compatible', vendor: 'Custom', target: 'hermes', baseUrl: 'https://api.example.com/v1', defaultModel: '', wireApi: 'chat', status: 'preview' },
-];
+] satisfies ProviderTemplate[];

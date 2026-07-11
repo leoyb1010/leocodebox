@@ -1,9 +1,12 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import type { ComponentProps } from 'react';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark as prismOneDark, oneLight as prismOneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { useTranslation } from 'react-i18next';
+
 import { copyTextToClipboard } from '../../../../../utils/clipboard';
 import { useTheme } from '../../../../../contexts/ThemeContext';
+
+const LazySyntaxHighlighter = lazy(() => import('../../../../../shared/view/ui/LazySyntaxHighlighter'));
+const MAX_HIGHLIGHT_CHARS = 50_000;
 
 type MarkdownCodeBlockProps = {
   inline?: boolean;
@@ -18,6 +21,7 @@ export default function MarkdownCodeBlock({
   ...props
 }: MarkdownCodeBlockProps) {
   const { isDarkMode } = useTheme();
+  const { t } = useTranslation('chat');
   const [copied, setCopied] = useState(false);
   const rawContent = Array.isArray(children) ? children.join('') : String(children ?? '');
   const looksMultiline = /[\r\n]/.test(rawContent);
@@ -40,7 +44,7 @@ export default function MarkdownCodeBlock({
   return (
     <div className="group relative my-2">
       {language !== 'text' && (
-        <div className="absolute left-3 top-2 z-10 text-xs font-medium uppercase text-gray-400">{language}</div>
+        <div className="absolute left-3 top-2 z-10 text-xs font-medium uppercase text-muted-foreground">{language}</div>
       )}
 
       <button
@@ -52,25 +56,20 @@ export default function MarkdownCodeBlock({
               setTimeout(() => setCopied(false), 2000);
             }
           })}
-        className="absolute right-2 top-2 z-10 rounded-md border border-border bg-card/90 px-2 py-1 text-xs text-foreground/80 opacity-0 transition-opacity hover:bg-muted group-hover:opacity-100"
+        className="absolute right-2 top-2 z-10 rounded-md border border-border bg-card/90 px-2 py-1 text-xs text-foreground/80 opacity-0 transition-opacity hover:bg-muted focus:opacity-100 group-hover:opacity-100"
+        aria-label={copied ? t('codeBlock.copied') : t('codeBlock.copyCode')}
+        title={copied ? t('codeBlock.copied') : t('codeBlock.copyCode')}
       >
-        {copied ? 'Copied!' : 'Copy'}
+        {copied ? t('codeBlock.copied') : t('codeBlock.copy')}
       </button>
 
-      <SyntaxHighlighter
-        language={language}
-        style={isDarkMode ? prismOneDark : prismOneLight}
-        customStyle={{
-          margin: 0,
-          borderRadius: '0.75rem',
-          fontSize: '0.875rem',
-          padding: language !== 'text' ? '2rem 1rem 1rem 1rem' : '1rem',
-          ...(isDarkMode ? {} : { background: 'hsl(var(--muted))' }),
-        }}
-        codeTagProps={{ style: isDarkMode ? {} : { background: 'transparent' } }}
-      >
-        {rawContent}
-      </SyntaxHighlighter>
+      {language !== 'text' && rawContent.length <= MAX_HIGHLIGHT_CHARS ? (
+        <Suspense fallback={<pre className="m-0 overflow-x-auto rounded-xl bg-muted p-4 font-mono text-sm"><code>{rawContent}</code></pre>}>
+          <LazySyntaxHighlighter language={language} raw={rawContent} isDarkMode={isDarkMode} />
+        </Suspense>
+      ) : (
+        <pre className="m-0 overflow-x-auto rounded-xl bg-muted p-4 font-mono text-sm"><code>{rawContent}</code></pre>
+      )}
     </div>
   );
 }

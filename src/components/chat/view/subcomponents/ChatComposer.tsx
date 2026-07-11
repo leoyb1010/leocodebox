@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type {
   ChangeEvent,
@@ -114,7 +114,7 @@ interface ChatComposerProps {
   sendByCtrlEnter?: boolean;
 }
 
-export default function ChatComposer({
+function ChatComposer({
   pendingPermissionRequests,
   handlePermissionDecision,
   handleGrantToolPermission,
@@ -613,3 +613,5 @@ export default function ChatComposer({
     </div>
   );
 }
+
+export default memo(ChatComposer);

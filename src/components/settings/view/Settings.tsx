@@ -193,10 +193,10 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
           <h2 id="leocodebox-settings-title" className="text-base font-semibold text-foreground">{t('title')}</h2>
           <div className="flex items-center gap-2">
             {saveStatus === 'success' && (
-              <span className="animate-in fade-in text-xs text-muted-foreground">{t('saveStatus.success')}</span>
+              <span className="text-xs text-muted-foreground animate-in fade-in">{t('saveStatus.success')}</span>
             )}
             {saveStatus === 'error' && (
-              <span role="alert" className="animate-in fade-in text-xs text-destructive">{t('saveStatus.error')}</span>
+              <span role="alert" className="text-xs text-destructive animate-in fade-in">{t('saveStatus.error')}</span>
             )}
             <Button
               ref={closeButtonRef}

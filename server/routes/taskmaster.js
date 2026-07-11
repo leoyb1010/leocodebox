@@ -8,13 +8,14 @@
  * - TaskMaster state and metadata management
  */
 
-import express from 'express';
-import fs from 'fs';
+import fs, { promises as fsPromises } from 'fs';
 import path from 'path';
-import { promises as fsPromises } from 'fs';
+
+import express from 'express';
 // cross-spawn: drop-in spawn with Windows .cmd/PATHEXT resolution — required
 // here since task-master/npx are .cmd shims on Windows.
 import spawn from 'cross-spawn';
+
 import { projectsDb } from '../modules/database/index.js';
 import { detectTaskMasterMCPServer } from '../utils/mcp-detector.js';
 import { broadcastTaskMasterProjectUpdate, broadcastTaskMasterTasksUpdate } from '../utils/taskmaster-websocket.js';
@@ -43,9 +44,8 @@ const router = express.Router();
 async function checkTaskMasterInstallation() {
     return new Promise((resolve) => {
         // Check if task-master command is available
-        const child = spawn('which', ['task-master'], { 
+        const child = spawn('which', ['task-master'], {
             stdio: ['ignore', 'pipe', 'pipe'],
-            shell: true 
         });
         
         let output = '';
@@ -62,9 +62,8 @@ async function checkTaskMasterInstallation() {
         child.on('close', (code) => {
             if (code === 0 && output.trim()) {
                 // TaskMaster is installed, get version
-                const versionChild = spawn('task-master', ['--version'], { 
+                const versionChild = spawn('task-master', ['--version'], {
                     stdio: ['ignore', 'pipe', 'pipe'],
-                    shell: true 
                 });
                 
                 let versionOutput = '';

@@ -30,6 +30,33 @@ export const authenticatedFetch = (url, options = {}) => {
   });
 };
 
+export class ApiError extends Error {
+  constructor(message, { status = 0, payload = null } = {}) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.payload = payload;
+  }
+}
+
+export async function apiRequest(url, options = {}) {
+  const response = await authenticatedFetch(url, options);
+  const contentType = response.headers.get('content-type') || '';
+  const payload = contentType.includes('application/json')
+    ? await response.json().catch(() => ({}))
+    : await response.text().catch(() => '');
+  if (!response.ok) {
+    const serverMessage = payload && typeof payload === 'object'
+      ? payload.error || payload.message || payload.details
+      : payload;
+    throw new ApiError(serverMessage || `Request failed (${response.status}).`, {
+      status: response.status,
+      payload,
+    });
+  }
+  return payload;
+}
+
 // API endpoints
 export const api = {
   // Auth endpoints (no token required)
@@ -118,11 +145,40 @@ export const api = {
       method: 'DELETE',
     });
   },
-  searchConversationsUrl: (query, limit = 50) => {
-    const token = localStorage.getItem('auth-token');
+  streamConversationSearch: async (query, handlers = {}, limit = 50, signal) => {
     const params = new URLSearchParams({ q: query, limit: String(limit) });
-    if (token) params.set('token', token);
-    return `/api/providers/search/sessions?${params.toString()}`;
+    const response = await authenticatedFetch(`/api/providers/search/sessions?${params.toString()}`, {
+      headers: { Accept: 'text/event-stream' },
+      signal,
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      const error = new Error(payload.error || `Conversation search failed (${response.status}).`);
+      error.status = response.status;
+      throw error;
+    }
+    if (!response.body) throw new Error('Conversation search stream is unavailable.');
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { value, done } = await reader.read();
+      buffer += decoder.decode(value || new Uint8Array(), { stream: !done });
+      const frames = buffer.split(/\r?\n\r?\n/);
+      buffer = frames.pop() || '';
+      for (const frame of frames) {
+        let event = 'message';
+        const data = [];
+        for (const line of frame.split(/\r?\n/)) {
+          if (line.startsWith('event:')) event = line.slice(6).trim();
+          else if (line.startsWith('data:')) data.push(line.slice(5).trimStart());
+        }
+        const handler = handlers[event];
+        if (handler) handler(data.join('\n'));
+      }
+      if (done) break;
+    }
   },
   createProject: (projectData) =>
     authenticatedFetch('/api/projects/create-project', {

@@ -5,6 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
+import { getUpdateMetadataVersion } from '../../electron/versionBridge.js';
+
 const appName = 'leocodebox.app';
 const outputDir = path.resolve('release/desktop');
 const sourceApp = path.join(outputDir, 'mac-arm64', appName);
@@ -20,22 +22,22 @@ const outputDmg = path.join(outputDir, `leocodebox-${packageJson.version}-mac-ar
 const outputZipName = `leocodebox-${packageJson.version}-mac-arm64.zip`;
 const outputZip = path.join(outputDir, outputZipName);
 const updateMetadataPath = path.join(outputDir, 'latest-mac.yml');
-// The previous public line used 1.36.x. Advertise one synthetic higher build
-// so those installed apps can receive the product-version reset to 1.1.3.
-// The 1.1.3 updater ignores this bridge value and future releases use normal semver.
-const updateMetadataVersion = packageJson.version === '1.1.3' ? '1.36.3' : packageJson.version;
-
+const updateMetadataVersion = getUpdateMetadataVersion(packageJson.version);
 // Developer ID signing happens in a clean temporary directory. Every nested
 // Mach-O is signed explicitly because codesign --deep does not discover native
 // executables stored in arbitrary node_modules resource directories.
 const signIdentity = (process.env.LEOCODEBOX_SIGN_IDENTITY || '').trim();
 const signerPath = path.resolve('scripts/release/sign-macos-app.sh');
 const signatureVerifierPath = path.resolve('scripts/release/verify-macos-signatures.sh');
+const githubPublish = packageJson.build?.publish?.find((entry) => entry?.provider === 'github');
+if (!githubPublish?.owner || !githubPublish?.repo) {
+  throw new Error('package.json build.publish must define a GitHub owner and repo.');
+}
 const appUpdateConfig = [
   'provider: github',
-  'owner: leoyb1010',
-  'repo: leocodebox',
-  'private: true',
+  `owner: ${githubPublish.owner}`,
+  `repo: ${githubPublish.repo}`,
+  `private: ${githubPublish.private === true}`,
   'updaterCacheDirName: leocodebox-updater',
   '',
 ].join('\n');

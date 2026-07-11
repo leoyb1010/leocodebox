@@ -26,6 +26,7 @@ const MAX_TEXT_FIELD = 20_000;
 const MODEL_DISCOVERY_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 const modelDiscoveryCache = new Map();
 const pendingModelDiscoveries = new Map();
+const pendingCliMutations = new Map();
 let switchMutationQueue = Promise.resolve();
 let modelCacheMutationQueue = Promise.resolve();
 
@@ -1730,8 +1731,8 @@ function parseCliVersionText(output) {
   return match ? match[1] : null;
 }
 
-async function resolveExecutablePath(command) {
-  const result = await runCliCommand('/usr/bin/which', [command], 5000);
+export async function resolveExecutablePath(command) {
+  const result = await runCliCommand('which', [command], 5000);
   if (!result.ok) return null;
   const executablePath = result.stdout.trim().split(/\r?\n/)[0];
   if (!executablePath) return null;
@@ -1742,23 +1743,32 @@ async function resolveExecutablePath(command) {
   }
 }
 
-async function detectCliInstallSource(tool) {
-  const executablePath = await resolveExecutablePath(tool.cmd);
-  if (!executablePath) return { source: 'not-installed', executablePath: null };
+export async function detectCliInstallSource(tool, resolvePath = resolveExecutablePath) {
+  const executablePath = await resolvePath(tool.cmd);
+  if (!executablePath) return { source: 'unknown', executablePath: null };
   const normalized = executablePath.replaceAll('\\', '/');
-  if (normalized.includes('/Cellar/') || normalized.includes('/homebrew/')) {
+  if (/(^|\/)(Cellar|homebrew)(\/|$)/i.test(normalized)) {
     return { source: 'homebrew', executablePath };
   }
-  if (normalized.includes('/node_modules/') || normalized.includes('/npm/') || normalized.includes('/.npm')) {
+  if (/(^|\/)(pnpm|pnpm-global)(\/|$)/i.test(normalized)) {
+    return { source: 'pnpm', executablePath };
+  }
+  if (/(^|\/)\.volta(\/|$)/i.test(normalized)) {
+    return { source: 'volta', executablePath };
+  }
+  if (/(^|\/)(lib\/node_modules|\.npm-global|npm\/bin)(\/|$)/i.test(normalized)) {
     return { source: 'npm-global', executablePath };
   }
   if (normalized.includes('.app/Contents/')) {
     return { source: 'app-bundled', executablePath };
   }
-  return { source: 'standalone', executablePath };
+  if (/(^|\/)\.local\/(bin|share\/claude)(\/|$)/i.test(normalized)) {
+    return { source: 'standalone', executablePath };
+  }
+  return { source: 'unknown', executablePath };
 }
 
-async function resolveCliUpdateCommand(tool, source) {
+export async function resolveCliUpdateCommand(tool, source) {
   if (source === 'npm-global' && tool.npmPackage) {
     return { command: 'npm', args: ['install', '--global', `${tool.npmPackage}@latest`] };
   }
@@ -1767,8 +1777,31 @@ async function resolveCliUpdateCommand(tool, source) {
     const formula = formulaById[tool.id];
     if (formula) return { command: 'brew', args: ['upgrade', formula] };
   }
-  if (Array.isArray(tool.updateArgs)) return { command: tool.cmd, args: tool.updateArgs };
+  if (source === 'pnpm' && tool.npmPackage) {
+    return { command: 'pnpm', args: ['add', '--global', `${tool.npmPackage}@latest`] };
+  }
+  if (source === 'volta' && tool.npmPackage) {
+    return { command: 'volta', args: ['install', `${tool.npmPackage}@latest`] };
+  }
+  if (source === 'standalone' && Array.isArray(tool.updateArgs)) {
+    return { command: tool.cmd, args: tool.updateArgs };
+  }
   return null;
+}
+
+export async function withCliMutation(toolId, operation) {
+  if (pendingCliMutations.has(toolId)) {
+    const error = new Error(`CLI operation already in progress for ${toolId}.`);
+    error.statusCode = 409;
+    throw error;
+  }
+  const request = Promise.resolve().then(operation);
+  pendingCliMutations.set(toolId, request);
+  try {
+    return await request;
+  } finally {
+    if (pendingCliMutations.get(toolId) === request) pendingCliMutations.delete(toolId);
+  }
 }
 
 function runCliCommand(cmd, args, timeoutMs = 10_000) {
@@ -1853,21 +1886,25 @@ router.post('/cli/:id/install', async (req, res, next) => {
       res.status(409).json({ success: false, error: `${tool.label} 没有经过验证的一键安装方式。` });
       return;
     }
-    const before = await getCliToolStatus(tool, { checkLatest: false });
-    if (before.installed) {
-      res.status(409).json({ success: false, error: `${tool.label} 已安装。` });
-      return;
-    }
-    const result = await runCliCommand(tool.install.command, tool.install.args, 300_000);
-    const after = await getCliToolStatus(tool, { checkLatest: false });
-    res.json({
-      success: result.ok && after.installed,
-      tool: tool.id,
-      currentVersion: after.currentVersion,
-      installSource: after.installSource,
-      output: `${result.stdout}\n${result.stderr}`.trim().slice(0, 8000),
-      error: result.ok && after.installed ? null : (result.error || 'Install command failed.'),
+    const payload = await withCliMutation(tool.id, async () => {
+      const before = await getCliToolStatus(tool, { checkLatest: false });
+      if (before.installed) {
+        const error = new Error(`${tool.label} 已安装。`);
+        error.statusCode = 409;
+        throw error;
+      }
+      const result = await runCliCommand(tool.install.command, tool.install.args, 300_000);
+      const after = await getCliToolStatus(tool, { checkLatest: false });
+      return {
+        success: result.ok && after.installed,
+        tool: tool.id,
+        currentVersion: after.currentVersion,
+        installSource: after.installSource,
+        output: `${result.stdout}\n${result.stderr}`.trim().slice(0, 8000),
+        error: result.ok && after.installed ? null : (result.error || 'Install command failed.'),
+      };
     });
+    res.json(payload);
   } catch (error) {
     next(error);
   }
@@ -1884,27 +1921,32 @@ router.post('/cli/:id/update', async (req, res, next) => {
       res.status(404).json({ success: false, error: 'Unknown CLI tool.' });
       return;
     }
-    const before = await getCliToolStatus(tool, { checkLatest: false });
-    if (!before.installed) {
-      res.status(409).json({ success: false, error: `${tool.label} CLI is not installed.` });
-      return;
-    }
-    const updateCommand = await resolveCliUpdateCommand(tool, before.installSource);
-    if (!updateCommand) {
-      res.status(409).json({ success: false, error: `${tool.label} 的安装来源为 ${before.installSource}，无法安全自动更新。` });
-      return;
-    }
-    const result = await runCliCommand(updateCommand.command, updateCommand.args, 180_000);
-    const after = await getCliToolStatus(tool, { checkLatest: false });
-    res.json({
-      success: result.ok,
-      tool: tool.id,
-      previousVersion: before.currentVersion,
-      currentVersion: after.currentVersion,
-      changed: before.currentVersion !== after.currentVersion,
-      output: `${result.stdout}\n${result.stderr}`.trim().slice(0, 8000),
-      error: result.ok ? null : (result.error || 'Update command failed.'),
+    const payload = await withCliMutation(tool.id, async () => {
+      const before = await getCliToolStatus(tool, { checkLatest: false });
+      if (!before.installed) {
+        const error = new Error(`${tool.label} CLI is not installed.`);
+        error.statusCode = 409;
+        throw error;
+      }
+      const updateCommand = await resolveCliUpdateCommand(tool, before.installSource);
+      if (!updateCommand) {
+        const error = new Error(`${tool.label} 的安装来源为 ${before.installSource}，无法安全自动更新。`);
+        error.statusCode = 409;
+        throw error;
+      }
+      const result = await runCliCommand(updateCommand.command, updateCommand.args, 180_000);
+      const after = await getCliToolStatus(tool, { checkLatest: false });
+      return {
+        success: result.ok,
+        tool: tool.id,
+        previousVersion: before.currentVersion,
+        currentVersion: after.currentVersion,
+        changed: before.currentVersion !== after.currentVersion,
+        output: `${result.stdout}\n${result.stderr}`.trim().slice(0, 8000),
+        error: result.ok ? null : (result.error || 'Update command failed.'),
+      };
     });
+    res.json(payload);
   } catch (error) {
     next(error);
   }
@@ -1946,43 +1988,69 @@ router.get('/switch/status', async (_req, res, next) => {
   }
 });
 
-router.post('/switch/providers', async (req, res, next) => {
-  try {
+function providerDiscoveryConfigFingerprint(provider) {
+  return crypto.createHash('sha256').update(JSON.stringify({
+    target: provider.target,
+    baseUrl: provider.baseUrl,
+    apiKey: provider.apiKey,
+    wireApi: provider.wireApi,
+  })).digest('hex');
+}
+
+function scheduleProviderModelDiscovery(provider, timeoutMs) {
+  const providerId = provider.id;
+  const expectedFingerprint = providerDiscoveryConfigFingerprint(provider);
+  void discoverProviderModels(provider, { bypassCache: true, timeoutMs }).then(async (discovery) => {
     await withSwitchMutation(async () => {
       const store = await readStore();
-      const existing = req.body?.id ? store.providers.find((provider) => provider.id === req.body.id) : null;
-      const provider = normalizeProvider(req.body, existing);
-      upsertProviderInStore(store, provider);
-      await writeStore(store);
-
-      let discovery = null;
-      let warning = null;
-      if (req.body?.autoDiscover === true && provider.baseUrl && provider.apiKey) {
-        try {
-          discovery = await discoverProviderModels(provider, { bypassCache: true });
-          provider.discoveredModels = discovery.models;
-          provider.modelDiscovery = {
-            endpoint: discovery.endpoint,
-            updatedAt: discovery.cache.updatedAt,
-            expiresAt: discovery.cache.expiresAt,
-          };
-          provider.modelDiscoveryError = '';
-          if (!provider.model && discovery.models[0]) {
-            provider.model = discovery.models[0];
-            provider.modelMapping = normalizeModelMapping({}, provider, provider.model);
-          }
-          provider.updatedAt = nowIso();
-          upsertProviderInStore(store, provider);
-          await writeStore(store);
-        } catch (error) {
-          warning = `配置已保存，但模型自动发现失败：${safeText(error?.message || '未知错误', 300)}`;
-          provider.modelDiscoveryError = safeText(error?.message || '未知错误', 500);
-          upsertProviderInStore(store, provider);
-          await writeStore(store);
-        }
+      const latestProvider = store.providers.find((item) => item.id === providerId);
+      if (!latestProvider || providerDiscoveryConfigFingerprint(latestProvider) !== expectedFingerprint) return;
+      latestProvider.discoveredModels = discovery.models;
+      latestProvider.modelDiscovery = {
+        endpoint: discovery.endpoint,
+        updatedAt: discovery.cache.updatedAt,
+        expiresAt: discovery.cache.expiresAt,
+      };
+      latestProvider.modelDiscoveryError = '';
+      if (!latestProvider.model && discovery.models[0]) {
+        latestProvider.model = discovery.models[0];
+        latestProvider.modelMapping = normalizeModelMapping({}, latestProvider, latestProvider.model);
       }
-      res.json({ success: true, provider: sanitizeProvider(provider), discovery, warning });
+      latestProvider.updatedAt = nowIso();
+      await writeStore(store);
     });
+  }).catch(async (error) => {
+    console.warn(`Provider model discovery failed for ${providerId}:`, error);
+    await withSwitchMutation(async () => {
+      const store = await readStore();
+      const latestProvider = store.providers.find((item) => item.id === providerId);
+      if (!latestProvider || providerDiscoveryConfigFingerprint(latestProvider) !== expectedFingerprint) return;
+      latestProvider.modelDiscoveryError = safeText(error?.message || '未知错误', 500);
+      latestProvider.updatedAt = nowIso();
+      await writeStore(store);
+    });
+  });
+}
+
+router.post('/switch/providers', async (req, res, next) => {
+  try {
+    const provider = await withSwitchMutation(async () => {
+      const store = await readStore();
+      const existing = req.body?.id ? store.providers.find((item) => item.id === req.body.id) : null;
+      const savedProvider = normalizeProvider(req.body, existing);
+      upsertProviderInStore(store, savedProvider);
+      await writeStore(store);
+      return savedProvider;
+    });
+
+    const shouldDiscover = req.body?.autoDiscover === true && provider.baseUrl && provider.apiKey;
+    res.json({
+      success: true,
+      provider: sanitizeProvider(provider),
+      discovery: shouldDiscover ? 'pending' : null,
+      warning: null,
+    });
+    if (shouldDiscover) scheduleProviderModelDiscovery(provider, req.body?.timeoutMs);
   } catch (error) {
     next(error);
   }
@@ -2142,15 +2210,24 @@ router.post('/switch/providers/:id/test', async (req, res, next) => {
 
 router.post('/switch/discover-models', async (req, res, next) => {
   try {
+    let apiKey = req.body?.apiKey;
+    if (!apiKey && req.body?.useStoredKey === true && req.body?.providerId) {
+      const store = await readStore();
+      apiKey = store.providers.find((item) => item.id === req.body.providerId)?.apiKey || '';
+    }
     const provider = normalizeProvider({
       id: 'draft-model-discovery',
       name: 'Draft',
       target: req.body?.target,
       baseUrl: req.body?.baseUrl,
-      apiKey: req.body?.apiKey,
+      apiKey,
       wireApi: req.body?.wireApi,
     });
-    const result = await discoverProviderModels(provider, req.body || {});
+    const result = await discoverProviderModels(provider, {
+      baseUrl: req.body?.baseUrl,
+      timeoutMs: req.body?.timeoutMs,
+      bypassCache: req.body?.bypassCache === true,
+    });
     res.json({ success: true, ...result });
   } catch (error) {
     next(error);

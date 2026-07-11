@@ -27,8 +27,11 @@ fi
 MOUNT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/leocodebox-notary.XXXXXX")"
 STAPLE_ROOT=""
 cleanup() {
-  hdiutil detach "$MOUNT_DIR" -quiet 2>/dev/null || true
-  rmdir "$MOUNT_DIR" 2>/dev/null || true
+  if [ -n "$MOUNT_DIR" ]; then
+    hdiutil detach "$MOUNT_DIR" -quiet 2>/dev/null || true
+    rmdir "$MOUNT_DIR" 2>/dev/null || true
+    MOUNT_DIR=""
+  fi
   if [ -n "$STAPLE_ROOT" ]; then
     rm -rf "$STAPLE_ROOT"
   fi
@@ -51,7 +54,7 @@ if ! grep -qi "Authority=Developer ID Application" <<<"$SIGNATURE_DETAILS"; then
 fi
 hdiutil detach "$MOUNT_DIR" -quiet
 rmdir "$MOUNT_DIR"
-trap - EXIT
+MOUNT_DIR=""
 
 echo "==> Submitting to Apple notary service (profile: $PROFILE). This can take several minutes."
 SUBMISSION_JSON="$(xcrun notarytool submit "$DMG" \
@@ -75,7 +78,6 @@ echo "==> Stapling the notarized app and rebuilding updater artifacts"
 STAPLE_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/leocodebox-app-staple.XXXXXX")"
 STAPLED_APP="$STAPLE_ROOT/leocodebox.app"
 MOUNT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/leocodebox-app-source.XXXXXX")"
-trap cleanup EXIT
 hdiutil attach -readonly -nobrowse -mountpoint "$MOUNT_DIR" "$DMG" >/dev/null
 APP_PATH="$(find "$MOUNT_DIR" -maxdepth 1 -type d -name '*.app' -print -quit)"
 if [ -z "$APP_PATH" ]; then
@@ -85,7 +87,7 @@ fi
 ditto --norsrc --noqtn "$APP_PATH" "$STAPLED_APP"
 hdiutil detach "$MOUNT_DIR" -quiet
 rmdir "$MOUNT_DIR"
-trap - EXIT
+MOUNT_DIR=""
 xcrun stapler staple "$STAPLED_APP"
 xcrun stapler validate "$STAPLED_APP"
 codesign --verify --deep --strict --verbose=2 "$STAPLED_APP"
@@ -96,7 +98,6 @@ STAPLE_ROOT=""
 
 echo "==> Gatekeeper assessment"
 MOUNT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/leocodebox-gatekeeper.XXXXXX")"
-trap cleanup EXIT
 hdiutil attach -readonly -nobrowse -mountpoint "$MOUNT_DIR" "$DMG" >/dev/null
 APP_PATH="$(find "$MOUNT_DIR" -maxdepth 1 -type d -name '*.app' -print -quit)"
 if [ -z "$APP_PATH" ]; then
@@ -106,6 +107,6 @@ fi
 spctl -a -vvv --type execute "$APP_PATH"
 hdiutil detach "$MOUNT_DIR" -quiet
 rmdir "$MOUNT_DIR"
-trap - EXIT
+MOUNT_DIR=""
 
 echo "Done: $DMG is signed, notarized, and stapled."

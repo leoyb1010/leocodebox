@@ -32,7 +32,7 @@ type ProviderCapabilities = {
  * - only the Claude SDK integration surfaces interactive permission requests.
  * - Cursor has no token usage endpoint support (its store.db has no usage rows).
  */
-const PROVIDER_CAPABILITIES: Record<LLMProvider, ProviderCapabilities> = {
+const RUNTIME_UI_CAPABILITIES: Record<LLMProvider, ProviderCapabilities> = {
   claude: {
     provider: 'claude',
     permissionModes: ['default', 'auto', 'acceptEdits', 'bypassPermissions', 'plan'],
@@ -78,16 +78,33 @@ const PROVIDER_CAPABILITIES: Record<LLMProvider, ProviderCapabilities> = {
   },
 };
 
+const runtimeManifests = providerRegistry
+  .listManifests({ includeHidden: true })
+  .filter((manifest) => manifest.capabilities.chat === 'supported');
+for (const manifest of runtimeManifests) {
+  if (!RUNTIME_UI_CAPABILITIES[manifest.id as LLMProvider]) {
+    throw new Error(`Runtime provider "${manifest.id}" is missing UI capability metadata.`);
+  }
+}
+if (runtimeManifests.length !== Object.keys(RUNTIME_UI_CAPABILITIES).length) {
+  throw new Error('Runtime UI capability metadata contains a provider without a supported chat manifest.');
+}
+
 /**
- * Application service exposing the provider capability matrix.
+ * Application service exposing runtime UI details for providers whose support
+ * status is owned by the provider manifest registry.
  */
 export const providerCapabilitiesService = {
   getProviderCapabilities(provider: LLMProvider): ProviderCapabilities {
-    return PROVIDER_CAPABILITIES[provider];
+    providerRegistry.requireCapability(provider, 'chat');
+    return { ...RUNTIME_UI_CAPABILITIES[provider], permissionModes: [...RUNTIME_UI_CAPABILITIES[provider].permissionModes] };
   },
 
   listAllProviderCapabilities(): ProviderCapabilities[] {
-    return Object.values(PROVIDER_CAPABILITIES);
+    return runtimeManifests.map((manifest) => {
+      const capabilities = RUNTIME_UI_CAPABILITIES[manifest.id as LLMProvider];
+      return { ...capabilities, permissionModes: [...capabilities.permissionModes] };
+    });
   },
 
   listProviderManifests(): ProviderManifest[] {

@@ -107,7 +107,7 @@ export function useChatSessionState({
 }: UseChatSessionStateArgs) {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(selectedSession?.id || null);
   const [isLoadingSessionMessages, setIsLoadingSessionMessages] = useState(false);
-  const [isLoadingMoreMessages, setIsLoadingMoreMessages] = useState(false);
+  const [isLoadingMoreMessages] = useState(false);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
   const [totalMessages, setTotalMessages] = useState(0);
   const [isUserScrolledUp, setIsUserScrolledUp] = useState(false);
@@ -123,7 +123,6 @@ export function useChatSessionState({
   const wasNearTopRef = useRef(false);
   const [searchTarget, setSearchTarget] = useState<{ timestamp?: string; uuid?: string; snippet?: string } | null>(null);
   const searchScrollActiveRef = useRef(false);
-  const isLoadingSessionRef = useRef(false);
   const isLoadingMoreRef = useRef(false);
   const allMessagesLoadedRef = useRef(false);
   const topLoadLockRef = useRef(false);
@@ -257,7 +256,10 @@ export function useChatSessionState({
     setPendingUserMessage(null);
   }, [activeSessionId, pendingUserMessage, sessionStore]);
 
-  const storeMessages = activeSessionId ? sessionStore.getMessages(activeSessionId) : [];
+  const storeMessages = useMemo(
+    () => activeSessionId ? sessionStore.getMessages(activeSessionId) : [],
+    [activeSessionId, sessionStore],
+  );
 
   // Reset viewHiddenCount when store messages change
   const prevStoreLenRef = useRef(0);
@@ -563,8 +565,9 @@ export function useChatSessionState({
       setIsLoadingSessionMessages(false);
     });
   }, [
+    currentSessionId,
     selectedProject,
-    selectedSession?.id,
+    selectedSession,
     sendMessage,
     statusCheckSentAtRef,
     lastSeqRef,

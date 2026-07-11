@@ -400,6 +400,9 @@
             <label for="providerApiKey">密钥</label>
             <input id="providerApiKey" name="apiKey" type="password" autocomplete="off" placeholder="编辑时留空可保留现有密钥">
           </div>
+          <div class="field span-2">
+            <label class="check-row"><input id="providerAutoDiscover" type="checkbox" checked>保存后自动发现可用模型</label>
+          </div>
         </div>
         <details class="advanced-form">
           <summary>高级选项</summary>
@@ -573,6 +576,7 @@
     let selectedTarget = localStorage.getItem("leoapi-target") || "claude";
     let selectedProvider = "";
     let toolsProviderId = "";
+    let lastAppliedPresetId = "";
     let toastTimer = null;
 
     const diagnosticDefaults = { timeoutSeconds: 8, attempts: 1, degradedThreshold: 6000 };
@@ -680,13 +684,20 @@
       fillPresetSelect();
     }
 
+    function providerTemplateStatusLabel(status) {
+      if (!status || status === "verified") return "";
+      if (status === "beta") return "Beta";
+      if (status === "preview") return "Preview";
+      return String(status);
+    }
+
     function fillPresetSelect() {
       const select = $("#providerPreset");
       if (!select) return;
       const previous = select.value;
       select.innerHTML = `<option value="">自定义</option>` + (state?.presets || []).map((preset) => {
-        const badge = preset.status === "beta" ? " · Beta" : preset.status === "preview" ? " · Preview" : "";
-        return `<option value="${escapeHtml(preset.id)}">${escapeHtml(preset.name + badge)}</option>`;
+        const statusLabel = providerTemplateStatusLabel(preset.status);
+        return `<option value="${escapeHtml(preset.id)}">${escapeHtml(preset.name + (statusLabel ? ` · ${statusLabel}` : ""))}</option>`;
       }).join("");
       select.value = (state?.presets || []).some((preset) => preset.id === previous) ? previous : "";
       syncPresetMeta();
@@ -706,7 +717,8 @@
         docs.removeAttribute("href");
         return;
       }
-      const statusLabel = preset.status === "beta" ? "Beta 模板 · " : preset.status === "preview" ? "Preview 模板 · " : "";
+      const templateStatus = providerTemplateStatusLabel(preset.status);
+      const statusLabel = templateStatus ? `${templateStatus} 模板 · ` : "";
       status.textContent = statusLabel;
       if (typeof preset.docsUrl === "string" && /^https:\/\//i.test(preset.docsUrl)) {
         docs.href = preset.docsUrl;
@@ -724,15 +736,41 @@
 
     function applyPreset() {
       const preset = selectedPreset();
-      syncPresetMeta();
-      if (!preset) return;
       const form = $("#providerForm");
+      const selectedPresetId = $("#providerPreset").value;
+      const hasUserConfiguration = [
+        form.elements.baseUrl.value,
+        form.elements.apiKey.value,
+        form.elements.model.value,
+      ].some((value) => value.trim());
+      if (preset && hasUserConfiguration && selectedPresetId !== lastAppliedPresetId) {
+        const confirmed = window.confirm("切换厂商模板会覆盖当前接口地址、模型和请求协议，是否继续？");
+        if (!confirmed) {
+          $("#providerPreset").value = lastAppliedPresetId;
+          syncPresetMeta();
+          return;
+        }
+      }
+      syncPresetMeta();
+      if (!preset) {
+        lastAppliedPresetId = "";
+        return;
+      }
       form.elements.name.value = preset.name || "";
       form.elements.target.value = preset.target || selectedTarget;
       form.elements.baseUrl.value = preset.baseUrl || "";
       form.elements.model.value = preset.defaultModel || "";
       form.elements.wireApi.value = preset.wireApi || "chat";
+      lastAppliedPresetId = selectedPresetId;
       syncProviderTargetFields();
+    }
+
+    function modelCacheSourceLabel(cache) {
+      if (!cache?.source) return "";
+      if (cache.source === "fresh") return "实时";
+      if (cache.source === "disk") return "磁盘缓存";
+      if (cache.source === "memory") return "内存缓存";
+      return cache.source;
     }
 
     async function discoverDraftModels() {
@@ -744,17 +782,18 @@
         const result = await api("/api/leocodebox/switch/discover-models", {
           method: "POST",
           body: JSON.stringify({
+            providerId: form.elements.id.value || undefined,
             target: form.elements.target.value,
             baseUrl: form.elements.baseUrl.value,
             apiKey: form.elements.apiKey.value,
+            useStoredKey: Boolean(form.elements.id.value && !form.elements.apiKey.value),
             wireApi: form.elements.wireApi.value,
           }),
         });
         $("#providerModelOptions").innerHTML = (result.models || []).map((model) => `<option value="${escapeHtml(model)}"></option>`).join("");
         if (!form.elements.model.value && result.models?.length) form.elements.model.value = result.models[0];
-        const cache = result.cache;
-        const cacheLabel = cache?.source === "fresh" ? "实时" : cache?.source === "disk" ? "磁盘缓存" : "内存缓存";
-        showToast(`已获取 ${result.models?.length || 0} 个模型${cache ? ` · ${cacheLabel}` : ""}`, "ok");
+        const cacheLabel = modelCacheSourceLabel(result.cache);
+        showToast(`已获取 ${result.models?.length || 0} 个模型${cacheLabel ? ` · ${cacheLabel}` : ""}`, "ok");
       } finally {
         button.disabled = false;
         button.textContent = "自动获取";
@@ -927,7 +966,7 @@
       });
       $("#modelOptions").innerHTML = result.models.map((model) => `<option value="${escapeHtml(model)}"></option>`).join("");
       if (!$("#testModel").value && result.models[0]) $("#testModel").value = result.models[0];
-      const cacheLabel = result.cache?.source === "fresh" ? "实时" : result.cache?.source === "disk" ? "磁盘缓存" : "内存缓存";
+      const cacheLabel = modelCacheSourceLabel(result.cache);
       setDiagnosticResult(
         result.models.length
           ? `已读取 ${result.models.length} 个模型 · ${result.latencyMs} ms${result.cache ? ` · ${cacheLabel}` : ""}`
@@ -1045,6 +1084,8 @@
       fillTargetSelect();
       form.elements.target.value = selectedTarget;
       form.elements.wireApi.value = "responses";
+      $("#providerAutoDiscover").checked = true;
+      lastAppliedPresetId = "";
       syncPresetMeta();
       $("#providerSonnetModel").value = "";
       $("#providerOpusModel").value = "";
@@ -1098,18 +1139,38 @@
         };
       }
       if (body.id && !body.apiKey) body.apiKey = "__KEEP__";
-      body.autoDiscover = true;
+      body.autoDiscover = $("#providerAutoDiscover").checked;
+      body.timeoutMs = 8000;
       const result = await api("/api/leocodebox/switch/providers", { method: "POST", body: JSON.stringify(body) });
       selectedTarget = result.provider.target;
       selectedProvider = result.provider.id;
       localStorage.setItem("leoapi-target", selectedTarget);
       $("#providerDialog").close();
       await refresh();
-      const discoveryCount = result.discovery?.models?.length || 0;
       if (result.warning) {
         showToast(result.warning, "error");
+      } else if (result.discovery === "pending") {
+        showToast(`${text("saved")}：${result.provider.name} · 正在后台发现模型`, "ok");
+        void pollProviderDiscovery(result.provider.id);
       } else {
-        showToast(`${text("saved")}：${result.provider.name}${discoveryCount ? ` · 已发现 ${discoveryCount} 个模型` : ""}`, "ok");
+        showToast(`${text("saved")}：${result.provider.name}`, "ok");
+      }
+    }
+
+    async function pollProviderDiscovery(providerId) {
+      for (let attempt = 0; attempt < 8; attempt += 1) {
+        await new Promise((resolve) => window.setTimeout(resolve, 600));
+        await refresh();
+        const provider = state.providers.find((item) => item.id === providerId);
+        if (!provider) return;
+        if (provider.modelDiscoveryError) {
+          showToast(`模型自动发现失败：${provider.modelDiscoveryError}`, "error");
+          return;
+        }
+        if (provider.modelDiscovery?.updatedAt) {
+          showToast(`已发现 ${provider.discoveredModels?.length || 0} 个模型`, "ok");
+          return;
+        }
       }
     }
 

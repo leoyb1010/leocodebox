@@ -1,5 +1,7 @@
-import jwt from 'jsonwebtoken';
 import { timingSafeEqual } from 'node:crypto';
+
+import jwt from 'jsonwebtoken';
+
 import { userDb, appConfigDb } from '../modules/database/index.js';
 import { IS_PLATFORM } from '../constants/config.js';
 
@@ -22,9 +24,6 @@ const isLocalOnlyAuthToken = (token) => safeTokenEquals(token, LOCAL_ONLY_AUTH_T
 const getRequestToken = (req) => {
   const authHeader = req.headers['authorization'];
   let token = authHeader && authHeader.split(' ')[1];
-  if (!token && req.query.token) {
-    token = req.query.token;
-  }
   return token || null;
 };
 

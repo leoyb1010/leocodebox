@@ -220,7 +220,7 @@ export class DesktopNotificationsController {
         this.lastEvent = 'register-error';
         this.lastError = error instanceof Error ? error.message : String(error);
         this.onChange?.();
-        try { ws.close(); } catch {}
+        try { ws.close(); } catch { /* socket is already closed */ }
       }
     });
 
@@ -365,7 +365,7 @@ export class DesktopNotificationsController {
       clearTimeout(connection.reconnectTimer);
       connection.reconnectTimer = null;
     }
-    try { connection.ws?.close(); } catch {}
+    try { connection.ws?.close(); } catch { /* socket is already closed */ }
   }
 
   stop() {

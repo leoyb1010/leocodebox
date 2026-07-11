@@ -290,6 +290,7 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
   assert.equal(traversalResponse.status, 400);
 
   const receivedProbes = [];
+  let releaseSlowModelProbe = null;
   const probeServer = http.createServer((request, response) => {
     const chunks = [];
     request.on('data', (chunk) => chunks.push(chunk));
@@ -300,8 +301,15 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
         headers: request.headers,
         body: Buffer.concat(chunks).toString('utf8'),
       });
+      if (request.url === '/slow/v1/models') {
+        releaseSlowModelProbe = () => {
+          response.writeHead(200, { 'Content-Type': 'application/json' });
+          response.end(JSON.stringify({ data: [{ id: 'slow-model' }] }));
+        };
+        return;
+      }
       response.writeHead(request.url === '/v1/messages' ? 400 : 200, { 'Content-Type': 'application/json' });
-      response.end(request.url === '/v1/models'
+      response.end(request.url === '/v1/models' || request.url === '/second/v1/models'
         ? JSON.stringify({ data: [{ id: 'model-b' }, { id: 'model-a' }] })
         : '{}');
     });
@@ -311,6 +319,31 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
   t.after(() => new Promise((resolve) => probeServer.close(resolve)));
   const probeAddress = probeServer.address();
   const probeBaseUrl = `http://127.0.0.1:${probeAddress.port}`;
+
+  const asyncSave = await post('/switch/providers', {
+    id: 'async-discovery',
+    target: 'codex',
+    name: 'Async Discovery',
+    baseUrl: `${probeBaseUrl}/slow/v1`,
+    apiKey: 'slow-key',
+    autoDiscover: true,
+    timeoutMs: 4000,
+  });
+  assert.equal(asyncSave.discovery, 'pending');
+  await post('/switch/providers', { id: 'save-while-discovering', target: 'claude', name: 'Not Blocked' });
+  for (let attempt = 0; attempt < 20 && !releaseSlowModelProbe; attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 10));
+  }
+  assert.ok(releaseSlowModelProbe, 'background discovery should start after the save response');
+  releaseSlowModelProbe();
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const discoveryStatus = await fetch(`${base}/switch/status`).then((response) => response.json());
+    const provider = discoveryStatus.providers.find((item) => item.id === 'async-discovery');
+    if (provider?.discoveredModels?.includes('slow-model')) break;
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+  const asyncStatus = await fetch(`${base}/switch/status`).then((response) => response.json());
+  assert.deepEqual(asyncStatus.providers.find((item) => item.id === 'async-discovery').discoveredModels, ['slow-model']);
 
   await post('/switch/providers', {
     id: 'claude-probe',
@@ -324,10 +357,10 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
   assert.equal(claudeProbe.reachable, true);
   assert.equal(claudeProbe.httpStatus, 400);
   assert.equal(claudeProbe.authStatus, 'accepted');
-  assert.equal(receivedProbes[0].method, 'POST');
-  assert.equal(receivedProbes[0].url, '/v1/messages');
-  assert.equal(receivedProbes[0].headers['x-api-key'], 'probe-key');
-  assert.equal(JSON.parse(receivedProbes[0].body).max_tokens, 1);
+  const claudeRequest = receivedProbes.find((probe) => probe.method === 'POST' && probe.url === '/v1/messages');
+  assert.ok(claudeRequest);
+  assert.equal(claudeRequest.headers['x-api-key'], 'probe-key');
+  assert.equal(JSON.parse(claudeRequest.body).max_tokens, 1);
 
   await post('/switch/providers', {
     id: 'codex-probe',
@@ -340,9 +373,8 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
   assert.equal(codexProbe.reachable, true);
   assert.equal(codexProbe.httpStatus, 200);
   assert.equal(codexProbe.authStatus, 'accepted');
-  assert.equal(receivedProbes[1].method, 'GET');
-  assert.equal(receivedProbes[1].url, '/v1/models');
-  assert.equal(receivedProbes[1].headers.authorization, 'Bearer codex-key');
+  const codexRequest = receivedProbes.find((probe) => probe.method === 'GET' && probe.url === '/v1/models' && probe.headers.authorization === 'Bearer codex-key');
+  assert.ok(codexRequest);
 
   const discoveredModels = await post('/switch/providers/codex-probe/models', { timeoutMs: 4000 });
   assert.deepEqual(discoveredModels.models, ['model-a', 'model-b']);

@@ -577,7 +577,7 @@ const CURSOR_CHATS_ROOT = path.join(os.homedir(), '.cursor', 'chats');
 // child_process.spawn everywhere else.
 const spawnFunction = crossSpawn;
 const ANSI_PATTERN = new RegExp(
-  // eslint-disable-next-line no-control-regex
+
   '[\\u001B\\u009B][[\\]()#;?]*(?:'
   + '(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]'
   + '|(?:[\\dA-PR-TZcf-ntqry=><~]))',

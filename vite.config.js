@@ -1,7 +1,7 @@
 import { fileURLToPath, URL } from 'node:url'
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
-import { getConnectableHost, normalizeLoopbackHost } from './shared/networkHosts.js'
+import { getConnectableHost, normalizeLoopbackHost } from './server/shared/network-hosts.js'
 
 export default defineConfig(({ mode }) => {
   // Load env file based on `mode` in the current working directory.
@@ -49,23 +49,11 @@ export default defineConfig(({ mode }) => {
       chunkSizeWarningLimit: 1000,
       rollupOptions: {
         output: {
-          manualChunks: {
-            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-            'vendor-codemirror': [
-              '@uiw/react-codemirror',
-              '@codemirror/lang-css',
-              '@codemirror/lang-html',
-              '@codemirror/lang-javascript',
-              '@codemirror/lang-json',
-              '@codemirror/lang-markdown',
-              '@codemirror/lang-python',
-              '@codemirror/theme-one-dark'
-            ],
-            'vendor-xterm': ['@xterm/xterm', '@xterm/addon-fit', '@xterm/addon-clipboard', '@xterm/addon-webgl'],
-            'vendor-markdown': ['react-markdown', 'remark-gfm', 'remark-math', 'rehype-katex'],
-            'vendor-syntax': ['react-syntax-highlighter'],
-            'vendor-katex': ['katex'],
-            'vendor-archive': ['jszip']
+          manualChunks(id) {
+            if (id.includes('/node_modules/react/') || id.includes('/node_modules/react-dom/') || id.includes('/node_modules/react-router-dom/')) {
+              return 'vendor-react'
+            }
+            return undefined
           }
         }
       }

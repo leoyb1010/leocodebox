@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 
 import i18n from '../i18n/config.js';
 import type { LLMProvider } from '../types/app';
-import { authenticatedFetch } from '../utils/api';
+import { apiRequest } from '../utils/api';
 
 export type AppPreferences = {
   language: string;
@@ -55,10 +55,8 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
-    authenticatedFetch('/api/settings/preferences')
-      .then(async (response) => {
-        if (!response.ok) throw new Error('Failed to load preferences');
-        const payload = await response.json();
+    apiRequest('/api/settings/preferences')
+      .then((payload) => {
         const next = { ...DEFAULTS, ...(payload.preferences || {}) } as AppPreferences;
         if (active) {
           setPreferences(next);
@@ -73,13 +71,10 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
   const updatePreferences = useCallback(async (updates: Partial<AppPreferences>) => {
     setSaving(true);
     try {
-      const response = await authenticatedFetch('/api/settings/preferences', {
+      const payload = await apiRequest('/api/settings/preferences', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
       });
-      if (!response.ok) throw new Error('Failed to save preferences');
-      const payload = await response.json();
       const next = { ...DEFAULTS, ...(payload.preferences || {}) } as AppPreferences;
       setPreferences(next);
       applyPreferences(next);

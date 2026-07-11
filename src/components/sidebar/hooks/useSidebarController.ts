@@ -143,7 +143,7 @@ export function useSidebarController({
   const [optimisticStarByProjectId, setOptimisticStarByProjectId] = useState<Map<string, boolean>>(new Map());
   const [loadingMoreProjects, setLoadingMoreProjects] = useState<Set<string>>(new Set());
   const searchSeqRef = useRef(0);
-  const eventSourceRef = useRef<EventSource | null>(null);
+  const conversationSearchAbortRef = useRef<AbortController | null>(null);
   const starToggleSequenceByProjectRef = useRef<Map<string, number>>(new Map());
   const migrationStartedRef = useRef(false);
   const onRefreshRef = useRef(onRefresh);
@@ -341,10 +341,8 @@ export function useSidebarController({
 
   // Debounced conversation search with SSE streaming
   useEffect(() => {
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
+    conversationSearchAbortRef.current?.abort();
+    conversationSearchAbortRef.current = null;
 
     const query = debouncedSearchQuery;
     if (searchMode !== 'conversations' || query.length < 2) {
@@ -362,69 +360,59 @@ export function useSidebarController({
       return;
     }
 
-    const url = api.searchConversationsUrl(query);
-    const es = new EventSource(url);
-    eventSourceRef.current = es;
+    const controller = new AbortController();
+    conversationSearchAbortRef.current = controller;
 
     const accumulated: ConversationProjectResult[] = [];
     let totalMatches = 0;
-
-    es.addEventListener('result', (evt) => {
-      if (seq !== searchSeqRef.current) { es.close(); return; }
-      try {
-        const data = JSON.parse(evt.data) as {
-          projectResult: ConversationProjectResult;
-          totalMatches: number;
-          scannedProjects: number;
-          totalProjects: number;
-        };
-        accumulated.push(data.projectResult);
-        totalMatches = data.totalMatches;
-        setConversationResults({ results: [...accumulated], totalMatches, query });
-        setSearchProgress({ scannedProjects: data.scannedProjects, totalProjects: data.totalProjects });
-      } catch {
-        // Ignore malformed SSE data
-      }
-    });
-
-    es.addEventListener('progress', (evt) => {
-      if (seq !== searchSeqRef.current) { es.close(); return; }
-      try {
-        const data = JSON.parse(evt.data) as { totalMatches: number; scannedProjects: number; totalProjects: number };
-        totalMatches = data.totalMatches;
-        setSearchProgress({ scannedProjects: data.scannedProjects, totalProjects: data.totalProjects });
-      } catch {
-        // Ignore malformed SSE data
-      }
-    });
-
-    es.addEventListener('done', () => {
-      if (seq !== searchSeqRef.current) { es.close(); return; }
-      es.close();
-      eventSourceRef.current = null;
+    const finish = () => {
+      if (seq !== searchSeqRef.current) return;
+      if (conversationSearchAbortRef.current === controller) conversationSearchAbortRef.current = null;
       setIsSearching(false);
       setSearchProgress(null);
       if (accumulated.length === 0) {
         setConversationResults({ results: [], totalMatches: 0, query });
       }
-    });
+    };
 
-    es.addEventListener('error', () => {
-      if (seq !== searchSeqRef.current) { es.close(); return; }
-      es.close();
-      eventSourceRef.current = null;
-      setIsSearching(false);
-      setSearchProgress(null);
-      if (accumulated.length === 0) {
-        setConversationResults({ results: [], totalMatches: 0, query });
+    void api.streamConversationSearch(query, {
+      result: (eventData: string) => {
+        if (seq !== searchSeqRef.current) { controller.abort(); return; }
+        try {
+          const data = JSON.parse(eventData) as {
+            projectResult: ConversationProjectResult;
+            totalMatches: number;
+            scannedProjects: number;
+            totalProjects: number;
+          };
+          accumulated.push(data.projectResult);
+          totalMatches = data.totalMatches;
+          setConversationResults({ results: [...accumulated], totalMatches, query });
+          setSearchProgress({ scannedProjects: data.scannedProjects, totalProjects: data.totalProjects });
+        } catch {
+          // Ignore malformed SSE data.
+        }
+      },
+      progress: (eventData: string) => {
+        if (seq !== searchSeqRef.current) { controller.abort(); return; }
+        try {
+          const data = JSON.parse(eventData) as { totalMatches: number; scannedProjects: number; totalProjects: number };
+          totalMatches = data.totalMatches;
+          setSearchProgress({ scannedProjects: data.scannedProjects, totalProjects: data.totalProjects });
+        } catch {
+          // Ignore malformed SSE data.
+        }
+      },
+      done: finish,
+    }, 50, controller.signal).catch((error: unknown) => {
+      if (!(error instanceof DOMException && error.name === 'AbortError')) {
+        console.warn('Conversation search failed:', error);
       }
-    });
+    }).finally(finish);
 
     return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-      }
+      conversationSearchAbortRef.current?.abort();
+      conversationSearchAbortRef.current = null;
     };
   }, [debouncedSearchQuery, searchMode]);
 
@@ -982,10 +970,8 @@ export function useSidebarController({
     searchProgress,
     clearConversationResults: useCallback(() => {
       searchSeqRef.current += 1;
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-        eventSourceRef.current = null;
-      }
+      conversationSearchAbortRef.current?.abort();
+      conversationSearchAbortRef.current = null;
       setIsSearching(false);
       setSearchProgress(null);
       setConversationResults(null);
