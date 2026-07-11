@@ -16,12 +16,16 @@ import {
   getOpenCodeConfigDir,
 } from '../shared/provider-runtime-paths.js';
 import { findAppRoot, getModuleDir } from '../utils/runtime-paths.js';
+import { PROVIDER_TEMPLATES } from '../shared/provider-templates.js';
 
 const router = express.Router();
 
 const ROUTE_DIR = getModuleDir(import.meta.url);
 const APP_ROOT = findAppRoot(ROUTE_DIR);
 const MAX_TEXT_FIELD = 20_000;
+const MODEL_DISCOVERY_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const modelDiscoveryCache = new Map();
+const pendingModelDiscoveries = new Map();
 let switchMutationQueue = Promise.resolve();
 
 const TARGETS = {
@@ -63,57 +67,6 @@ const TARGETS = {
   },
 };
 
-const PRESETS = [
-  {
-    id: 'anthropic',
-    name: 'Anthropic',
-    target: 'claude',
-    baseUrl: 'https://api.anthropic.com',
-    defaultModel: 'claude-sonnet-4-5',
-    wireApi: 'chat',
-  },
-  {
-    id: 'openai',
-    name: 'OpenAI',
-    target: 'codex',
-    baseUrl: 'https://api.openai.com/v1',
-    defaultModel: 'gpt-5-codex',
-    wireApi: 'responses',
-  },
-  {
-    id: 'openai-compatible',
-    name: 'OpenAI Compatible',
-    target: 'codex',
-    baseUrl: 'https://api.example.com/v1',
-    defaultModel: 'gpt-5-codex',
-    wireApi: 'chat',
-  },
-  {
-    id: 'gemini',
-    name: 'Google Gemini',
-    target: 'gemini',
-    baseUrl: 'https://generativelanguage.googleapis.com',
-    defaultModel: 'gemini-2.5-pro',
-    wireApi: 'chat',
-  },
-  {
-    id: 'opencode-compatible',
-    name: 'OpenCode Compatible',
-    target: 'opencode',
-    baseUrl: 'https://api.example.com/v1',
-    defaultModel: 'gpt-5-codex',
-    wireApi: 'chat',
-  },
-  {
-    id: 'hermes-compatible',
-    name: 'Hermes Compatible',
-    target: 'hermes',
-    baseUrl: 'https://api.example.com/v1',
-    defaultModel: 'anthropic/claude-sonnet-4-5',
-    wireApi: 'chat',
-  },
-];
-
 function homeDir() {
   return process.env.LEOCODEBOX_TEST_HOME || os.homedir();
 }
@@ -127,6 +80,39 @@ function expandHome(input) {
 
 function switchDir() {
   return path.join(homeDir(), '.leocodebox', 'switch');
+}
+
+function providerModelCachePath() {
+  return path.join(switchDir(), 'model-discovery-cache.json');
+}
+
+function modelDiscoveryCacheKey(provider, rawBase) {
+  return crypto.createHash('sha256').update(JSON.stringify({
+    target: provider.target,
+    baseUrl: safeText(rawBase, 800).replace(/\/+$/, ''),
+    wireApi: normalizeWireApi(provider.wireApi),
+  })).digest('hex');
+}
+
+function modelDiscoveryCacheInfo(entry, source) {
+  return {
+    source,
+    updatedAt: new Date(entry.updatedAt).toISOString(),
+    expiresAt: new Date(entry.expiresAt).toISOString(),
+  };
+}
+
+async function loadModelDiscoveryDiskCache() {
+  const value = await readJsonFile(providerModelCachePath(), { version: 1, entries: {} });
+  return value?.version === 1 && value.entries && typeof value.entries === 'object'
+    ? value.entries
+    : {};
+}
+
+async function persistModelDiscoveryCache() {
+  const now = Date.now();
+  const entries = Object.fromEntries([...modelDiscoveryCache.entries()].filter(([, entry]) => entry.expiresAt > now));
+  await writeJsonFile(providerModelCachePath(), { version: 1, entries });
 }
 
 function feedbackDir() {
@@ -261,6 +247,13 @@ function normalizeProvider(input, existing = null) {
       : {},
     apiKey: nextApiKey,
     model,
+    discoveredModels: Array.isArray(existing?.discoveredModels)
+      ? existing.discoveredModels.map((item) => safeText(item, 240)).filter(Boolean).slice(0, 300)
+      : [],
+    modelDiscovery: existing?.modelDiscovery && typeof existing.modelDiscovery === 'object'
+      ? existing.modelDiscovery
+      : null,
+    modelDiscoveryError: safeText(existing?.modelDiscoveryError ?? '', 500),
     modelMapping: normalizeModelMapping(input, existing, model),
     wireApi: normalizeWireApi(input?.wireApi ?? existing?.wireApi),
     notes: safeText(input?.notes ?? existing?.notes ?? '', 2000),
@@ -1332,35 +1325,68 @@ async function discoverProviderModels(provider, options = {}) {
     error.statusCode = 400;
     throw error;
   }
-  const timeoutMs = parseBoundedInteger(options.timeoutMs, 8000, 1000, 30000);
-  const probe = buildModelListProbe(provider, rawBase);
-  const startedAt = Date.now();
-  const response = await fetch(probe.url, {
-    method: 'GET',
-    headers: probe.headers,
-    redirect: 'manual',
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  const latencyMs = Date.now() - startedAt;
-  let payload = null;
-  try {
-    payload = await response.json();
-  } catch {
-    payload = null;
+  const cacheKey = modelDiscoveryCacheKey(provider, rawBase);
+  const now = Date.now();
+  if (!options.bypassCache) {
+    const memoryEntry = modelDiscoveryCache.get(cacheKey);
+    if (memoryEntry?.expiresAt > now) {
+      return { ...memoryEntry.result, cache: modelDiscoveryCacheInfo(memoryEntry, 'memory') };
+    }
+    const diskEntries = await loadModelDiscoveryDiskCache();
+    const diskEntry = diskEntries[cacheKey];
+    if (diskEntry?.expiresAt > now && Array.isArray(diskEntry.result?.models)) {
+      modelDiscoveryCache.set(cacheKey, diskEntry);
+      return { ...diskEntry.result, cache: modelDiscoveryCacheInfo(diskEntry, 'disk') };
+    }
   }
-  if (!response.ok) {
-    const message = safeText(payload?.error?.message || payload?.message, 300);
-    const error = new Error(message || `模型列表读取失败（HTTP ${response.status}）。`);
-    error.statusCode = response.status >= 400 && response.status < 600 ? response.status : 502;
-    error.details = { latencyMs, httpStatus: response.status };
-    throw error;
-  }
-  return {
-    models: extractModelIds(payload),
-    latencyMs,
-    httpStatus: response.status,
-    endpoint: rawBase,
-  };
+  const pending = pendingModelDiscoveries.get(cacheKey);
+  if (pending) return pending;
+
+  const request = (async () => {
+    const timeoutMs = parseBoundedInteger(options.timeoutMs, 8000, 1000, 30000);
+    const probe = buildModelListProbe(provider, rawBase);
+    const startedAt = Date.now();
+    const response = await fetch(probe.url, {
+      method: 'GET',
+      headers: probe.headers,
+      redirect: 'manual',
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    const latencyMs = Date.now() - startedAt;
+    let payload = null;
+    try {
+      payload = await response.json();
+    } catch {
+      payload = null;
+    }
+    if (!response.ok) {
+      const message = safeText(payload?.error?.message || payload?.message, 300);
+      const error = new Error(message || `模型列表读取失败（HTTP ${response.status}）。`);
+      error.statusCode = response.status >= 400 && response.status < 600 ? response.status : 502;
+      error.details = { latencyMs, httpStatus: response.status };
+      throw error;
+    }
+    const result = {
+      models: extractModelIds(payload),
+      latencyMs,
+      httpStatus: response.status,
+      endpoint: rawBase,
+    };
+    const entry = {
+      updatedAt: Date.now(),
+      expiresAt: Date.now() + MODEL_DISCOVERY_CACHE_TTL_MS,
+      result,
+    };
+    modelDiscoveryCache.set(cacheKey, entry);
+    try {
+      await persistModelDiscoveryCache();
+    } catch (error) {
+      console.warn('Unable to persist model discovery cache:', error);
+    }
+    return { ...result, cache: modelDiscoveryCacheInfo(entry, 'fresh') };
+  })().finally(() => pendingModelDiscoveries.delete(cacheKey));
+  pendingModelDiscoveries.set(cacheKey, request);
+  return request;
 }
 
 function buildModelBenchmarkProbe(provider, model) {
@@ -1596,6 +1622,7 @@ const CLI_TOOLS = {
     label: 'Claude Code',
     cmd: 'claude',
     updateArgs: ['update'],
+    install: { command: 'npm', args: ['install', '--global', '@anthropic-ai/claude-code'] },
     npmPackage: '@anthropic-ai/claude-code',
     docsUrl: 'https://docs.anthropic.com/en/docs/claude-code',
   },
@@ -1604,6 +1631,7 @@ const CLI_TOOLS = {
     label: 'Codex',
     cmd: 'codex',
     updateArgs: ['update'],
+    install: { command: 'npm', args: ['install', '--global', '@openai/codex'] },
     npmPackage: '@openai/codex',
     docsUrl: 'https://github.com/openai/codex',
   },
@@ -1611,9 +1639,9 @@ const CLI_TOOLS = {
     id: 'opencode',
     label: 'OpenCode',
     cmd: 'opencode',
-    // OpenCode supports several installers. Guessing npm can create a second,
-    // shadowed installation on another Mac, so only report status here.
+    // Update selection is resolved from the executable's verified install source.
     updateArgs: null,
+    install: { command: 'npm', args: ['install', '--global', 'opencode-ai'] },
     npmPackage: 'opencode-ai',
     docsUrl: 'https://opencode.ai',
   },
@@ -1630,6 +1658,7 @@ const CLI_TOOLS = {
     label: 'Gemini CLI',
     cmd: 'gemini',
     updateArgs: null,
+    install: { command: 'npm', args: ['install', '--global', '@google/gemini-cli'] },
     npmPackage: '@google/gemini-cli',
     docsUrl: 'https://github.com/google-gemini/gemini-cli',
   },
@@ -1647,6 +1676,47 @@ function parseCliVersionText(output) {
   if (!output) return null;
   const match = String(output).match(CLI_VERSION_TOKEN);
   return match ? match[1] : null;
+}
+
+async function resolveExecutablePath(command) {
+  const result = await runCliCommand('/usr/bin/which', [command], 5000);
+  if (!result.ok) return null;
+  const executablePath = result.stdout.trim().split(/\r?\n/)[0];
+  if (!executablePath) return null;
+  try {
+    return await fs.realpath(executablePath);
+  } catch {
+    return executablePath;
+  }
+}
+
+async function detectCliInstallSource(tool) {
+  const executablePath = await resolveExecutablePath(tool.cmd);
+  if (!executablePath) return { source: 'not-installed', executablePath: null };
+  const normalized = executablePath.replaceAll('\\', '/');
+  if (normalized.includes('/Cellar/') || normalized.includes('/homebrew/')) {
+    return { source: 'homebrew', executablePath };
+  }
+  if (normalized.includes('/node_modules/') || normalized.includes('/npm/') || normalized.includes('/.npm')) {
+    return { source: 'npm-global', executablePath };
+  }
+  if (normalized.includes('.app/Contents/')) {
+    return { source: 'app-bundled', executablePath };
+  }
+  return { source: 'standalone', executablePath };
+}
+
+async function resolveCliUpdateCommand(tool, source) {
+  if (source === 'npm-global' && tool.npmPackage) {
+    return { command: 'npm', args: ['install', '--global', `${tool.npmPackage}@latest`] };
+  }
+  if (source === 'homebrew') {
+    const formulaById = { opencode: 'opencode' };
+    const formula = formulaById[tool.id];
+    if (formula) return { command: 'brew', args: ['upgrade', formula] };
+  }
+  if (Array.isArray(tool.updateArgs)) return { command: tool.cmd, args: tool.updateArgs };
+  return null;
 }
 
 function runCliCommand(cmd, args, timeoutMs = 10_000) {
@@ -1683,6 +1753,10 @@ async function getCliToolStatus(tool, { checkLatest = true } = {}) {
   const updateAvailable = Boolean(
     currentVersion && latestVersion && compareSemver(latestVersion, currentVersion) > 0,
   );
+  const installInfo = installed
+    ? await detectCliInstallSource(tool)
+    : { source: 'not-installed', executablePath: null };
+  const updateCommand = runnable ? await resolveCliUpdateCommand(tool, installInfo.source) : null;
   return {
     id: tool.id,
     label: tool.label,
@@ -1693,7 +1767,10 @@ async function getCliToolStatus(tool, { checkLatest = true } = {}) {
     currentVersion,
     latestVersion,
     updateAvailable,
-    canSelfUpdate: runnable && Array.isArray(tool.updateArgs),
+    installSource: installInfo.source,
+    executablePath: installInfo.executablePath,
+    canInstall: !installed && Boolean(tool.install),
+    canSelfUpdate: runnable && Boolean(updateCommand),
     docsUrl: tool.docsUrl,
   };
 }
@@ -1704,6 +1781,41 @@ router.get('/cli/status', async (_req, res, next) => {
       Object.values(CLI_TOOLS).map((tool) => getCliToolStatus(tool)),
     );
     res.json({ success: true, checkedAt: nowIso(), tools });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/cli/:id/install', async (req, res, next) => {
+  try {
+    if (process.env.LEOCODEBOX_LOCAL_ONLY !== '1' && !process.env.LEOCODEBOX_TEST_HOME) {
+      res.status(403).json({ success: false, error: 'CLI installs are available only in local-only mode.' });
+      return;
+    }
+    const tool = CLI_TOOLS[String(req.params.id || '').toLowerCase()];
+    if (!tool) {
+      res.status(404).json({ success: false, error: 'Unknown CLI tool.' });
+      return;
+    }
+    if (!tool.install) {
+      res.status(409).json({ success: false, error: `${tool.label} 没有经过验证的一键安装方式。` });
+      return;
+    }
+    const before = await getCliToolStatus(tool, { checkLatest: false });
+    if (before.installed) {
+      res.status(409).json({ success: false, error: `${tool.label} 已安装。` });
+      return;
+    }
+    const result = await runCliCommand(tool.install.command, tool.install.args, 300_000);
+    const after = await getCliToolStatus(tool, { checkLatest: false });
+    res.json({
+      success: result.ok && after.installed,
+      tool: tool.id,
+      currentVersion: after.currentVersion,
+      installSource: after.installSource,
+      output: `${result.stdout}\n${result.stderr}`.trim().slice(0, 8000),
+      error: result.ok && after.installed ? null : (result.error || 'Install command failed.'),
+    });
   } catch (error) {
     next(error);
   }
@@ -1725,11 +1837,12 @@ router.post('/cli/:id/update', async (req, res, next) => {
       res.status(409).json({ success: false, error: `${tool.label} CLI is not installed.` });
       return;
     }
-    if (!Array.isArray(tool.updateArgs)) {
-      res.status(409).json({ success: false, error: `${tool.label} 请使用原安装方式更新。` });
+    const updateCommand = await resolveCliUpdateCommand(tool, before.installSource);
+    if (!updateCommand) {
+      res.status(409).json({ success: false, error: `${tool.label} 的安装来源为 ${before.installSource}，无法安全自动更新。` });
       return;
     }
-    const result = await runCliCommand(tool.cmd, tool.updateArgs, 180_000);
+    const result = await runCliCommand(updateCommand.command, updateCommand.args, 180_000);
     const after = await getCliToolStatus(tool, { checkLatest: false });
     res.json({
       success: result.ok,
@@ -1769,7 +1882,7 @@ router.get('/switch/status', async (_req, res, next) => {
     res.json({
       success: true,
       targets: configStatus(),
-      presets: PRESETS,
+      presets: PROVIDER_TEMPLATES,
       activeByTarget,
       nativeAvailableByTarget,
       lastAppliedByTarget: store.activeByTarget,
@@ -1789,7 +1902,34 @@ router.post('/switch/providers', async (req, res, next) => {
       const provider = normalizeProvider(req.body, existing);
       upsertProviderInStore(store, provider);
       await writeStore(store);
-      res.json({ success: true, provider: sanitizeProvider(provider) });
+
+      let discovery = null;
+      let warning = null;
+      if (req.body?.autoDiscover === true && provider.baseUrl && provider.apiKey) {
+        try {
+          discovery = await discoverProviderModels(provider, { bypassCache: true });
+          provider.discoveredModels = discovery.models;
+          provider.modelDiscovery = {
+            endpoint: discovery.endpoint,
+            updatedAt: discovery.cache.updatedAt,
+            expiresAt: discovery.cache.expiresAt,
+          };
+          provider.modelDiscoveryError = '';
+          if (!provider.model && discovery.models[0]) {
+            provider.model = discovery.models[0];
+            provider.modelMapping = normalizeModelMapping({}, provider, provider.model);
+          }
+          provider.updatedAt = nowIso();
+          upsertProviderInStore(store, provider);
+          await writeStore(store);
+        } catch (error) {
+          warning = `配置已保存，但模型自动发现失败：${safeText(error?.message || '未知错误', 300)}`;
+          provider.modelDiscoveryError = safeText(error?.message || '未知错误', 500);
+          upsertProviderInStore(store, provider);
+          await writeStore(store);
+        }
+      }
+      res.json({ success: true, provider: sanitizeProvider(provider), discovery, warning });
     });
   } catch (error) {
     next(error);
@@ -1948,6 +2088,23 @@ router.post('/switch/providers/:id/test', async (req, res, next) => {
   }
 });
 
+router.post('/switch/discover-models', async (req, res, next) => {
+  try {
+    const provider = normalizeProvider({
+      id: 'draft-model-discovery',
+      name: 'Draft',
+      target: req.body?.target,
+      baseUrl: req.body?.baseUrl,
+      apiKey: req.body?.apiKey,
+      wireApi: req.body?.wireApi,
+    });
+    const result = await discoverProviderModels(provider, req.body || {});
+    res.json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+});
+
 router.post('/switch/providers/:id/models', async (req, res, next) => {
   try {
     const store = await readStore();
@@ -1956,7 +2113,21 @@ router.post('/switch/providers/:id/models', async (req, res, next) => {
       res.status(404).json({ success: false, error: 'Provider not found.' });
       return;
     }
-    const result = await discoverProviderModels(provider, req.body || {});
+    const result = await discoverProviderModels(provider, { ...req.body, bypassCache: true });
+    await withSwitchMutation(async () => {
+      const latestStore = await readStore();
+      const latestProvider = latestStore.providers.find((item) => item.id === req.params.id);
+      if (!latestProvider) return;
+      latestProvider.discoveredModels = result.models;
+      latestProvider.modelDiscovery = {
+        endpoint: result.endpoint,
+        updatedAt: result.cache.updatedAt,
+        expiresAt: result.cache.expiresAt,
+      };
+      latestProvider.modelDiscoveryError = '';
+      latestProvider.updatedAt = nowIso();
+      await writeStore(latestStore);
+    });
     res.json({ success: true, provider: provider.id, ...result });
   } catch (error) {
     next(error);

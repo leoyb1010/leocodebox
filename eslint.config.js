@@ -164,6 +164,7 @@ export default tseslint.config(
             "server/shared/image-attachments.ts",
             "server/shared/provider-errors.ts",
             "server/shared/provider-runtime-paths.ts",
+            "server/shared/provider-templates.js",
           ], // classify shared utility files so modules can depend on them explicitly
           mode: "file",
         },

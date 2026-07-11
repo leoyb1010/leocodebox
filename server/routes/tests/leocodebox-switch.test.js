@@ -87,6 +87,21 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
   })));
   const status = await fetch(`${base}/switch/status`).then((response) => response.json());
   assert.equal(status.providers.filter((provider) => provider.id.startsWith('parallel-')).length, 20);
+  assert.equal(status.presets.length, 16);
+  assert.deepEqual(
+    status.presets.find((preset) => preset.id === 'xai'),
+    {
+      id: 'xai',
+      name: 'xAI / Grok',
+      vendor: 'xAI',
+      target: 'codex',
+      baseUrl: 'https://api.x.ai/v1',
+      defaultModel: '',
+      wireApi: 'chat',
+      status: 'beta',
+      docsUrl: 'https://console.x.ai/',
+    },
+  );
 
   await fs.mkdir(path.join(home, '.claude'), { recursive: true });
   await fs.writeFile(path.join(home, '.claude', 'settings.json'), JSON.stringify({

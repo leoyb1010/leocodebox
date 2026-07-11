@@ -234,6 +234,10 @@
     .field { display: grid; gap: 7px; margin-bottom: 15px; }
     .field.span-2 { grid-column: 1 / -1; }
     label { color: var(--muted); font-size: 13px; font-weight: 600; }
+    .template-meta { min-height: 18px; color: var(--subtle); font-size: 12px; line-height: 1.45; }
+    .template-meta[hidden] { display: none; }
+    .template-meta a { color: var(--blue); font-weight: 600; text-decoration: none; }
+    .template-meta a:hover { text-decoration: underline; }
     input, select, textarea {
       width: 100%; min-height: 42px; border: 1px solid var(--line); border-radius: 7px; padding: 9px 11px;
       background: var(--input-bg); color: var(--text);
@@ -365,6 +369,14 @@
         <input type="hidden" name="id">
         <div class="field-grid">
           <div class="field span-2">
+            <label for="providerPreset">厂商快捷模板</label>
+            <select id="providerPreset" name="preset" aria-describedby="providerPresetMeta"><option value="">自定义</option></select>
+            <div class="template-meta" id="providerPresetMeta" hidden>
+              <span id="providerPresetStatus"></span>
+              <a id="providerPresetDocs" href="#" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer">打开官方文档 ↗</a>
+            </div>
+          </div>
+          <div class="field span-2">
             <label for="providerName">名称</label>
             <input id="providerName" name="name" autocomplete="off" required placeholder="例如：DeepSeek">
           </div>
@@ -374,7 +386,11 @@
           </div>
           <div class="field">
             <label for="providerModel">模型</label>
-            <input id="providerModel" name="model" placeholder="模型名称">
+            <div style="display:flex;gap:8px">
+              <input id="providerModel" name="model" list="providerModelOptions" placeholder="模型名称" style="flex:1">
+              <button class="quiet-button" id="discoverDraftModels" type="button">自动获取</button>
+            </div>
+            <datalist id="providerModelOptions"></datalist>
           </div>
           <div class="field span-2">
             <label for="providerBaseUrl">接口地址</label>
@@ -661,6 +677,88 @@
       const previous = select.value;
       select.innerHTML = orderedTargets().map((target) => `<option value="${escapeHtml(target.id)}">${escapeHtml(target.label)}</option>`).join("");
       select.value = previous && state.targets[previous] ? previous : selectedTarget;
+      fillPresetSelect();
+    }
+
+    function fillPresetSelect() {
+      const select = $("#providerPreset");
+      if (!select) return;
+      const previous = select.value;
+      select.innerHTML = `<option value="">自定义</option>` + (state?.presets || []).map((preset) => {
+        const badge = preset.status === "beta" ? " · Beta" : preset.status === "preview" ? " · Preview" : "";
+        return `<option value="${escapeHtml(preset.id)}">${escapeHtml(preset.name + badge)}</option>`;
+      }).join("");
+      select.value = (state?.presets || []).some((preset) => preset.id === previous) ? previous : "";
+      syncPresetMeta();
+    }
+
+    function selectedPreset() {
+      return (state?.presets || []).find((item) => item.id === $("#providerPreset").value);
+    }
+
+    function syncPresetMeta() {
+      const preset = selectedPreset();
+      const container = $("#providerPresetMeta");
+      const docs = $("#providerPresetDocs");
+      const status = $("#providerPresetStatus");
+      if (!preset) {
+        container.hidden = true;
+        docs.removeAttribute("href");
+        return;
+      }
+      const statusLabel = preset.status === "beta" ? "Beta 模板 · " : preset.status === "preview" ? "Preview 模板 · " : "";
+      status.textContent = statusLabel;
+      if (typeof preset.docsUrl === "string" && /^https:\/\//i.test(preset.docsUrl)) {
+        docs.href = preset.docsUrl;
+        docs.hidden = false;
+        container.hidden = false;
+      } else if (statusLabel) {
+        docs.removeAttribute("href");
+        docs.hidden = true;
+        container.hidden = false;
+      } else {
+        docs.removeAttribute("href");
+        container.hidden = true;
+      }
+    }
+
+    function applyPreset() {
+      const preset = selectedPreset();
+      syncPresetMeta();
+      if (!preset) return;
+      const form = $("#providerForm");
+      form.elements.name.value = preset.name || "";
+      form.elements.target.value = preset.target || selectedTarget;
+      form.elements.baseUrl.value = preset.baseUrl || "";
+      form.elements.model.value = preset.defaultModel || "";
+      form.elements.wireApi.value = preset.wireApi || "chat";
+      syncProviderTargetFields();
+    }
+
+    async function discoverDraftModels() {
+      const form = $("#providerForm");
+      const button = $("#discoverDraftModels");
+      button.disabled = true;
+      button.textContent = "获取中…";
+      try {
+        const result = await api("/api/leocodebox/switch/discover-models", {
+          method: "POST",
+          body: JSON.stringify({
+            target: form.elements.target.value,
+            baseUrl: form.elements.baseUrl.value,
+            apiKey: form.elements.apiKey.value,
+            wireApi: form.elements.wireApi.value,
+          }),
+        });
+        $("#providerModelOptions").innerHTML = (result.models || []).map((model) => `<option value="${escapeHtml(model)}"></option>`).join("");
+        if (!form.elements.model.value && result.models?.length) form.elements.model.value = result.models[0];
+        const cache = result.cache;
+        const cacheLabel = cache?.source === "fresh" ? "实时" : cache?.source === "disk" ? "磁盘缓存" : "内存缓存";
+        showToast(`已获取 ${result.models?.length || 0} 个模型${cache ? ` · ${cacheLabel}` : ""}`, "ok");
+      } finally {
+        button.disabled = false;
+        button.textContent = "自动获取";
+      }
     }
 
     function renderTabs() {
@@ -825,13 +923,14 @@
       setDiagnosticResult("正在读取模型列表…");
       const result = await api(`/api/leocodebox/switch/providers/${encodeURIComponent(provider.id)}/models`, {
         method: "POST",
-        body: JSON.stringify({ timeoutMs: settings.timeoutSeconds * 1000 }),
+        body: JSON.stringify({ timeoutMs: settings.timeoutSeconds * 1000, bypassCache: true }),
       });
       $("#modelOptions").innerHTML = result.models.map((model) => `<option value="${escapeHtml(model)}"></option>`).join("");
       if (!$("#testModel").value && result.models[0]) $("#testModel").value = result.models[0];
+      const cacheLabel = result.cache?.source === "fresh" ? "实时" : result.cache?.source === "disk" ? "磁盘缓存" : "内存缓存";
       setDiagnosticResult(
         result.models.length
-          ? `已读取 ${result.models.length} 个模型 · ${result.latencyMs} ms`
+          ? `已读取 ${result.models.length} 个模型 · ${result.latencyMs} ms${result.cache ? ` · ${cacheLabel}` : ""}`
           : `接口可访问，但没有返回可识别的模型列表 · ${result.latencyMs} ms`,
         result.models.length ? "good" : "",
       );
@@ -946,6 +1045,7 @@
       fillTargetSelect();
       form.elements.target.value = selectedTarget;
       form.elements.wireApi.value = "responses";
+      syncPresetMeta();
       $("#providerSonnetModel").value = "";
       $("#providerOpusModel").value = "";
       $("#providerHaikuModel").value = "";
@@ -975,6 +1075,7 @@
       form.elements.baseUrl.value = provider.baseUrl || "";
       form.elements.apiKey.value = "";
       form.elements.model.value = provider.model || "";
+      $("#providerModelOptions").innerHTML = (provider.discoveredModels || []).map((model) => `<option value="${escapeHtml(model)}"></option>`).join("");
       form.elements.notes.value = provider.notes || "";
       $("#providerSonnetModel").value = provider.modelMapping?.sonnet || provider.model || "";
       $("#providerOpusModel").value = provider.modelMapping?.opus || provider.model || "";
@@ -997,13 +1098,19 @@
         };
       }
       if (body.id && !body.apiKey) body.apiKey = "__KEEP__";
+      body.autoDiscover = true;
       const result = await api("/api/leocodebox/switch/providers", { method: "POST", body: JSON.stringify(body) });
       selectedTarget = result.provider.target;
       selectedProvider = result.provider.id;
       localStorage.setItem("leoapi-target", selectedTarget);
       $("#providerDialog").close();
       await refresh();
-      showToast(`${text("saved")}：${result.provider.name}`, "ok");
+      const discoveryCount = result.discovery?.models?.length || 0;
+      if (result.warning) {
+        showToast(result.warning, "error");
+      } else {
+        showToast(`${text("saved")}：${result.provider.name}${discoveryCount ? ` · 已发现 ${discoveryCount} 个模型` : ""}`, "ok");
+      }
     }
 
     async function applyProvider(id) {
@@ -1126,6 +1233,8 @@
 
     $("#providerForm").addEventListener("submit", (event) => saveProvider(event).catch((error) => showToast(error.message, "error")));
     $("#providerTarget").addEventListener("change", syncProviderTargetFields);
+    $("#providerPreset").addEventListener("change", applyPreset);
+    $("#discoverDraftModels").addEventListener("click", () => discoverDraftModels().catch((error) => showToast(error.message, "error")));
     $("#addProvider").addEventListener("click", openAddProvider);
     $("#closeProvider").addEventListener("click", () => $("#providerDialog").close());
     $("#cancelProvider").addEventListener("click", () => $("#providerDialog").close());

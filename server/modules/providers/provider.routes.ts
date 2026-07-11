@@ -508,6 +508,8 @@ router.get(
   asyncHandler(async (_req: Request, res: Response) => {
     res.json(createApiSuccessResponse({
       providers: providerCapabilitiesService.listAllProviderCapabilities(),
+      manifests: providerCapabilitiesService.listProviderManifests(),
+      templates: providerCapabilitiesService.listProviderTemplates(),
     }));
   }),
 );

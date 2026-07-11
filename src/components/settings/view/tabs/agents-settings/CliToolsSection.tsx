@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowUpCircle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpCircle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
 
 import { authenticatedFetch } from '../../../../../utils/api';
 import { cn } from '../../../../../lib/utils';
@@ -14,6 +14,9 @@ type CliToolStatus = {
   currentVersion: string | null;
   latestVersion: string | null;
   updateAvailable: boolean;
+  installSource: string;
+  executablePath: string | null;
+  canInstall: boolean;
   canSelfUpdate: boolean;
   docsUrl?: string;
 };
@@ -55,25 +58,25 @@ export default function CliToolsSection() {
     void load();
   }, [load]);
 
-  const runUpdate = useCallback(async (tool: CliToolStatus) => {
+  const runAction = useCallback(async (tool: CliToolStatus, action: 'install' | 'update') => {
     setUpdating(tool.id);
     setMessage(null);
     try {
-      const response = await authenticatedFetch(`/api/leocodebox/cli/${tool.id}/update`, {
+      const response = await authenticatedFetch(`/api/leocodebox/cli/${tool.id}/${action}`, {
         method: 'POST',
       });
       const data = await response.json();
       if (data?.success) {
-        setMessage(
-          data.changed
+        setMessage(action === 'install'
+          ? `${tool.label} 已安装${data.currentVersion ? ` (${data.currentVersion})` : ''}。`
+          : data.changed
             ? `${tool.label} 已更新到 ${data.currentVersion ?? '最新版本'}。`
-            : `${tool.label} 已是最新版本 (${data.currentVersion ?? tool.currentVersion ?? ''})。`,
-        );
+            : `${tool.label} 已是最新版本 (${data.currentVersion ?? tool.currentVersion ?? ''})。`);
       } else {
-        setMessage(`${tool.label} 更新失败：${data?.error ?? '未知错误'}`);
+        setMessage(`${tool.label} ${action === 'install' ? '安装' : '更新'}失败：${data?.error ?? '未知错误'}`);
       }
     } catch (error) {
-      setMessage(`${tool.label} 更新失败：${error instanceof Error ? error.message : '未知错误'}`);
+      setMessage(`${tool.label} ${action === 'install' ? '安装' : '更新'}失败：${error instanceof Error ? error.message : '未知错误'}`);
     } finally {
       setUpdating(null);
       void load();
@@ -124,7 +127,7 @@ export default function CliToolsSection() {
               <div className="mt-0.5 truncate text-xs text-muted-foreground">
                 {tool.installed && tool.runnable ? (
                   <>
-                    当前 {tool.currentVersion ?? '未知'}
+                    当前 {tool.currentVersion ?? '未知'} · {tool.installSource || '来源未知'}
                     {tool.updateAvailable && tool.latestVersion ? ` → 最新 ${tool.latestVersion}` : ''}
                   </>
                 ) : tool.installed ? (
@@ -137,7 +140,7 @@ export default function CliToolsSection() {
 
             {tool.installed && tool.runnable && tool.updateAvailable && tool.canSelfUpdate && (
               <button
-                onClick={() => void runUpdate(tool)}
+                onClick={() => void runAction(tool, 'update')}
                 disabled={updating !== null}
                 className="inline-flex flex-shrink-0 items-center gap-1 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
               >
@@ -145,7 +148,17 @@ export default function CliToolsSection() {
                 更新
               </button>
             )}
-            {!tool.installed && tool.docsUrl && (
+            {!tool.installed && tool.canInstall && (
+              <button
+                onClick={() => void runAction(tool, 'install')}
+                disabled={updating !== null}
+                className="inline-flex flex-shrink-0 items-center gap-1 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
+              >
+                {updating === tool.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <ArrowDownToLine className="h-3 w-3" />}
+                安装
+              </button>
+            )}
+            {!tool.installed && !tool.canInstall && tool.docsUrl && (
               <a
                 href={tool.docsUrl}
                 target="_blank"

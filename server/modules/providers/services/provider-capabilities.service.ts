@@ -1,4 +1,5 @@
-import type { LLMProvider } from '@/shared/types.js';
+import { providerRegistry } from '@/modules/providers/provider.registry.js';
+import type { LLMProvider, ProviderManifest, ProviderTemplate } from '@/shared/types.js';
 
 /**
  * Static, backend-owned description of what one provider integration supports.
@@ -87,5 +88,13 @@ export const providerCapabilitiesService = {
 
   listAllProviderCapabilities(): ProviderCapabilities[] {
     return Object.values(PROVIDER_CAPABILITIES);
+  },
+
+  listProviderManifests(): ProviderManifest[] {
+    return providerRegistry.listManifests();
+  },
+
+  listProviderTemplates(): ProviderTemplate[] {
+    return providerRegistry.listTemplates();
   },
 };

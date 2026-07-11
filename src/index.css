@@ -218,6 +218,19 @@
     bottom: 0;
   }
   
+  /* Shared motion tokens: keep UI transitions consistent and easy to reduce. */
+  :root {
+    --motion-fast: 120ms;
+    --motion-base: 200ms;
+    --motion-slow: 320ms;
+    --motion-ease-out: cubic-bezier(0.2, 0, 0, 1);
+    --motion-spring: cubic-bezier(0.16, 1, 0.3, 1);
+    --z-popover: 40;
+    --z-sheet: 50;
+    --z-dialog: 60;
+    --z-toast: 70;
+  }
+
   /* Global transition defaults */
   button,
   a, 
@@ -227,8 +240,8 @@
   [role="button"],
   .transition-all {
     transition-property: color, background-color, border-color, opacity, box-shadow, transform;
-    transition-duration: 140ms;
-    transition-timing-function: cubic-bezier(0.2, 0, 0, 1);
+    transition-duration: var(--motion-fast);
+    transition-timing-function: var(--motion-ease-out);
   }
   
   /* Color transitions for theme switching - exclude interactive elements */

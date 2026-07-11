@@ -1,10 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { Suspense, lazy, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
-import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
-import { oneDark, oneLight } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { useTranslation } from 'react-i18next';
 import { normalizeInlineCodeFences } from '../../utils/chatFormatting';
 import { copyTextToClipboard } from '../../../../utils/clipboard';
@@ -57,6 +55,9 @@ type CodeBlockProps = {
   className?: string;
   children?: React.ReactNode;
 };
+
+const LazySyntaxHighlighter = lazy(() => import('./LazySyntaxHighlighter'));
+const MAX_HIGHLIGHT_CHARS = 50_000;
 
 const CodeBlock = ({ node, inline, className, children, ...props }: CodeBlockProps) => {
   const { t } = useTranslation('chat');
@@ -132,27 +133,13 @@ const CodeBlock = ({ node, inline, className, children, ...props }: CodeBlockPro
         )}
       </button>
 
-      <SyntaxHighlighter
-        language={language}
-        style={isDarkMode ? oneDark : oneLight}
-        customStyle={{
-          margin: 0,
-          borderRadius: '0.75rem',
-          fontSize: '0.875rem',
-          padding: language && language !== 'text' ? '2rem 1rem 1rem 1rem' : '1rem',
-          // ChatGPT-style soft grey block in light mode; keep oneDark's own bg in dark.
-          ...(isDarkMode ? {} : { background: 'hsl(var(--muted))' }),
-        }}
-        codeTagProps={{
-          style: {
-            fontFamily:
-              'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace',
-            ...(isDarkMode ? {} : { background: 'transparent' }),
-          },
-        }}
-      >
-        {raw}
-      </SyntaxHighlighter>
+      {language !== 'text' && raw.length <= MAX_HIGHLIGHT_CHARS ? (
+        <Suspense fallback={<pre className="m-0 overflow-x-auto rounded-xl bg-muted p-4 font-mono text-sm"><code>{raw}</code></pre>}>
+          <LazySyntaxHighlighter language={language} raw={raw} isDarkMode={isDarkMode} />
+        </Suspense>
+      ) : (
+        <pre className="m-0 overflow-x-auto rounded-xl bg-muted p-4 font-mono text-sm"><code>{raw}</code></pre>
+      )}
     </div>
   );
 };

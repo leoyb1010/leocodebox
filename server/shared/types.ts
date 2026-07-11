@@ -67,6 +67,86 @@ export type AuthenticatedWebSocketRequest = IncomingMessage & {
  */
 export type LLMProvider = 'claude' | 'codex' | 'cursor' | 'opencode';
 
+/** Provider identifiers known to the product, including capability-only integrations. */
+export type ProviderId =
+  | LLMProvider
+  | 'gemini'
+  | 'grok'
+  | 'antigravity'
+  | 'openclaw';
+
+/** Configuration files that Leoapi can inspect or mutate independently of chat runtimes. */
+export type ConfigTargetId = 'claude' | 'codex' | 'opencode' | 'cursor' | 'gemini' | 'hermes';
+
+/** Locally detectable command-line tools. A CLI tool is not necessarily a chat runtime. */
+export type CliToolId = ConfigTargetId;
+
+export type ProviderTemplateId =
+  | 'anthropic'
+  | 'openai'
+  | 'deepseek'
+  | 'kimi'
+  | 'glm'
+  | 'qwen'
+  | 'minimax'
+  | 'siliconflow'
+  | 'openrouter'
+  | 'groq'
+  | 'xai'
+  | 'volcengine'
+  | 'gemini'
+  | 'openai-compatible'
+  | 'opencode-compatible'
+  | 'hermes-compatible';
+
+export type ProviderCapabilityStatus =
+  | 'supported'
+  | 'unsupported'
+  | 'unavailable'
+  | 'unverified';
+
+export type ProviderCapabilityName =
+  | 'chat'
+  | 'auth'
+  | 'models'
+  | 'sessions'
+  | 'sessionSync'
+  | 'mcp'
+  | 'skills'
+  | 'configSwitch'
+  | 'cliInstall'
+  | 'cliUpdate';
+
+export type ProviderVerificationStatus = 'verified' | 'beta' | 'preview' | 'unverified';
+
+/** Declarative provider metadata. Operational behavior is registered separately. */
+export type ProviderManifest = {
+  id: ProviderId;
+  displayName: string;
+  vendor: string;
+  visibility: 'public' | 'experimental' | 'hidden';
+  verification: ProviderVerificationStatus;
+  order: number;
+  runtimeProvider?: LLMProvider;
+  configTarget?: ConfigTargetId;
+  cliTool?: CliToolId;
+  docsUrl?: string;
+  capabilities: Record<ProviderCapabilityName, ProviderCapabilityStatus>;
+};
+
+/** Reusable, non-secret defaults for creating one Leoapi provider configuration. */
+export type ProviderTemplate = {
+  id: ProviderTemplateId;
+  name: string;
+  vendor: string;
+  target: ConfigTargetId;
+  baseUrl: string;
+  defaultModel: string;
+  wireApi: 'chat' | 'responses';
+  status: ProviderVerificationStatus;
+  docsUrl?: string;
+};
+
 /**
  * One selectable model row in a provider model catalog.
  */
