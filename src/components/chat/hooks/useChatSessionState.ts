@@ -12,6 +12,7 @@ import { normalizedToChatMessages } from './useChatMessages';
 
 const MESSAGES_PER_PAGE = 20;
 const INITIAL_VISIBLE_MESSAGES = 100;
+const EMPTY_STORE_MESSAGES: NormalizedMessage[] = [];
 
 interface UseChatSessionStateArgs {
   selectedProject: Project | null;
@@ -256,10 +257,11 @@ export function useChatSessionState({
     setPendingUserMessage(null);
   }, [activeSessionId, pendingUserMessage, sessionStore]);
 
-  const storeMessages = useMemo(
-    () => activeSessionId ? sessionStore.getMessages(activeSessionId) : [],
-    [activeSessionId, sessionStore],
-  );
+  // The store owns a render tick that fires whenever the active slot changes.
+  // Read the mutable slot on every resulting render: memoizing this lookup by
+  // the stable store object/session id freezes the first (often empty) array
+  // until an unrelated selection change forces another derivation.
+  const storeMessages = activeSessionId ? sessionStore.getMessages(activeSessionId) : EMPTY_STORE_MESSAGES;
 
   // Reset viewHiddenCount when store messages change
   const prevStoreLenRef = useRef(0);
