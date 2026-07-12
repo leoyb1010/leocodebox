@@ -370,6 +370,7 @@
     "switchLeoapi": "Switch Leoapi API node…",
     "confirmSwitch": "Switch to \"{{name}}\" (applies to new sessions)",
     "testNode": "Test \"{{name}}\"",
-    "backToNodes": "Back to node list"
+    "backToNodes": "Back to node list",
+    "sessionsCovered": "Sessions (full-text covers: {{providers}})"
   }
 }

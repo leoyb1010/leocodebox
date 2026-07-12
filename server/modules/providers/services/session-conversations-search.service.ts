@@ -4,11 +4,13 @@ import readline from 'node:readline';
 
 import { spawn } from 'cross-spawn';
 import { rgPath } from '@vscode/ripgrep';
+import Database from 'better-sqlite3';
 
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
+import { getOpenCodeDatabasePath } from '@/shared/utils.js';
 
 type AnyRecord = Record<string, any>;
-type SearchableProvider = 'claude' | 'codex';
+type SearchableProvider = 'claude' | 'codex' | 'opencode';
 
 type SearchSnippetHighlight = {
   start: number;
@@ -82,7 +84,9 @@ type ProjectBucket = {
   sessions: SearchableSessionRow[];
 };
 
-const SUPPORTED_PROVIDERS = new Set<SearchableProvider>(['claude', 'codex']);
+const SUPPORTED_PROVIDERS = new Set<SearchableProvider>(['claude', 'codex', 'opencode']);
+/** Providers whose sessions this search can currently see. Surfaced to the UI so absence ≠ "从没聊过". */
+export const SEARCH_COVERED_PROVIDERS: readonly string[] = ['claude', 'codex', 'opencode'];
 const MAX_MATCHES_PER_SESSION = 2;
 const RIPGREP_FILE_CHUNK_SIZE = 40;
 const RIPGREP_CHUNK_CONCURRENCY = 6;
@@ -459,13 +463,21 @@ function normalizeSearchableSessions(rows: SessionRepositoryRow[]): SearchableSe
   const normalizedRows: SearchableSessionRow[] = [];
   const projectArchiveStateByPath = new Map<string, boolean>();
 
+  const opencodeDbPath = getOpenCodeDatabasePath();
+  const opencodeDbExists = fsSync.existsSync(opencodeDbPath);
+
   for (const row of rows) {
     const provider = row.provider as SearchableProvider;
     if (!SUPPORTED_PROVIDERS.has(provider)) {
       continue;
     }
 
-    const rawJsonlPath = typeof row.jsonl_path === 'string' ? row.jsonl_path.trim() : '';
+    // OpenCode keeps conversations in a shared SQLite database instead of
+    // per-session JSONL files, so its rows carry the db path and are matched
+    // via SQL rather than ripgrep.
+    const rawJsonlPath = provider === 'opencode'
+      ? (opencodeDbExists ? opencodeDbPath : '')
+      : typeof row.jsonl_path === 'string' ? row.jsonl_path.trim() : '';
     if (!rawJsonlPath) {
       continue;
     }
@@ -1050,6 +1062,121 @@ async function parseCodexSessionMatches(
   };
 }
 
+function openOpenCodeSearchDatabase(): Database.Database | null {
+  const dbPath = getOpenCodeDatabasePath();
+  if (!fsSync.existsSync(dbPath)) {
+    return null;
+  }
+  try {
+    return new Database(dbPath, { readonly: true, fileMustExist: true });
+  } catch {
+    // Degrade to "OpenCode not covered this pass" instead of failing search.
+    return null;
+  }
+}
+
+/**
+ * Cheap SQL pre-filter mirroring ripgrep's role for file-based providers:
+ * sessions whose message parts contain every query word become candidates,
+ * and the precise word matcher re-verifies each part during parsing.
+ */
+function findOpenCodeCandidateSessionIds(safeQuery: string, words: string[]): Set<string> {
+  const db = openOpenCodeSearchDatabase();
+  if (!db) return new Set();
+  try {
+    const terms = words.length > 0 ? words : [safeQuery];
+    let candidates: Set<string> | null = null;
+    for (const term of terms) {
+      const rows = db.prepare('SELECT DISTINCT session_id FROM part WHERE data LIKE ?')
+        .all(`%${term}%`) as { session_id: string }[];
+      const next = new Set<string>(rows.map((row) => row.session_id));
+      if (candidates === null) {
+        candidates = next;
+      } else {
+        const intersection = new Set<string>();
+        candidates.forEach((id) => {
+          if (next.has(id)) intersection.add(id);
+        });
+        candidates = intersection;
+      }
+      if (candidates.size === 0) break;
+    }
+    return candidates ?? new Set<string>();
+  } catch {
+    return new Set();
+  } finally {
+    db.close();
+  }
+}
+
+function parseOpenCodeSessionMatches(
+  session: SearchableSessionRow,
+  runtime: SearchRuntime,
+): SessionConversationResult | null {
+  const db = openOpenCodeSearchDatabase();
+  if (!db) return null;
+
+  const matches: SessionConversationMatch[] = [];
+  let latestUserMessageText: string | null = null;
+  try {
+    const rows = db.prepare(`
+      SELECT part.data AS part_data, part.time_created AS time_created, message.data AS message_data
+      FROM part JOIN message ON message.id = part.message_id
+      WHERE part.session_id = ?
+      ORDER BY part.time_created ASC
+    `).all(session.session_id) as { part_data: string; time_created: number | null; message_data: string | null }[];
+
+    for (const row of rows) {
+      if (runtime.isAborted()) break;
+
+      let part: AnyRecord;
+      let message: AnyRecord;
+      try {
+        part = JSON.parse(row.part_data) as AnyRecord;
+        message = row.message_data ? JSON.parse(row.message_data) as AnyRecord : {};
+      } catch {
+        continue;
+      }
+      if (part?.type !== 'text' || typeof part.text !== 'string') continue;
+
+      const text = part.text.trim();
+      if (!text || INTERNAL_CONTENT_PREFIXES.some((prefix) => text.startsWith(prefix))) continue;
+
+      const role = message?.role === 'user' ? 'user' : 'assistant';
+      if (role === 'user') {
+        latestUserMessageText = text;
+      }
+      if (matches.length >= MAX_MATCHES_PER_SESSION || runtime.totalMatches >= runtime.limit) continue;
+      if (!runtime.matchesQuery(text)) continue;
+
+      const { snippet, highlights } = runtime.buildSnippet(text);
+      matches.push({
+        role,
+        snippet,
+        highlights,
+        timestamp: Number.isFinite(Number(row.time_created)) ? new Date(Number(row.time_created)).toISOString() : null,
+        provider: 'opencode',
+      });
+      runtime.totalMatches += 1;
+    }
+  } catch {
+    return null;
+  } finally {
+    db.close();
+  }
+
+  if (matches.length === 0) {
+    return null;
+  }
+
+  return {
+    sessionId: session.session_id,
+    provider: 'opencode',
+    sessionSummary: toSummaryText(session.custom_name, latestUserMessageText, 'OpenCode Session'),
+    matches,
+  };
+}
+
 async function parseSessionMatches(
   session: SearchableSessionRow,
   runtime: SearchRuntime,
@@ -1059,6 +1186,9 @@ async function parseSessionMatches(
   }
   if (session.provider === 'codex') {
     return parseCodexSessionMatches(session, runtime);
+  }
+  if (session.provider === 'opencode') {
+    return parseOpenCodeSessionMatches(session, runtime);
   }
   return null;
 }
@@ -1098,10 +1228,13 @@ export async function searchConversations(
 
     if (!sessionsByPathKey.has(normalizedPath)) {
       sessionsByPathKey.set(normalizedPath, []);
-      searchablePathEntries.push({
-        normalizedPath,
-        absolutePath: session.jsonl_path,
-      });
+      // OpenCode's shared SQLite db is not a ripgrep target.
+      if (session.provider !== 'opencode') {
+        searchablePathEntries.push({
+          normalizedPath,
+          absolutePath: session.jsonl_path,
+        });
+      }
     }
 
     const pathSessions = sessionsByPathKey.get(normalizedPath) as SearchableSessionRow[];
@@ -1114,9 +1247,6 @@ export async function searchConversations(
     words,
     signal ?? undefined,
   );
-  if (isAborted() || matchedFileKeys.size === 0) {
-    return { results: [], totalMatches: 0, query: safeQuery };
-  }
 
   const matchedSessionKeys = new Set<string>();
   for (const fileKey of matchedFileKeys) {
@@ -1128,6 +1258,14 @@ export async function searchConversations(
     for (const session of sessions) {
       matchedSessionKeys.add(getSessionKey(session));
     }
+  }
+
+  for (const sessionId of findOpenCodeCandidateSessionIds(safeQuery, words)) {
+    matchedSessionKeys.add(`opencode:${sessionId}`);
+  }
+
+  if (isAborted() || matchedSessionKeys.size === 0) {
+    return { results: [], totalMatches: 0, query: safeQuery };
   }
 
   const projectBuckets = buildProjectBuckets(searchableSessions);

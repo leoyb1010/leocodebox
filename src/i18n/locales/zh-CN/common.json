@@ -370,6 +370,7 @@
     "switchLeoapi": "换轨 Leoapi 接口节点…",
     "confirmSwitch": "确认切到「{{name}}」（对新会话生效）",
     "testNode": "测速「{{name}}」",
-    "backToNodes": "返回节点列表"
+    "backToNodes": "返回节点列表",
+    "sessionsCovered": "会话（全文搜索覆盖：{{providers}}）"
   }
 }

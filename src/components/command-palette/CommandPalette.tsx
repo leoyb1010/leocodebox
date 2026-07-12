@@ -109,7 +109,7 @@ export default function CommandPalette({
   const showLeoapi = page === 'leoapi';
 
   const sessions = useSessionsSource(projectId, open && showSessions);
-  const messageMatches = useSessionMessageSearch(projectId, search, open && showSessions);
+  const { items: messageMatches, coveredProviders } = useSessionMessageSearch(projectId, search, open && showSessions);
   const files = useFilesSource(projectId, open && showFiles);
   const commits = useCommitsSource(projectId, open && showCommits);
   const branches = useBranchesSource(projectId, open && showBranches);
@@ -346,7 +346,11 @@ export default function CommandPalette({
             )}
 
             {showSessions && projectId && sessionsShown.length > 0 && (
-              <CommandGroup heading={t('commandPalette.sessions')}>
+              <CommandGroup
+                heading={search.trim().length >= 2 && coveredProviders.length > 0
+                  ? t('commandPalette.sessionsCovered', { providers: coveredProviders.join(' / ') })
+                  : t('commandPalette.sessions')}
+              >
                 {sessionsShown.map((s) => (
                   <CommandItem
                     key={s.id}
