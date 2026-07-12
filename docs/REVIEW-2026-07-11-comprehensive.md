@@ -1,5 +1,10 @@
 # leocodebox v1.1.3 全面审查 · 修复与升级文档
 
+> **文档状态（2026-07-12 标注）**：其中「开启 asar」建议与 docs/SIGNING.md 的有意 asar:false 设计冲突，
+> 以 SIGNING.md 为准（A/B 测试通过前不得开启）。包体减重已改走「codex 兜底二进制按需下载」路线
+> （2026-07-12 落地，DMG 约 -300MB）。S-2 API Key 哈希化、E-5 单飞互斥、通知管线接通已于 2026-07-12 完成。
+
+
 > 审查时间：2026-07-11（Asia/Shanghai）
 > 审查对象：`cloudcli-native-app`（GitHub 私有仓库 `leoyb1010/leocodebox`），本地优先 macOS 桌面应用
 > 代码规模：前端 `src/` 约 5.4 万行（374 TS/TSX）、服务端 `server/` 约 4.2 万行、Electron `electron/` 约 5500 行
