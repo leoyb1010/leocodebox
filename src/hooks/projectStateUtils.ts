@@ -325,3 +325,25 @@ export const readPersistedTab = (): AppTab => {
   }
   return 'chat';
 };
+
+const LAST_SESSION_KEY = 'last-session-id';
+
+export const readLastSessionId = (): string | null => {
+  try {
+    return localStorage.getItem(LAST_SESSION_KEY);
+  } catch {
+    return null;
+  }
+};
+
+export const persistLastSessionId = (sessionId: string | null): void => {
+  try {
+    if (sessionId) {
+      localStorage.setItem(LAST_SESSION_KEY, sessionId);
+    } else {
+      localStorage.removeItem(LAST_SESSION_KEY);
+    }
+  } catch {
+    // localStorage unavailable
+  }
+};
