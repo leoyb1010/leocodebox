@@ -9,7 +9,7 @@ import path from 'node:path';
 import {
   getAgentCliDiagnostics,
   getDesktopRuntimePath,
-  readLoginShellEnvironment,
+  readLoginShellEnvironmentAsync,
 } from './runtimePath.js';
 
 const DEFAULT_PORT = Number.parseInt(
@@ -272,6 +272,7 @@ export class LocalServerController {
   constructor({ appRoot, settingsPath, isPackaged = false, appVersion, onChange }) {
     this.appRoot = appRoot;
     this.settingsPath = settingsPath;
+    this.runtimeEnvCachePath = path.join(path.dirname(settingsPath), 'runtime-env-cache.json');
     this.isPackaged = isPackaged;
     this.appVersion = appVersion;
     this.onChange = onChange;
@@ -459,11 +460,60 @@ export class LocalServerController {
 
   }
 
-  startBundledServer(port, serverEntry) {
+  /**
+   * The login-shell probe used to run synchronously on the startup critical
+   * path, freezing the event loop for up to SHELL_TIMEOUT_MS on heavy shell
+   * configs. Serve a cached snapshot immediately and refresh it in the
+   * background for the next launch; only a cold cache awaits the async probe.
+   */
+  async resolveLoginShellEnvironment() {
+    let cached = null;
+    try {
+      cached = JSON.parse(await fs.readFile(this.runtimeEnvCachePath, 'utf8'));
+    } catch {
+      // Missing or corrupt cache: fall through to a fresh probe.
+    }
+
+    const shell = process.env.SHELL || '';
+    if (cached && cached.shell === shell && cached.env && typeof cached.env === 'object') {
+      void this.refreshLoginShellEnvironmentCache(shell);
+      return cached.env;
+    }
+
+    const environment = await readLoginShellEnvironmentAsync();
+    await this.writeLoginShellEnvironmentCache(shell, environment);
+    return environment;
+  }
+
+  async refreshLoginShellEnvironmentCache(shell) {
+    try {
+      const environment = await readLoginShellEnvironmentAsync();
+      if (Object.keys(environment).length > 0) {
+        await this.writeLoginShellEnvironmentCache(shell, environment);
+      }
+    } catch {
+      // Background refresh only; the stale cache remains usable.
+    }
+  }
+
+  async writeLoginShellEnvironmentCache(shell, environment) {
+    try {
+      await fs.mkdir(path.dirname(this.runtimeEnvCachePath), { recursive: true });
+      await fs.writeFile(
+        this.runtimeEnvCachePath,
+        JSON.stringify({ shell, updatedAt: new Date().toISOString(), env: environment }, null, 2),
+        { encoding: 'utf8', mode: 0o600 },
+      );
+    } catch {
+      // Cache write failures only cost the next launch a fresh probe.
+    }
+  }
+
+  async startBundledServer(port, serverEntry) {
     const bindHost = this.getServerBindHost();
     const runtime = getNodeRuntime();
     const serverCwd = getServerCwd(this.appRoot, serverEntry);
-    const loginShellEnvironment = readLoginShellEnvironment();
+    const loginShellEnvironment = await this.resolveLoginShellEnvironment();
     const runtimeEnvironment = { ...process.env, ...loginShellEnvironment };
     const desktopPath = getDesktopRuntimePath({
       env: runtimeEnvironment,
@@ -576,7 +626,7 @@ export class LocalServerController {
     const serverUrl = `http://${HOST}:${port}`;
     const displayUrl = `http://${DISPLAY_HOST}:${port}`;
     this.localServerPort = port;
-    this.startBundledServer(port, serverEntry);
+    await this.startBundledServer(port, serverEntry);
 
     const ready = await waitForLeocodeboxServer(serverUrl, SERVER_START_TIMEOUT_MS);
     if (!ready) {
