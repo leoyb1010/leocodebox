@@ -460,11 +460,19 @@ window.__MOCK_STATE__ = {
 
   CC.buildLocalServerSection = function (state, options) {
     options = options || {};
+    var settings = state.desktopSettings || {};
+    var keepRunning = settings.keepLocalServerRunning === true;
     var url = localUrl(state) || 'starts on demand';
     var body = '<div class="cc-surface">' +
       '<div class="cc-meta mono">' + esc(url) + '</div>' +
-      '<p class="cc-note">leocodebox 打开时自动启动本地 Agent 服务，退出时自动停止。</p>';
-    body += '</div>';
+      '<p class="cc-note">' + (keepRunning
+        ? 'leocodebox 打开时自动启动本地 Agent 服务；退出后服务保温运行，下次打开秒回。'
+        : 'leocodebox 打开时自动启动本地 Agent 服务，退出时自动停止。') + '</p>' +
+      '</div>' +
+      '<div class="cc-surface cc-choice-group">' +
+      CC.renderRadioOption('keep-server-running', 'off', !keepRunning, '退出即停', '完全退出 leocodebox 时停止本地服务（默认）。') +
+      CC.renderRadioOption('keep-server-running', 'on', keepRunning, '退出后保温', '完全退出后保留本地服务，下次启动直接接管，实现秒开。重启服务后生效。') +
+      '</div>';
     return CC.renderSection(
       options.eyebrow || '本地服务',
       options.title || '在这台 Mac 上运行 leocodebox',
@@ -555,6 +563,11 @@ window.__MOCK_STATE__ = {
       var theme = event.target.closest('[name="desktop-theme"]');
       if (theme) {
         CC.act('set-theme-mode', { value: theme.value });
+        return;
+      }
+      var keepServer = event.target.closest('[name="keep-server-running"]');
+      if (keepServer) {
+        CC.act('set-setting', { key: 'keepLocalServerRunning', value: keepServer.value === 'on' });
         return;
       }
     });

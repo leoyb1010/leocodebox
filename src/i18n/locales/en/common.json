@@ -305,7 +305,8 @@
     "tasksRunning": "{{count}} tasks running",
     "agentIdle": "Agent idle",
     "localOnly": "Local only",
-    "autoSave": "Auto-save"
+    "autoSave": "Auto-save",
+    "leoapiNodeHint": "Current API node: {{node}} (applies to new sessions)"
   },
   "errorBoundary": {
     "regionTitle": "This area could not be loaded",
@@ -364,6 +365,17 @@
     "browseFiles": "Browse all files ({{count}})",
     "browseCommits": "Browse all commits ({{count}})",
     "browseBranches": "Browse all branches ({{count}})",
-    "switchBranch": "Switch to: {{name}}"
+    "switchBranch": "Switch to: {{name}}",
+    "leoapi": "Leoapi nodes",
+    "switchLeoapi": "Switch Leoapi API node…",
+    "confirmSwitch": "Switch to \"{{name}}\" (applies to new sessions)",
+    "testNode": "Test \"{{name}}\"",
+    "backToNodes": "Back to node list",
+    "sessionsCovered": "Sessions (full-text covers: {{providers}})",
+    "handoff": "Handoff to another agent…",
+    "handoffHeading": "Handoff to…",
+    "handoffTo": "Handoff to {{provider}} (edit before sending)",
+    "handoffHint": "Recent messages become an editable preamble; nothing is auto-sent",
+    "handoffPreparing": "Collecting recent messages…"
   }
 }

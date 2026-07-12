@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { NavigateFunction } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -17,8 +17,10 @@ import {
   mergeProjectSessionPage,
   mergeTaskMasterCache,
   normalizeSessionProvider,
+  persistLastSessionId,
   projectFromRegistration,
   projectsHaveChanges,
+  readLastSessionId,
   readPersistedTab,
   readSelectedProvider,
   removeSessionFromProject,
@@ -271,6 +273,44 @@ export function useProjectsState({
       setSelectedProject(projects[0]);
     }
   }, [isLoadingProjects, projects, selectedProject, sessionId]);
+
+  // 原地站回: reopen the last visited session on boot. Only fires once, and
+  // only when the app was opened at `/` (a deep link keeps its own session).
+  const sessionRestoreAttempted = useRef(false);
+  const restoredSessionId = useRef<string | null>(null);
+  useEffect(() => {
+    if (sessionRestoreAttempted.current) return;
+    sessionRestoreAttempted.current = true;
+    if (sessionId) return;
+    const lastSessionId = readLastSessionId();
+    if (lastSessionId) {
+      restoredSessionId.current = lastSessionId;
+      navigate(`/session/${lastSessionId}`, { replace: true });
+    }
+  }, [sessionId, navigate]);
+
+  // Remember every session the user lands on so the next boot returns there.
+  useEffect(() => {
+    if (sessionId) persistLastSessionId(sessionId);
+  }, [sessionId]);
+
+  // If the restored session no longer exists (deleted since last run), fall
+  // back to the normal landing state instead of an empty phantom session.
+  useEffect(() => {
+    const restored = restoredSessionId.current;
+    if (!restored || isLoadingProjects || projects.length === 0) return;
+    if (sessionId !== restored) {
+      restoredSessionId.current = null;
+      return;
+    }
+    const stillExists = projects.some((project) =>
+      project.sessions?.some((session) => session.id === restored));
+    restoredSessionId.current = null;
+    if (!stillExists) {
+      persistLastSessionId(null);
+      navigate('/', { replace: true });
+    }
+  }, [isLoadingProjects, projects, sessionId, navigate]);
 
   const { loadingProgress, externalMessageUpdate } = useProjectRealtimeEvents({
     subscribe,

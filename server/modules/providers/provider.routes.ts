@@ -5,7 +5,7 @@ import { providerCapabilitiesService } from '@/modules/providers/services/provid
 import { providerMcpService } from '@/modules/providers/services/mcp.service.js';
 import { providerModelsService } from '@/modules/providers/services/provider-models.service.js';
 import { providerSkillsService } from '@/modules/providers/services/skills.service.js';
-import { sessionConversationsSearchService } from '@/modules/providers/services/session-conversations-search.service.js';
+import { SEARCH_COVERED_PROVIDERS, sessionConversationsSearchService } from '@/modules/providers/services/session-conversations-search.service.js';
 import { sessionsService } from '@/modules/providers/services/sessions.service.js';
 import type {
   LLMProvider,
@@ -668,7 +668,7 @@ router.get('/search/sessions', asyncHandler(async (req: Request, res: Response) 
     });
 
     if (!closed) {
-      res.write('event: done\ndata: {}\n\n');
+      res.write(`event: done\ndata: ${JSON.stringify({ coveredProviders: SEARCH_COVERED_PROVIDERS })}\n\n`);
     }
   } catch (error) {
     console.error('Error searching conversations:', error);

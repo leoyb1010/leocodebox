@@ -35,6 +35,7 @@ function errorMessage(error: unknown): string {
 }
 
 async function writeLocalServerMarker({ appRoot, installMode, runningVersion }: Omit<ServerLifecycleOptions, 'server'>): Promise<void> {
+  const localAuthToken = process.env.LEOCODEBOX_LOCAL_AUTH_TOKEN || process.env.CLOUDCLI_DESKTOP_LOCAL_AUTH_TOKEN || '';
   const marker = {
     pid: process.pid,
     port: SERVER_PORT,
@@ -44,9 +45,12 @@ async function writeLocalServerMarker({ appRoot, installMode, runningVersion }: 
     installMode,
     appRoot,
     updatedAt: new Date().toISOString(),
+    // The desktop shell reads this token back when it adopts an already-running
+    // server (warm resume), so the file must stay user-only readable.
+    ...(IS_LOCAL_ONLY_AUTH && localAuthToken ? { token: localAuthToken } : {}),
   };
-  await fsPromises.mkdir(path.dirname(LOCAL_SERVER_MARKER_PATH), { recursive: true });
-  await fsPromises.writeFile(LOCAL_SERVER_MARKER_PATH, JSON.stringify(marker, null, 2), 'utf8');
+  await fsPromises.mkdir(path.dirname(LOCAL_SERVER_MARKER_PATH), { recursive: true, mode: 0o700 });
+  await fsPromises.writeFile(LOCAL_SERVER_MARKER_PATH, JSON.stringify(marker, null, 2), { encoding: 'utf8', mode: 0o600 });
 }
 
 async function removeLocalServerMarker(): Promise<void> {

@@ -25,7 +25,9 @@ const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   channels: {
     inApp: false,
     webPush: false,
-    desktop: false,
+    // The local desktop shell is the primary notification surface; run
+    // completion/failure toasts should work out of the box.
+    desktop: true,
     sound: true,
   },
   events: {

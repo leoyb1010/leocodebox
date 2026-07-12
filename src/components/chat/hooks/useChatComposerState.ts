@@ -458,6 +458,20 @@ export function useChatComposerState({
     });
   }, [selectedProjectId]);
 
+  // ⌘K "Handoff to…" pre-fills the composer with an editable handoff preamble
+  // after switching provider; nothing is sent until the user confirms.
+  useEffect(() => {
+    const onHandoffDraft = (event: Event) => {
+      const text = (event as CustomEvent<{ text?: string }>).detail?.text;
+      if (typeof text === 'string' && text) {
+        inputValueRef.current = text;
+        setInput(text);
+      }
+    };
+    window.addEventListener('leocodebox:handoff-draft', onHandoffDraft);
+    return () => window.removeEventListener('leocodebox:handoff-draft', onHandoffDraft);
+  }, []);
+
   useEffect(() => {
     if (!selectedProjectId) {
       return;

@@ -4,13 +4,16 @@ import { useTranslation } from 'react-i18next';
 import {
   ArrowDownToLine,
   ArrowUpFromLine,
+  Check,
   ChevronRight,
   FileText,
+  Gauge,
   GitCommit,
   GitMerge,
   MessageSquare,
   MessageSquarePlus,
   RefreshCw,
+  Route,
   Settings,
   SunMoon,
   X,
@@ -38,11 +41,14 @@ import { useCommitsSource } from './sources/useCommitsSource';
 import { useSessionMessageSearch } from './sources/useSessionMessageSearch';
 import { useBranchesSource } from './sources/useBranchesSource';
 import { useGitActions } from './sources/useGitActions';
+import { useLeoapiSwitchSource, type LeoapiSwitchNode } from './sources/useLeoapiSwitchSource';
+import { HANDOFF_TARGET_PROVIDERS, useHandoffSource } from './sources/useHandoffSource';
 
-type Page = 'actions' | 'files' | 'sessions' | 'commits' | 'branches';
+type Page = 'actions' | 'files' | 'sessions' | 'commits' | 'branches' | 'leoapi' | 'handoff';
 
 type CommandPaletteProps = {
   selectedProject: Project | null;
+  selectedSession?: { id: string; __provider?: string } | null;
   onStartNewChat: (project: Project) => void;
   onOpenSettings: (tab?: string) => void;
   onShowTab?: (tab: AppTab) => void;
@@ -58,6 +64,7 @@ const NAV_TABS: Array<{ id: AppTab; labelKey: string; keywords: string }> = [
 
 export default function CommandPalette({
   selectedProject,
+  selectedSession = null,
   onStartNewChat,
   onOpenSettings,
   onShowTab,
@@ -84,10 +91,13 @@ export default function CommandPalette({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
 
+  const [pendingSwitchNode, setPendingSwitchNode] = React.useState<LeoapiSwitchNode | null>(null);
+
   React.useEffect(() => {
     if (!open) {
       setSearch('');
       setPages([]);
+      setPendingSwitchNode(null);
     }
   }, [open]);
 
@@ -99,12 +109,31 @@ export default function CommandPalette({
   const showCommits = !page || page === 'commits';
   const showBranches = !page || page === 'branches' || page === 'actions';
 
+  const showLeoapi = page === 'leoapi';
+
   const sessions = useSessionsSource(projectId, open && showSessions);
-  const messageMatches = useSessionMessageSearch(projectId, search, open && showSessions);
+  const { items: messageMatches, coveredProviders } = useSessionMessageSearch(projectId, search, open && showSessions);
   const files = useFilesSource(projectId, open && showFiles);
   const commits = useCommitsSource(projectId, open && showCommits);
   const branches = useBranchesSource(projectId, open && showBranches);
   const git = useGitActions(projectId);
+  const leoapi = useLeoapiSwitchSource(open && showLeoapi);
+  const handoff = useHandoffSource();
+  const showHandoff = page === 'handoff';
+  const currentSessionProvider = selectedSession?.__provider || null;
+
+  const runHandoff = React.useCallback(async (targetProvider: string) => {
+    if (!selectedSession || !selectedProject) return;
+    const text = await handoff.prepare(selectedSession.id, currentSessionProvider || 'agent');
+    setOpen(false);
+    // Provider switch reuses the preferences event the composer already
+    // listens to; the draft event fills the new session's composer.
+    window.dispatchEvent(new CustomEvent('leocodebox-preferences:changed', {
+      detail: { defaultProvider: targetProvider },
+    }));
+    onStartNewChat(selectedProject);
+    window.dispatchEvent(new CustomEvent('leocodebox:handoff-draft', { detail: { text } }));
+  }, [selectedSession, selectedProject, currentSessionProvider, handoff, onStartNewChat]);
 
   const sessionRows = React.useMemo(() => {
     if (!showSessions) return [];
@@ -141,6 +170,7 @@ export default function CommandPalette({
 
   const popPage = React.useCallback(() => {
     setSearch('');
+    setPendingSwitchNode(null);
     setPages((prev) => prev.slice(0, -1));
   }, []);
 
@@ -211,6 +241,105 @@ export default function CommandPalette({
                   <SunMoon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
                   <span className="flex-1">{t('commandPalette.toggleTheme')}</span>
                 </CommandItem>
+                <CommandItem
+                  value="Switch Leoapi node api endpoint 换轨 接口 节点"
+                  onSelect={() => pushPage('leoapi')}
+                >
+                  <Route className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <span className="flex-1">{t('commandPalette.switchLeoapi')}</span>
+                </CommandItem>
+                {selectedSession && selectedProject && (
+                  <CommandItem
+                    value="Handoff to agent 交接 接力 续写"
+                    onSelect={() => pushPage('handoff')}
+                  >
+                    <ArrowUpFromLine className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                    <span className="flex-1">{t('commandPalette.handoff')}</span>
+                  </CommandItem>
+                )}
+              </CommandGroup>
+            )}
+
+            {showHandoff && (
+              <CommandGroup heading={t('commandPalette.handoffHeading')}>
+                {HANDOFF_TARGET_PROVIDERS
+                  .filter((target) => target !== currentSessionProvider)
+                  .map((target) => (
+                    <CommandItem
+                      key={target}
+                      value={`handoff ${target}`}
+                      disabled={handoff.preparing}
+                      onSelect={() => {
+                        void runHandoff(target).catch((error: unknown) => {
+                          console.error('Handoff failed:', error);
+                        });
+                      }}
+                    >
+                      <ArrowUpFromLine className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                      <span className="flex-1">{t('commandPalette.handoffTo', { provider: target })}</span>
+                    </CommandItem>
+                  ))}
+                <div className="px-3 py-1.5 text-xs text-muted-foreground">
+                  {handoff.preparing ? t('commandPalette.handoffPreparing') : t('commandPalette.handoffHint')}
+                </div>
+              </CommandGroup>
+            )}
+
+            {showLeoapi && !pendingSwitchNode && (
+              <CommandGroup heading={t('commandPalette.leoapi')}>
+                {leoapi.nodes.map((node) => (
+                  <CommandItem
+                    key={node.id}
+                    value={`${node.name} ${node.target} ${node.baseUrl}`}
+                    onSelect={() => setPendingSwitchNode(node)}
+                  >
+                    <Route className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                    <span className="flex-1 truncate">{node.name}</span>
+                    <span className="text-xs text-muted-foreground">{node.target}</span>
+                    {node.latencyMs !== null && (
+                      <span className="text-xs text-muted-foreground">{node.latencyMs}ms</span>
+                    )}
+                    {node.isActive && <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden />}
+                  </CommandItem>
+                ))}
+                {leoapi.lastResult && (
+                  <div className="px-3 py-1.5 text-xs text-muted-foreground">{leoapi.lastResult}</div>
+                )}
+              </CommandGroup>
+            )}
+
+            {showLeoapi && pendingSwitchNode && (
+              <CommandGroup heading={pendingSwitchNode.name}>
+                <CommandItem
+                  value="confirm switch apply 确认 切换"
+                  disabled={leoapi.busyNodeId !== null}
+                  onSelect={() => {
+                    void leoapi.apply(pendingSwitchNode).then(() => {
+                      window.dispatchEvent(new CustomEvent('leocodebox:leoapi-switched'));
+                      setOpen(false);
+                    }).catch(() => {
+                      // Transactional apply rolls back server-side; surface via lastResult.
+                    });
+                  }}
+                >
+                  <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+                  <span className="flex-1">{t('commandPalette.confirmSwitch', { name: pendingSwitchNode.name })}</span>
+                </CommandItem>
+                <CommandItem
+                  value="test latency 测速"
+                  disabled={leoapi.busyNodeId !== null}
+                  onSelect={() => void leoapi.test(pendingSwitchNode)}
+                >
+                  <Gauge className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <span className="flex-1">{t('commandPalette.testNode', { name: pendingSwitchNode.name })}</span>
+                </CommandItem>
+                <CommandItem value="back cancel 返回" onSelect={() => setPendingSwitchNode(null)}>
+                  <ChevronRight className="h-4 w-4 shrink-0 rotate-180 text-muted-foreground" aria-hidden />
+                  <span className="flex-1">{t('commandPalette.backToNodes')}</span>
+                </CommandItem>
+                {leoapi.lastResult && (
+                  <div className="px-3 py-1.5 text-xs text-muted-foreground">{leoapi.lastResult}</div>
+                )}
               </CommandGroup>
             )}
 
@@ -270,7 +399,11 @@ export default function CommandPalette({
             )}
 
             {showSessions && projectId && sessionsShown.length > 0 && (
-              <CommandGroup heading={t('commandPalette.sessions')}>
+              <CommandGroup
+                heading={search.trim().length >= 2 && coveredProviders.length > 0
+                  ? t('commandPalette.sessionsCovered', { providers: coveredProviders.join(' / ') })
+                  : t('commandPalette.sessions')}
+              >
                 {sessionsShown.map((s) => (
                   <CommandItem
                     key={s.id}

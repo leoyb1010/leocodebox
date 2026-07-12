@@ -55,6 +55,7 @@ export function resolveCursorPermissionArgs(permissionMode: string | undefined, 
 }
 
 async function spawnCursor(command: string, options: CursorRuntimeOptions = {}, writer: object): Promise<void> {
+  const runStartedAtMs = Date.now();
   const ws = writer as RuntimeWriter;
   return new Promise<void>(async (resolve, reject) => {
     const { abortSignal, appSessionId, sessionId, projectPath, cwd, toolsSettings, skipPermissions, permissionMode, model, sessionSummary, images } = options;
@@ -138,7 +139,8 @@ async function spawnCursor(command: string, options: CursorRuntimeOptions = {}, 
             provider: 'cursor',
             sessionId: finalSessionId,
             sessionName: sessionSummary,
-            stopReason: 'completed'
+            stopReason: 'completed',
+            durationMs: Date.now() - runStartedAtMs,
           });
           return;
         }

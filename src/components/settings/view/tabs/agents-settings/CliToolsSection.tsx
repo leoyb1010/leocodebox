@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowDownToLine, ArrowUpCircle, CheckCircle2, CircleHelp, Copy, Loader2, RefreshCw } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpCircle, CheckCircle2, CircleHelp, Copy, FileDown, Loader2, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { apiClient } from '../../../../../utils/apiClient';
 import { apiRequest } from '../../../../../utils/api';
 import { cn } from '../../../../../lib/utils';
 import SessionProviderLogo from '../../../../llm-logo-provider/SessionProviderLogo';
@@ -82,6 +83,23 @@ export default function CliToolsSection({ onToolsChange }: CliToolsSectionProps)
     void load(false);
   }, [load, t]);
 
+  // 一键诊断包: masked CLI/Leoapi state as a shareable JSON download.
+  const exportDiagnostics = useCallback(async () => {
+    try {
+      const response = await apiClient.get<{ success: boolean; report: unknown }>('/api/leocodebox/diagnostics');
+      if (!response?.success) throw new Error('diagnostics export failed');
+      const blob = new Blob([JSON.stringify(response.report, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `leocodebox-diagnostics-${new Date().toISOString().slice(0, 10)}.json`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Failed to export diagnostics:', error);
+    }
+  }, []);
+
   const runAction = useCallback(async (tool: CliToolStatus, action: 'install' | 'update') => {
     setUpdating(tool.id);
     setMessage(null);
@@ -119,14 +137,24 @@ export default function CliToolsSection({ onToolsChange }: CliToolsSectionProps)
     <div className="border-b border-border/60 bg-muted/20 px-4 py-3 md:px-6">
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-sm font-medium text-foreground">{t('agents.cliTools.title')}</h3>
-        <button
-          onClick={() => void load(true)}
-          className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          title={t('agents.cliTools.refresh')}
-        >
-          <RefreshCw className={cn('h-3 w-3', loading && 'animate-spin')} />
-          {t('agents.cliTools.refresh')}
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => void exportDiagnostics()}
+            className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            title={t('agents.cliTools.diagnosticsHint')}
+          >
+            <FileDown className="h-3 w-3" />
+            {t('agents.cliTools.diagnostics')}
+          </button>
+          <button
+            onClick={() => void load(true)}
+            className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            title={t('agents.cliTools.refresh')}
+          >
+            <RefreshCw className={cn('h-3 w-3', loading && 'animate-spin')} />
+            {t('agents.cliTools.refresh')}
+          </button>
+        </div>
       </div>
       {!mutationsAllowed && !loading && (
         <p className="mb-2 text-[11px] text-muted-foreground">{t('agents.cliTools.desktopOnly')}</p>

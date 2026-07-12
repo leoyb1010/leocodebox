@@ -305,7 +305,8 @@
     "tasksRunning": "{{count}} 个任务运行中",
     "agentIdle": "Agent 空闲",
     "localOnly": "仅本机",
-    "autoSave": "自动保存"
+    "autoSave": "自动保存",
+    "leoapiNodeHint": "当前接口节点：{{node}}（对新会话生效）"
   },
   "errorBoundary": {
     "regionTitle": "此区域暂时无法加载",
@@ -364,6 +365,17 @@
     "browseFiles": "浏览全部文件（{{count}}）",
     "browseCommits": "浏览全部提交（{{count}}）",
     "browseBranches": "浏览全部分支（{{count}}）",
-    "switchBranch": "切换到：{{name}}"
+    "switchBranch": "切换到：{{name}}",
+    "leoapi": "Leoapi 节点",
+    "switchLeoapi": "换轨 Leoapi 接口节点…",
+    "confirmSwitch": "确认切到「{{name}}」（对新会话生效）",
+    "testNode": "测速「{{name}}」",
+    "backToNodes": "返回节点列表",
+    "sessionsCovered": "会话（全文搜索覆盖：{{providers}}）",
+    "handoff": "交接给另一个 Agent…",
+    "handoffHeading": "交接给…",
+    "handoffTo": "交接给 {{provider}}（可编辑后再发送）",
+    "handoffHint": "会把最近对话拼成可编辑的接力前言,不会自动发送",
+    "handoffPreparing": "正在整理最近对话…"
   }
 }

@@ -325,12 +325,12 @@ export class ViewHost {
     view.__leocodeboxLoadedUrl = null;
   }
 
-  async showLocalStartupTarget(tabId, target, logs) {
+  async showLocalStartupTarget(tabId, target, logs, phase) {
     const view = this.getOrCreateTabView(tabId);
     if (view.webContents.isDestroyed()) return;
     if (view.__leocodeboxLoadingUrl || view.__leocodeboxStartupLoading) return;
     this.attach(view);
-    const payload = { title: target.name || this.appName, message: '正在启动本地 leocodebox...', logs };
+    const payload = { title: target.name || this.appName, message: '正在启动本地 leocodebox...', logs, phase };
     const signature = JSON.stringify(payload);
     if (view.__leocodeboxStartupHtml === signature) return;
     view.__leocodeboxStartupLoading = true;

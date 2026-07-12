@@ -30,6 +30,7 @@ export function useSessionMessageSearch(
   enabled: boolean,
 ) {
   const [items, setItems] = useState<SessionMessageMatch[]>([]);
+  const [coveredProviders, setCoveredProviders] = useState<string[]>([]);
   const seqRef = useRef(0);
   const searchAbortRef = useRef<AbortController | null>(null);
 
@@ -72,7 +73,15 @@ export function useSessionMessageSearch(
             // Ignore malformed SSE data.
           }
         },
-        done: () => controller.abort(),
+        done: (eventData: string) => {
+          try {
+            const data = JSON.parse(eventData) as { coveredProviders?: string[] };
+            if (Array.isArray(data.coveredProviders)) setCoveredProviders(data.coveredProviders);
+          } catch {
+            // Older servers send an empty done payload.
+          }
+          controller.abort();
+        },
       }, 50, controller.signal).catch((error: unknown) => {
         if (!(error instanceof DOMException && error.name === 'AbortError')) {
           console.warn('Conversation search failed:', error);
@@ -94,5 +103,5 @@ export function useSessionMessageSearch(
     };
   }, []);
 
-  return items;
+  return { items, coveredProviders };
 }

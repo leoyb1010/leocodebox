@@ -32,6 +32,7 @@ export type SidebarProjectListProps = {
   attentionSessionIds: ReadonlySet<string>;
   forceExpanded?: boolean;
   isProjectStarred: (projectName: string) => boolean;
+  onOpenAgentSettings?: () => void;
   onEditingNameChange: (value: string) => void;
   onToggleProject: (projectName: string) => void;
   onProjectSelect: (project: Project) => void;
@@ -79,6 +80,7 @@ export default function SidebarProjectList({
   attentionSessionIds,
   forceExpanded = false,
   isProjectStarred,
+  onOpenAgentSettings,
   onEditingNameChange,
   onToggleProject,
   onProjectSelect,
@@ -102,6 +104,7 @@ export default function SidebarProjectList({
       loadingProgress={loadingProgress}
       projectsCount={projects.length}
       filteredProjectsCount={filteredProjects.length}
+      onOpenAgentSettings={onOpenAgentSettings}
       t={t}
     />
   );

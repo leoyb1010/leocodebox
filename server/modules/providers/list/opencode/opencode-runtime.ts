@@ -159,6 +159,7 @@ function readOpenCodeTokenUsage(sessionId: string | null): { used: number; input
 }
 
 async function spawnOpenCode(command: string, options: OpenCodeOptions = {}, writer: object): Promise<void> {
+  const runStartedAtMs = Date.now();
   const ws = writer as RuntimeWriter;
   return new Promise<void>((resolve, reject) => {
     const { abortSignal, appSessionId, sessionId, projectPath, cwd, model, effort, sessionSummary, images, permissionMode } = options;
@@ -187,6 +188,7 @@ async function spawnOpenCode(command: string, options: OpenCodeOptions = {}, wri
           sessionId: finalSessionId,
           sessionName: sessionSummary,
           stopReason: 'completed',
+          durationMs: Date.now() - runStartedAtMs,
         });
         return;
       }

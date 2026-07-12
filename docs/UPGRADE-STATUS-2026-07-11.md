@@ -1,5 +1,9 @@
 # Workspace 2.0 升级完成度审计
 
+> **文档状态（2026-07-12 标注）**：过程性状态页，部分声明已过期——
+> README 下载入口现指向最新正式版（非 1.37.0）；后续以 docs/RELEASE-1.4x 系列与本仓库 CHANGELOG 为准。
+
+
 > 审计日期：2026-07-11（Asia/Shanghai）
 > 原始执行文档：`/Users/admin/Desktop/leocodebox-审查与升级执行文档-2026-07-11.md`
 > 原始接手线程：`019f5103-a6d7-7750-8f9d-3ec7cfd607a8`

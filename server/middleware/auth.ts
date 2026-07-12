@@ -37,9 +37,9 @@ const validateApiKey = (req: Request, res: Response, next: NextFunction) => {
   if (!process.env.API_KEY) {
     return next();
   }
-  
+
   const apiKey = req.headers['x-api-key'];
-  if (apiKey !== process.env.API_KEY) {
+  if (!safeTokenEquals(typeof apiKey === 'string' ? apiKey : null, process.env.API_KEY)) {
     return res.status(401).json({ error: 'Invalid API key' });
   }
   next();
@@ -181,5 +181,6 @@ export {
   IS_LOCAL_ONLY_AUTH,
   getLocalOnlyUser,
   getRequestToken,
-  isLocalOnlyAuthToken
+  isLocalOnlyAuthToken,
+  safeTokenEquals
 };

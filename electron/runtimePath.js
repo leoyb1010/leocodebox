@@ -1,7 +1,10 @@
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { promisify } from 'node:util';
+
+const execFileAsync = promisify(execFile);
 
 const PATH_SENTINEL_START = '__LEOCODEBOX_PATH_START__';
 const PATH_SENTINEL_END = '__LEOCODEBOX_PATH_END__';
@@ -140,6 +143,31 @@ export function readLoginShellEnvironment({
       timeout: SHELL_TIMEOUT_MS,
     });
     return parseLoginShellEnvironment(output);
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Async twin of readLoginShellEnvironment: same login-shell probe without
+ * freezing the main-process event loop (a heavy zshrc can take seconds).
+ */
+export async function readLoginShellEnvironmentAsync({
+  env = process.env,
+  platform = process.platform,
+  execFileImpl = execFileAsync,
+} = {}) {
+  if (platform === 'win32') return {};
+  const shell = env.SHELL && path.isAbsolute(env.SHELL) ? env.SHELL : '/bin/zsh';
+  const command = `printf '${ENV_SENTINEL_START}'; /usr/bin/env -0; printf '${ENV_SENTINEL_END}'`;
+  try {
+    const { stdout } = await execFileImpl(shell, ['-ilc', command], {
+      encoding: 'utf8',
+      env: { ...env, TERM: 'dumb', NO_COLOR: '1' },
+      timeout: SHELL_TIMEOUT_MS,
+      maxBuffer: 4 * 1024 * 1024,
+    });
+    return parseLoginShellEnvironment(stdout);
   } catch {
     return {};
   }

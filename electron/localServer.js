@@ -9,7 +9,7 @@ import path from 'node:path';
 import {
   getAgentCliDiagnostics,
   getDesktopRuntimePath,
-  readLoginShellEnvironment,
+  readLoginShellEnvironmentAsync,
 } from './runtimePath.js';
 
 const DEFAULT_PORT = Number.parseInt(
@@ -22,7 +22,11 @@ const LOCAL_ONLY_ENV_VALUE = '1';
 const HEALTH_TIMEOUT_MS = 1000;
 const SERVER_START_TIMEOUT_MS = 30000;
 const MAX_STARTUP_LOG_LINES = 300;
-const SERVER_MARKER_PATH = path.join(os.homedir(), '.leocodebox', 'local-server.json');
+// Resolved at call time so tests can point it at a scratch file.
+function getServerMarkerPath() {
+  return process.env.LEOCODEBOX_SERVER_MARKER_PATH
+    || path.join(os.homedir(), '.leocodebox', 'local-server.json');
+}
 const LOCAL_SERVER_URL_ENV_KEYS = [
   'LEOCODEBOX_DESKTOP_LOCAL_SERVER_URL',
   'LEOCODEBOX_LOCAL_SERVER_URL',
@@ -68,11 +72,16 @@ function requestJson(url, timeoutMs = HEALTH_TIMEOUT_MS) {
   });
 }
 
-async function isLeocodeboxServer(baseUrl) {
+async function getLeocodeboxServerHealth(baseUrl) {
   const response = await requestJson(`${baseUrl}/health`);
-  return response.ok
-    && response.json?.status === 'ok'
-    && typeof response.json?.installMode === 'string';
+  if (!response.ok || response.json?.status !== 'ok' || typeof response.json?.installMode !== 'string') {
+    return null;
+  }
+  return response.json;
+}
+
+async function isLeocodeboxServer(baseUrl) {
+  return Boolean(await getLeocodeboxServerHealth(baseUrl));
 }
 
 function isPortAvailable(port, host = HOST) {
@@ -195,24 +204,25 @@ function getServerCwd(appRoot, serverEntry) {
   return path.resolve(path.dirname(normalizedEntry), '..', '..');
 }
 
-async function readServerMarkerUrl() {
+async function readServerMarker() {
   try {
-    const raw = await fs.readFile(SERVER_MARKER_PATH, 'utf8');
+    const raw = await fs.readFile(getServerMarkerPath(), 'utf8');
     const marker = JSON.parse(raw);
-    return marker.url || (marker.port ? `http://${marker.host || HOST}:${marker.port}` : null);
+    const url = marker.url || (marker.port ? `http://${marker.host || HOST}:${marker.port}` : null);
+    return url ? { ...marker, url } : null;
   } catch {
     return null;
   }
 }
 
-async function getExistingServerCandidateUrls(defaultUrl) {
+async function getExistingServerCandidateUrls(defaultUrl, markerUrl) {
   const urls = [];
 
   for (const key of LOCAL_SERVER_URL_ENV_KEYS) {
     addCandidateUrl(urls, process.env[key]);
   }
 
-  addCandidateUrl(urls, await readServerMarkerUrl());
+  addCandidateUrl(urls, markerUrl);
 
   for (const key of LOCAL_SERVER_PORT_ENV_KEYS) {
     addCandidatePort(urls, process.env[key]);
@@ -220,6 +230,29 @@ async function getExistingServerCandidateUrls(defaultUrl) {
 
   addCandidateUrl(urls, defaultUrl);
   return urls;
+}
+
+function isProcessAlive(pid) {
+  if (!Number.isInteger(pid) || pid <= 1) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function terminateStaleServer(pid) {
+  if (!isProcessAlive(pid)) return;
+  try {
+    process.kill(pid, 'SIGTERM');
+  } catch {
+    return;
+  }
+  const deadline = Date.now() + 3000;
+  while (Date.now() < deadline && isProcessAlive(pid)) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
 }
 
 async function waitForLeocodeboxServer(baseUrl, timeoutMs) {
@@ -239,6 +272,7 @@ export class LocalServerController {
   constructor({ appRoot, settingsPath, isPackaged = false, appVersion, onChange }) {
     this.appRoot = appRoot;
     this.settingsPath = settingsPath;
+    this.runtimeEnvCachePath = path.join(path.dirname(settingsPath), 'runtime-env-cache.json');
     this.isPackaged = isPackaged;
     this.appVersion = appVersion;
     this.onChange = onChange;
@@ -252,6 +286,9 @@ export class LocalServerController {
       || process.env.CLOUDCLI_DESKTOP_LOCAL_AUTH_TOKEN
       || randomBytes(32).toString('base64url');
     this.startupLogs = [];
+    // Real startup progress for the placeholder screen:
+    // 0 = discovering agents, 1 = starting server, 2 = preparing workspace.
+    this.startupPhase = 0;
     this.desktopSettings = {
       keepLocalServerRunning: false,
       exposeLocalServerOnNetwork: false,
@@ -295,6 +332,16 @@ export class LocalServerController {
     return [...this.startupLogs];
   }
 
+  getStartupPhase() {
+    return this.startupPhase;
+  }
+
+  setStartupPhase(phase) {
+    if (this.startupPhase === phase) return;
+    this.startupPhase = phase;
+    this.onChange?.();
+  }
+
   getPendingTarget() {
     return {
       kind: 'local',
@@ -329,7 +376,7 @@ export class LocalServerController {
       const raw = await fs.readFile(this.settingsPath, 'utf8');
       const stored = JSON.parse(raw);
       this.desktopSettings = {
-        keepLocalServerRunning: false,
+        keepLocalServerRunning: stored.keepLocalServerRunning === true,
         exposeLocalServerOnNetwork: false,
         themeMode: stored.themeMode === 'light' || stored.themeMode === 'dark' ? stored.themeMode : 'system',
       };
@@ -344,7 +391,7 @@ export class LocalServerController {
 
   async saveDesktopSettings(nextSettings = this.desktopSettings) {
     this.desktopSettings = {
-      keepLocalServerRunning: false,
+      keepLocalServerRunning: nextSettings.keepLocalServerRunning === true,
       exposeLocalServerOnNetwork: false,
       themeMode: nextSettings.themeMode === 'light' || nextSettings.themeMode === 'dark' ? nextSettings.themeMode : 'system',
     };
@@ -358,13 +405,58 @@ export class LocalServerController {
       throw new Error(`Unknown desktop setting: ${key}`);
     }
 
-    const nextValue = key === 'themeMode' ? value : false;
+    let nextValue = false;
+    if (key === 'themeMode') nextValue = value;
+    if (key === 'keepLocalServerRunning') nextValue = value === true || value === 'true';
     await this.saveDesktopSettings({ ...this.desktopSettings, [key]: nextValue });
 
     return {
       desktopSettings: this.desktopSettings,
-      requiresRestartNotice: false,
+      // The parent watchdog decision is baked in at server spawn time, so a
+      // keep-alive change only fully applies once the server is respawned.
+      requiresRestartNotice: key === 'keepLocalServerRunning',
     };
+  }
+
+  /**
+   * Warm resume: adopt a healthy, version-matched server left behind by a
+   * previous run. A version mismatch means a stale server from before an app
+   * update — terminate it (via the marker pid) so a fresh one replaces it.
+   * Adopting also means adopting its auth token from the marker file, since
+   * the running server only accepts the token it was spawned with.
+   */
+  async adoptExistingServer(defaultUrl) {
+    const marker = await readServerMarker();
+    const candidateUrls = await getExistingServerCandidateUrls(defaultUrl, marker?.url);
+
+    for (const candidateUrl of candidateUrls) {
+      const health = await getLeocodeboxServerHealth(candidateUrl);
+      if (!health) continue;
+
+      const isMarkerServer = marker?.url && stripTrailingSlash(String(marker.url)) === candidateUrl;
+      const versionMatches = this.appVersion && health.version === this.appVersion;
+      const markerToken = isMarkerServer && typeof marker.token === 'string' && marker.token ? marker.token : null;
+
+      if (versionMatches && markerToken) {
+        this.localAuthToken = markerToken;
+        const displayUrl = getDisplayUrl(candidateUrl);
+        this.localServerPort = getPortFromUrl(candidateUrl);
+        this.setStartupPhase(2);
+        this.appendStartupLog(`Using existing Local leocodebox at ${displayUrl} (v${health.version})`);
+        return displayUrl;
+      }
+
+      if (isMarkerServer && !versionMatches) {
+        this.appendStartupLog(
+          `Existing local server is v${health.version || 'unknown'} but this app bundles v${this.appVersion}; replacing it.`,
+        );
+        await terminateStaleServer(marker.pid);
+      }
+      // Healthy but unadoptable (no token / not ours): leave it alone and
+      // start our own on a free port instead.
+    }
+
+    return null;
   }
 
   /** Resolves the local server entry, installing the matching runtime if needed. */
@@ -382,11 +474,60 @@ export class LocalServerController {
 
   }
 
-  startBundledServer(port, serverEntry) {
+  /**
+   * The login-shell probe used to run synchronously on the startup critical
+   * path, freezing the event loop for up to SHELL_TIMEOUT_MS on heavy shell
+   * configs. Serve a cached snapshot immediately and refresh it in the
+   * background for the next launch; only a cold cache awaits the async probe.
+   */
+  async resolveLoginShellEnvironment() {
+    let cached = null;
+    try {
+      cached = JSON.parse(await fs.readFile(this.runtimeEnvCachePath, 'utf8'));
+    } catch {
+      // Missing or corrupt cache: fall through to a fresh probe.
+    }
+
+    const shell = process.env.SHELL || '';
+    if (cached && cached.shell === shell && cached.env && typeof cached.env === 'object') {
+      void this.refreshLoginShellEnvironmentCache(shell);
+      return cached.env;
+    }
+
+    const environment = await readLoginShellEnvironmentAsync();
+    await this.writeLoginShellEnvironmentCache(shell, environment);
+    return environment;
+  }
+
+  async refreshLoginShellEnvironmentCache(shell) {
+    try {
+      const environment = await readLoginShellEnvironmentAsync();
+      if (Object.keys(environment).length > 0) {
+        await this.writeLoginShellEnvironmentCache(shell, environment);
+      }
+    } catch {
+      // Background refresh only; the stale cache remains usable.
+    }
+  }
+
+  async writeLoginShellEnvironmentCache(shell, environment) {
+    try {
+      await fs.mkdir(path.dirname(this.runtimeEnvCachePath), { recursive: true });
+      await fs.writeFile(
+        this.runtimeEnvCachePath,
+        JSON.stringify({ shell, updatedAt: new Date().toISOString(), env: environment }, null, 2),
+        { encoding: 'utf8', mode: 0o600 },
+      );
+    } catch {
+      // Cache write failures only cost the next launch a fresh probe.
+    }
+  }
+
+  async startBundledServer(port, serverEntry) {
     const bindHost = this.getServerBindHost();
     const runtime = getNodeRuntime();
     const serverCwd = getServerCwd(this.appRoot, serverEntry);
-    const loginShellEnvironment = readLoginShellEnvironment();
+    const loginShellEnvironment = await this.resolveLoginShellEnvironment();
     const runtimeEnvironment = { ...process.env, ...loginShellEnvironment };
     const desktopPath = getDesktopRuntimePath({
       env: runtimeEnvironment,
@@ -403,7 +544,11 @@ export class LocalServerController {
       CLOUDCLI_DESKTOP_LOCAL_ONLY: LOCAL_ONLY_ENV_VALUE,
       LEOCODEBOX_LOCAL_AUTH_TOKEN: this.localAuthToken,
       CLOUDCLI_DESKTOP_LOCAL_AUTH_TOKEN: this.localAuthToken,
-      LEOCODEBOX_DESKTOP_PARENT_PID: String(process.pid),
+      // Keep-alive servers must outlive this process, so skip the parent
+      // watchdog that would otherwise stop them ~1s after Electron exits.
+      ...(this.desktopSettings.keepLocalServerRunning
+        ? {}
+        : { LEOCODEBOX_DESKTOP_PARENT_PID: String(process.pid) }),
       PATH: desktopPath,
       ...(agentCliDiagnostics.claude ? { CLAUDE_CLI_PATH: agentCliDiagnostics.claude } : {}),
       ...(agentCliDiagnostics.codex ? { CODEX_CLI_PATH: agentCliDiagnostics.codex } : {}),
@@ -428,6 +573,7 @@ export class LocalServerController {
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     });
+    this.setStartupPhase(1);
 
     const childProcess = this.ownedServerProcess;
 
@@ -468,10 +614,13 @@ export class LocalServerController {
   }
 
   async resolveLocalServerUrl() {
+    this.startupPhase = 0;
     const defaultUrl = `http://${HOST}:${DEFAULT_PORT}`;
     const defaultDisplayUrl = `http://${DISPLAY_HOST}:${DEFAULT_PORT}`;
     const devUrl = process.env.ELECTRON_DEV_URL;
-    const forceOwnServer = process.env.ELECTRON_FORCE_OWN_SERVER !== '0';
+    // Warm resume: adopt an already-running matching server by default.
+    // ELECTRON_FORCE_OWN_SERVER=1 opts back into always spawning a fresh one.
+    const forceOwnServer = process.env.ELECTRON_FORCE_OWN_SERVER === '1';
 
     if (devUrl) {
       const ready = await waitForLeocodeboxServer(defaultUrl, SERVER_START_TIMEOUT_MS);
@@ -483,15 +632,8 @@ export class LocalServerController {
     }
 
     if (!forceOwnServer) {
-      const candidateUrls = await getExistingServerCandidateUrls(defaultUrl);
-      for (const candidateUrl of candidateUrls) {
-        if (await isLeocodeboxServer(candidateUrl)) {
-          const displayUrl = getDisplayUrl(candidateUrl);
-          this.localServerPort = getPortFromUrl(candidateUrl);
-          this.appendStartupLog(`Using existing Local leocodebox at ${displayUrl}`);
-          return displayUrl;
-        }
-      }
+      const adopted = await this.adoptExistingServer(defaultUrl);
+      if (adopted) return adopted;
     }
 
     const serverEntry = await this.resolveServerEntry();
@@ -500,7 +642,7 @@ export class LocalServerController {
     const serverUrl = `http://${HOST}:${port}`;
     const displayUrl = `http://${DISPLAY_HOST}:${port}`;
     this.localServerPort = port;
-    this.startBundledServer(port, serverEntry);
+    await this.startBundledServer(port, serverEntry);
 
     const ready = await waitForLeocodeboxServer(serverUrl, SERVER_START_TIMEOUT_MS);
     if (!ready) {
@@ -513,6 +655,7 @@ export class LocalServerController {
       ].join('\n\n'));
     }
 
+    this.setStartupPhase(2);
     this.appendStartupLog(`Local leocodebox ready at ${displayUrl}`);
     this.localServerUrl = displayUrl;
     return displayUrl;

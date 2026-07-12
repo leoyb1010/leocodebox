@@ -63,6 +63,7 @@ export class DesktopNotificationsController {
     getAuthToken,
     getIconPath,
     openNotificationTarget,
+    isWindowFocused,
     onChange,
   }) {
     this.settingsPath = settingsPath;
@@ -75,6 +76,7 @@ export class DesktopNotificationsController {
     this.getAuthToken = getAuthToken;
     this.getIconPath = getIconPath;
     this.openNotificationTarget = openNotificationTarget;
+    this.isWindowFocused = isWindowFocused;
     this.onChange = onChange;
     this.settings = { enabled: false };
     this.connections = new Map();
@@ -107,7 +109,10 @@ export class DesktopNotificationsController {
       const stored = JSON.parse(raw);
       this.settings = { enabled: Boolean(stored.enabled) };
     } catch {
-      this.settings = { enabled: false };
+      // First run: native completion notifications are on by default — the
+      // server already applies a duration threshold and window-focus checks
+      // keep them quiet while the user is watching.
+      this.settings = { enabled: true };
     }
     return this.settings;
   }
@@ -293,6 +298,14 @@ export class DesktopNotificationsController {
   handleMessage(target, ws, raw) {
     const message = readJsonMessage(raw);
     if (!message || message.type !== 'notification' || !message.payload) {
+      return;
+    }
+
+    // A run finishing while the user is looking at the app needs no toast;
+    // failures and approval requests always surface.
+    if (message.payload?.data?.code === 'run.stopped' && this.isWindowFocused?.()) {
+      this.lastEvent = 'suppressed-focused';
+      this.onChange?.();
       return;
     }
 

@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { Database } from 'better-sqlite3';
 
 import {
@@ -421,6 +423,30 @@ const ensureProjectsForSessionPaths = (db: Database): void => {
   `);
 };
 
+/**
+ * S-2: api_keys used to persist plaintext keys. Hash every legacy row so a
+ * copied database no longer contains usable credentials; the first characters
+ * are kept in key_prefix purely for list display.
+ */
+const migrateApiKeysToHashes = (db: Database): void => {
+  if (!tableExists(db, 'api_keys')) return;
+
+  const columnNames = getTableInfo(db, 'api_keys').map((column) => column.name);
+  addColumnToTableIfNotExists(db, 'api_keys', columnNames, 'key_prefix', 'TEXT');
+
+  const legacyRows = db
+    .prepare("SELECT id, api_key FROM api_keys WHERE api_key NOT LIKE 'sha256:%'")
+    .all() as { id: number; api_key: string }[];
+  if (legacyRows.length === 0) return;
+
+  console.log(`Running migration: Hashing ${legacyRows.length} plaintext API key(s)`);
+  const update = db.prepare('UPDATE api_keys SET api_key = ?, key_prefix = ? WHERE id = ?');
+  for (const row of legacyRows) {
+    const digest = 'sha256:' + createHash('sha256').update(row.api_key).digest('hex');
+    update.run(digest, row.api_key.slice(0, 10), row.id);
+  }
+};
+
 export const runMigrations = (db: Database) => {
   try {
     const usersTableInfo = db.prepare('PRAGMA table_info(users)').all() as { name: string }[];
@@ -453,6 +479,7 @@ export const runMigrations = (db: Database) => {
     migrateLegacySessionNames(db);
     addProviderSessionIdMapping(db);
     ensureProjectsForSessionPaths(db);
+    migrateApiKeysToHashes(db);
 
     db.exec('CREATE INDEX IF NOT EXISTS idx_session_ids_lookup ON sessions(session_id)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_provider_session_id ON sessions(provider_session_id)');

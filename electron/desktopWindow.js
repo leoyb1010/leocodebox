@@ -116,9 +116,9 @@ export class DesktopWindowManager {
     await this.viewHost.showTabPlaceholder(tabId, target, message);
   }
 
-  async showLocalStartupTarget(target, logs) {
+  async showLocalStartupTarget(target, logs, phase) {
     const tabId = this.tabs.getTabIdForTarget(target);
-    await this.viewHost.showLocalStartupTarget(tabId, target, logs);
+    await this.viewHost.showLocalStartupTarget(tabId, target, logs, phase);
   }
 
   async showContentTarget(target) {
@@ -747,6 +747,19 @@ export class DesktopWindowManager {
 
     this.mainWindow.on('move', () => {
       this.syncSettingsWindowBounds();
+    });
+
+    this.mainWindow.on('close', (event) => {
+      // Hide instead of close so reopening from the tray/Dock is instant and
+      // the local server stays warm. Real quit (⌘Q / tray) bypasses this.
+      if (this.actions.isAppQuitting?.()) return;
+      event.preventDefault();
+      if (this.mainWindow.isFullScreen()) {
+        this.mainWindow.once('leave-full-screen', () => this.mainWindow?.hide());
+        this.mainWindow.setFullScreen(false);
+        return;
+      }
+      this.mainWindow.hide();
     });
 
     this.mainWindow.on('closed', () => {

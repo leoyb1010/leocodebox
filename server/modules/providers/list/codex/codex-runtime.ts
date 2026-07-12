@@ -23,6 +23,8 @@ import { providerAuthService } from '@/modules/providers/services/provider-auth.
 import { providerModelsService } from '@/modules/providers/services/provider-models.service.js';
 import { createCompleteMessage, createNormalizedMessage } from '@/shared/utils.js';
 
+import { ensureFallbackCodexBinary } from './codex-fallback.service.js';
+
 
 type RuntimeWriter = {
   send(data: unknown): void;
@@ -258,6 +260,7 @@ function mapPermissionModeToCodexOptions(permissionMode: string | undefined): { 
  * @param {WebSocket|object} ws - WebSocket connection or response writer
  */
 export async function queryCodex(command: string, options: CodexRuntimeOptions = {}, writer: object): Promise<void> {
+  const runStartedAtMs = Date.now();
   const ws = writer as RuntimeWriter;
   const {
     sessionId,
@@ -311,8 +314,21 @@ export async function queryCodex(command: string, options: CodexRuntimeOptions =
   abortSignal?.addEventListener('abort', abortFromGateway, { once: true });
 
   try {
+    // No user CLI and no bundled binary → download the platform package on
+    // first use (the DMG no longer ships the ~300MB fallback).
+    const fallbackCodexPath = process.env.CODEX_CLI_PATH
+      ? null
+      : await ensureFallbackCodexBinary((progressMessage) => {
+        sendMessage(ws, createNormalizedMessage({
+          kind: 'status',
+          content: progressMessage,
+          sessionId: capturedSessionId || sessionId || null,
+          provider: 'codex',
+        }));
+      });
+
     codex = new Codex({
-      codexPathOverride: process.env.CODEX_CLI_PATH || undefined,
+      codexPathOverride: process.env.CODEX_CLI_PATH || fallbackCodexPath || undefined,
       env: Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === 'string')) ,
     });
 
@@ -433,7 +449,8 @@ export async function queryCodex(command: string, options: CodexRuntimeOptions =
           provider: 'codex',
           sessionId: capturedSessionId || sessionId || null,
           sessionName: sessionSummary,
-          stopReason: 'completed'
+          stopReason: 'completed',
+          durationMs: Date.now() - runStartedAtMs,
         });
       }
     }

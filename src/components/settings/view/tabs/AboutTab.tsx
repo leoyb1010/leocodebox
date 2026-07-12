@@ -98,6 +98,7 @@ export default function AboutTab() {
             <span className="rounded-md bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">
               v{currentVersion}
             </span>
+            <span className="text-[11px] text-muted-foreground">by LeoYuan</span>
           </div>
           <p className="mt-0.5 text-sm text-muted-foreground">{t('about.description')}</p>
         </div>

@@ -146,6 +146,12 @@ function AppContentInner() {
     return () => window.clearInterval(interval);
   }, [refreshRunningSessions]);
 
+  // Mirror the running count onto the macOS Dock badge so a long task can be
+  // watched from outside the app.
+  useEffect(() => {
+    void window.leocodeboxDesktopTools?.setRunningBadge?.(processingSessions.size);
+  }, [processingSessions.size]);
+
   usePaletteOpsRegister({
     openSettings,
     refreshProjects: refreshProjectsSilently,
@@ -308,11 +314,16 @@ function AppContentInner() {
           externalMessageUpdate={externalMessageUpdate}
           newSessionTrigger={newSessionTrigger}
         />}
-        <WorkspaceStatusBar selectedProject={selectedProject} runningCount={processingSessions.size} />
+        <WorkspaceStatusBar
+          selectedProject={selectedProject}
+          runningCount={processingSessions.size}
+          activeProvider={selectedSession?.__provider ?? null}
+        />
       </div>
 
       <CommandPalette
         selectedProject={selectedProject}
+        selectedSession={selectedSession}
         onStartNewChat={handleNewSession}
         onOpenSettings={() => openSettings()}
         onShowTab={setActiveTab}

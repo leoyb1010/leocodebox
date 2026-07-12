@@ -181,6 +181,7 @@ function Sidebar({
     attentionSessionIds,
     forceExpanded: searchMode === 'running',
     isProjectStarred,
+    onOpenAgentSettings: onShowSettings,
     onEditingNameChange: setEditingName,
     onToggleProject: toggleProject,
     onProjectSelect: handleProjectSelect,

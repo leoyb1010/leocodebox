@@ -236,6 +236,14 @@
     }
     dialog::backdrop { background: rgba(5, 5, 7, .68); backdrop-filter: blur(4px); }
     .settings-dialog { width: min(820px, calc(100vw - 32px)); }
+    #confirmDialog { width: min(460px, calc(100vw - 32px)); }
+    .confirm-message { margin: 0; white-space: pre-wrap; font-size: 14px; line-height: 1.6; color: var(--text); }
+    .provider-section-label { margin: 18px 0 6px; font-size: 12px; font-weight: 650; letter-spacing: .04em; color: var(--muted); text-transform: none; }
+    .provider-section-label:first-child { margin-top: 0; }
+    .endpoint-bar { position: relative; grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+    .endpoint-bar i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--blue); }
+    .endpoint-bar.bad i { background: var(--red); }
+    .endpoint-label-input { max-width: 128px; }
     .dialog-head { min-height: 70px; display: flex; align-items: center; gap: 12px; padding: 0 20px; border-bottom: 1px solid var(--line); }
     .dialog-head h2 { margin: 0; font-size: 18px; font-weight: 650; }
     .dialog-head .icon-button { margin-left: auto; }
@@ -273,7 +281,7 @@
     .check-row { display: flex; align-items: center; gap: 9px; color: var(--text); font-weight: 500; }
     .check-row input { width: 16px; min-height: 16px; margin: 0; accent-color: var(--blue); }
     .endpoint-list { display: grid; gap: 9px; margin: 14px 0; }
-    .endpoint-row { display: grid; grid-template-columns: minmax(0, 1fr) auto 38px; align-items: center; gap: 9px; }
+    .endpoint-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto 38px; align-items: center; gap: 9px; }
     .endpoint-row input { min-height: 38px; }
     .endpoint-result { min-width: 88px; color: var(--subtle); font-size: 12px; text-align: right; }
     .endpoint-result.good { color: var(--green); }
@@ -326,7 +334,8 @@
       .field-grid { grid-template-columns: 1fr; }
       .field.span-2 { grid-column: auto; }
       .dialog-body { padding: 18px; }
-      .endpoint-row { grid-template-columns: minmax(0, 1fr) 38px; }
+      .endpoint-row { grid-template-columns: minmax(0, 1fr) auto 38px; }
+      .endpoint-row .endpoint-result { display: none; }
       .endpoint-result { grid-column: 1 / -1; grid-row: 2; text-align: left; }
     }
     @media (hover: none) {
@@ -560,6 +569,19 @@
     </div>
   </dialog>
 
+  <dialog id="confirmDialog" aria-labelledby="confirmMessage">
+    <div class="dialog-head">
+      <h2>确认操作</h2>
+    </div>
+    <div class="dialog-body">
+      <p id="confirmMessage" class="confirm-message"></p>
+    </div>
+    <div class="dialog-actions">
+      <button class="quiet-button" id="confirmCancel" type="button">取消</button>
+      <button class="primary-button" id="confirmOk" type="button">确认</button>
+    </div>
+  </dialog>
+
   <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
   <script>
@@ -744,7 +766,7 @@
       }
     }
 
-    function applyPreset() {
+    async function applyPreset() {
       const preset = selectedPreset();
       const form = $("#providerForm");
       const selectedPresetId = $("#providerPreset").value;
@@ -754,7 +776,7 @@
         form.elements.model.value,
       ].some((value) => value.trim());
       if (preset && hasUserConfiguration && selectedPresetId !== lastAppliedPresetId) {
-        const confirmed = window.confirm("切换厂商模板会覆盖当前接口地址、模型和请求协议，是否继续？");
+        const confirmed = await confirmDialog("切换厂商模板会覆盖当前接口地址、模型和请求协议，是否继续？");
         if (!confirmed) {
           $("#providerPreset").value = lastAppliedPresetId;
           syncPresetMeta();
@@ -826,18 +848,53 @@
       return escapeHtml((source[0] || "L").toUpperCase());
     }
 
+    function confirmDialog(message) {
+      return new Promise((resolve) => {
+        const dialog = $("#confirmDialog");
+        const okButton = $("#confirmOk");
+        const cancelButton = $("#confirmCancel");
+        $("#confirmMessage").textContent = message;
+        const finish = (result) => {
+          okButton.removeEventListener("click", onOk);
+          cancelButton.removeEventListener("click", onCancel);
+          dialog.removeEventListener("close", onClose);
+          if (dialog.open) dialog.close();
+          resolve(result);
+        };
+        const onOk = () => finish(true);
+        const onCancel = () => finish(false);
+        const onClose = () => finish(false);
+        okButton.addEventListener("click", onOk);
+        cancelButton.addEventListener("click", onCancel);
+        dialog.addEventListener("close", onClose);
+        dialog.showModal();
+        okButton.focus();
+      });
+    }
+
+    function relativeTime(iso) {
+      const timestamp = new Date(iso).getTime();
+      if (!Number.isFinite(timestamp)) return "";
+      const elapsedMs = Date.now() - timestamp;
+      if (elapsedMs < 60000) return "刚刚";
+      if (elapsedMs < 3600000) return `${Math.floor(elapsedMs / 60000)} 分钟前`;
+      if (elapsedMs < 86400000) return `${Math.floor(elapsedMs / 3600000)} 小时前`;
+      return `${Math.floor(elapsedMs / 86400000)} 天前`;
+    }
+
     function providerHealth(provider) {
       const discovery = provider?.modelDiscovery || {};
       if (provider?.modelDiscoveryError) {
         return { id: "failed", label: "失败", className: "health-fail", detail: provider.modelDiscoveryError };
       }
       const modelCount = Number(discovery.modelCount ?? provider?.discoveredModels?.length ?? 0);
+      const checkedAgo = discovery.updatedAt ? relativeTime(discovery.updatedAt) : "";
       if (discovery.updatedAt && modelCount > 0) {
         const latency = Number.isFinite(Number(discovery.latencyMs)) ? ` · ${Math.round(Number(discovery.latencyMs))}ms` : "";
-        return { id: "healthy", label: "健康", className: "health-ok", detail: `${modelCount} 个模型${latency}` };
+        return { id: "healthy", label: "健康", className: "health-ok", detail: `${modelCount} 个模型${latency}${checkedAgo ? ` · ${checkedAgo}检测` : ""}` };
       }
       if (discovery.updatedAt) {
-        return { id: "degraded", label: "降级", className: "health-warn", detail: "连接成功，但未发现模型" };
+        return { id: "degraded", label: "降级", className: "health-warn", detail: `连接成功，但未发现模型${checkedAgo ? ` · ${checkedAgo}检测` : ""}` };
       }
       return { id: "unverified", label: "未验证", className: "health-idle", detail: "尚未执行模型发现" };
     }
@@ -855,7 +912,7 @@
         return;
       }
       const prompt = `检测到 ${provider.name} 当前不可用。是否切换到备用 Provider「${candidate.name}」？\n\n切换前会自动备份现有配置，可随时恢复。`;
-      if (!window.confirm(prompt)) return;
+      if (!(await confirmDialog(prompt))) return;
       await applyProvider(candidate.id);
     }
 
@@ -882,12 +939,14 @@
           ${nativeActive ? "" : `<button class="primary-button activate-button" type="button" data-restore-default="${escapeHtml(selectedTarget)}" ${nativeAvailable ? "" : "disabled"}><img class="button-icon" src="${icon("rotate-ccw")}" alt="">恢复</button>`}
         </div>
       </article>`;
-      const providerCards = providers.map((provider) => {
+      const renderProviderCard = (provider) => {
         const active = state.activeByTarget?.[provider.target] === provider.id;
         const selected = provider.id === selectedProvider;
         const providerName = escapeHtml(provider.name);
         const providerId = escapeHtml(provider.id);
-        const url = escapeHtml(provider.baseUrl || "本机默认配置");
+        const baseUrl = (provider.baseUrl || "").replace(/\/+$/, "");
+        const nickname = provider.endpointLabels?.[baseUrl];
+        const url = escapeHtml(nickname ? `${nickname} · ${provider.baseUrl}` : provider.baseUrl || "本机默认配置");
         const health = providerHealth(provider);
         const backup = health.id === "failed" ? failoverCandidate(provider) : null;
         return `<article class="provider-card${active ? " is-active" : ""}${selected ? " is-selected" : ""}" data-card-provider="${providerId}" tabindex="0">
@@ -912,8 +971,23 @@
             </details>
           </div>
         </article>`;
-      }).join("");
-      $("#providerList").innerHTML = nativeCard + providerCards;
+      };
+      // 三卡叙事：本机原配置永远第一；当前启用其次；备选按健康与延迟排序。
+      const activeProvider = providers.find((provider) => state.activeByTarget?.[provider.target] === provider.id) || null;
+      const alternatives = providers.filter((provider) => provider !== activeProvider).sort((a, b) => {
+        const healthRank = (p) => ({ healthy: 0, degraded: 1, unverified: 2, failed: 3 })[providerHealth(p).id] ?? 2;
+        const latency = (p) => {
+          const value = Number(p?.modelDiscovery?.latencyMs);
+          return Number.isFinite(value) ? value : Infinity;
+        };
+        return healthRank(a) - healthRank(b) || latency(a) - latency(b);
+      });
+      const section = (label, content) => (content ? `<div class="provider-section-label">${label}</div>${content}` : "");
+      $("#providerList").innerHTML = [
+        section("本机原配置", nativeCard),
+        section("今天在用", activeProvider ? renderProviderCard(activeProvider) : ""),
+        section("备选节点", alternatives.map(renderProviderCard).join("")),
+      ].join("");
     }
 
     function diagnosticProvider() {
@@ -931,16 +1005,28 @@
         ? provider.endpoints
         : provider?.baseUrl ? [provider.baseUrl] : [""];
       const liveByUrl = Object.fromEntries(liveResults.map((result) => [result.url, result]));
+      const statFor = (url) => liveByUrl[url] || provider?.endpointStats?.[url];
+      // 条带基准：本组端点里最慢的一个作为 100%。
+      const maxLatency = Math.max(1, ...endpoints
+        .map((url) => Number(statFor(url)?.latencyMs))
+        .filter((value) => Number.isFinite(value)));
       $("#endpointList").innerHTML = endpoints.map((url, index) => {
-        const stat = liveByUrl[url] || provider?.endpointStats?.[url];
+        const stat = statFor(url);
         const usable = stat?.usable;
+        const label = provider?.endpointLabels?.[url] || "";
         const status = stat
           ? `${usable ? "可用" : "异常"}${stat.latencyMs != null ? ` · ${stat.latencyMs} ms` : ""}${stat.httpStatus ? ` · HTTP ${stat.httpStatus}` : ""}`
           : "未测试";
+        const latency = Number(stat?.latencyMs);
+        const bar = Number.isFinite(latency)
+          ? `<span class="endpoint-bar${usable ? "" : " bad"}" aria-hidden="true"><i style="width:${Math.max(4, Math.round((latency / maxLatency) * 100))}%"></i></span>`
+          : "";
         return `<div class="endpoint-row">
           <input type="url" data-endpoint-url value="${escapeHtml(url)}" placeholder="https://api.example.com/v1" aria-label="请求地址 ${index + 1}">
+          <input type="text" class="endpoint-label-input" data-endpoint-label value="${escapeHtml(label)}" placeholder="昵称（如：家里光猫）" maxlength="60" aria-label="地址昵称 ${index + 1}">
           <span class="endpoint-result${stat ? usable ? " good" : " bad" : ""}">${escapeHtml(status)}</span>
           <button class="icon-button danger" type="button" data-remove-endpoint="${index}" aria-label="删除此地址" title="删除"><img src="${icon("trash-2")}" alt=""></button>
+          ${bar}
         </div>`;
       }).join("");
     }
@@ -949,6 +1035,16 @@
       return Array.from(document.querySelectorAll("[data-endpoint-url]"))
         .map((input) => input.value.trim().replace(/\/+$/, ""))
         .filter((url, index, urls) => url && urls.indexOf(url) === index);
+    }
+
+    function collectEndpointLabels() {
+      const labels = {};
+      for (const row of document.querySelectorAll(".endpoint-row")) {
+        const url = row.querySelector("[data-endpoint-url]")?.value.trim().replace(/\/+$/, "");
+        const label = row.querySelector("[data-endpoint-label]")?.value.trim();
+        if (url && label) labels[url] = label;
+      }
+      return labels;
     }
 
     function openProviderTools(id) {
@@ -976,6 +1072,7 @@
           id: provider.id,
           baseUrl,
           endpoints,
+          endpointLabels: collectEndpointLabels(),
           autoSelectEndpoint: $("#autoSelectEndpoint").checked,
           apiKey: "__KEEP__",
         }),
@@ -1234,7 +1331,7 @@
       const prompt = language() === "en"
         ? `Enable ${provider.name} for ${target?.label || provider.target}?\n\nThe following files will be backed up first:\n${files}`
         : `确认将 ${provider.name} 用于 ${target?.label || provider.target}？\n\n以下文件会先备份再修改：\n${files}`;
-      if (!window.confirm(prompt)) return;
+      if (!(await confirmDialog(prompt))) return;
       const result = await api(`/api/leocodebox/switch/providers/${encodeURIComponent(id)}/apply`, { method: "POST", body: "{}" });
       window.parent.dispatchEvent(new CustomEvent("leocodebox-provider:applied", {
         detail: { target: provider.target, activeModel: result.activeModel || null },
@@ -1246,7 +1343,7 @@
 
     async function restoreDefault(target) {
       const label = state.targets[target]?.label || target;
-      if (!window.confirm(`恢复 ${label} 的本机原配置？\n\n当前配置会先自动备份。`)) return;
+      if (!(await confirmDialog(`恢复 ${label} 的本机原配置？\n\n当前配置会先自动备份。`))) return;
       await api(`/api/leocodebox/switch/targets/${encodeURIComponent(target)}/restore-default`, { method: "POST", body: "{}" });
       window.parent.dispatchEvent(new CustomEvent("leocodebox-provider:applied", {
         detail: { target, activeModel: null },
@@ -1275,7 +1372,7 @@
     async function deleteProvider(id) {
       const provider = state.providers.find((item) => item.id === id);
       if (!provider) return;
-      if (!window.confirm(`确认删除 ${provider.name}？此操作不会还原已写入的智能体配置。`)) return;
+      if (!(await confirmDialog(`确认删除 ${provider.name}？此操作不会还原已写入的智能体配置。`))) return;
       await api(`/api/leocodebox/switch/providers/${encodeURIComponent(id)}`, { method: "DELETE" });
       selectedProvider = "";
       await refresh();
@@ -1283,7 +1380,7 @@
     }
 
     async function restoreBackup(relativePath) {
-      if (!window.confirm(`确认恢复此备份并替换当前配置文件？\n\n${relativePath}`)) return;
+      if (!(await confirmDialog(`确认恢复此备份并替换当前配置文件？\n\n${relativePath}`))) return;
       const result = await api("/api/leocodebox/switch/backups/restore", { method: "POST", body: JSON.stringify({ relativePath }) });
       await refresh();
       showToast(`${text("restored")}：${result.restoredPath}`, "ok");
@@ -1341,8 +1438,14 @@
       const removeEndpoint = event.target.closest("[data-remove-endpoint]");
       if (removeEndpoint) {
         const urls = Array.from(document.querySelectorAll("[data-endpoint-url]")).map((input) => input.value.trim());
+        const pendingLabels = collectEndpointLabels();
         urls.splice(Number(removeEndpoint.dataset.removeEndpoint), 1);
-        renderEndpointEditor({ ...diagnosticProvider(), endpoints: urls.length ? urls : [""] });
+        const provider = diagnosticProvider();
+        renderEndpointEditor({
+          ...provider,
+          endpoints: urls.length ? urls : [""],
+          endpointLabels: { ...provider?.endpointLabels, ...pendingLabels },
+        });
       }
     });
 
@@ -1383,7 +1486,12 @@
     $("#cancelTools").addEventListener("click", () => $("#toolsDialog").close());
     $("#addEndpoint").addEventListener("click", () => {
       const urls = Array.from(document.querySelectorAll("[data-endpoint-url]")).map((input) => input.value.trim());
-      renderEndpointEditor({ ...diagnosticProvider(), endpoints: [...urls, ""] });
+      const provider = diagnosticProvider();
+      renderEndpointEditor({
+        ...provider,
+        endpoints: [...urls, ""],
+        endpointLabels: { ...provider?.endpointLabels, ...collectEndpointLabels() },
+      });
     });
     $("#testEndpoints").addEventListener("click", () => testAllEndpoints().catch((error) => setDiagnosticResult(error.message, "bad")));
     $("#loadModels").addEventListener("click", () => loadProviderModels().catch((error) => setDiagnosticResult(error.message, "bad")));
@@ -1394,6 +1502,15 @@
       .catch((error) => setDiagnosticResult(error.message, "bad")));
     ["#testTimeoutSeconds", "#testAttempts", "#degradedThreshold"].forEach((selector) => {
       $(selector).addEventListener("change", saveDiagnosticSettings);
+    });
+
+    // Keyboard focus lives inside this iframe, so the parent modal's own Esc
+    // listener never fires; relay a close request when no dialog is open.
+    document.addEventListener("keydown", (event) => {
+      if (event.key !== "Escape") return;
+      if (document.documentElement.dataset.embedded !== "true") return;
+      if (document.querySelector("dialog[open]")) return;
+      window.parent.postMessage({ type: "leocodebox-switch:close" }, window.location.origin);
     });
 
     loadDiagnosticSettings();
