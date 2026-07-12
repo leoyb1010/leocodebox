@@ -371,6 +371,11 @@
     "confirmSwitch": "确认切到「{{name}}」（对新会话生效）",
     "testNode": "测速「{{name}}」",
     "backToNodes": "返回节点列表",
-    "sessionsCovered": "会话（全文搜索覆盖：{{providers}}）"
+    "sessionsCovered": "会话（全文搜索覆盖：{{providers}}）",
+    "handoff": "交接给另一个 Agent…",
+    "handoffHeading": "交接给…",
+    "handoffTo": "交接给 {{provider}}（可编辑后再发送）",
+    "handoffHint": "会把最近对话拼成可编辑的接力前言,不会自动发送",
+    "handoffPreparing": "正在整理最近对话…"
   }
 }

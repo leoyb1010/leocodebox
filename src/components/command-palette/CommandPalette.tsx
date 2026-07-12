@@ -42,11 +42,13 @@ import { useSessionMessageSearch } from './sources/useSessionMessageSearch';
 import { useBranchesSource } from './sources/useBranchesSource';
 import { useGitActions } from './sources/useGitActions';
 import { useLeoapiSwitchSource, type LeoapiSwitchNode } from './sources/useLeoapiSwitchSource';
+import { HANDOFF_TARGET_PROVIDERS, useHandoffSource } from './sources/useHandoffSource';
 
-type Page = 'actions' | 'files' | 'sessions' | 'commits' | 'branches' | 'leoapi';
+type Page = 'actions' | 'files' | 'sessions' | 'commits' | 'branches' | 'leoapi' | 'handoff';
 
 type CommandPaletteProps = {
   selectedProject: Project | null;
+  selectedSession?: { id: string; __provider?: string } | null;
   onStartNewChat: (project: Project) => void;
   onOpenSettings: (tab?: string) => void;
   onShowTab?: (tab: AppTab) => void;
@@ -62,6 +64,7 @@ const NAV_TABS: Array<{ id: AppTab; labelKey: string; keywords: string }> = [
 
 export default function CommandPalette({
   selectedProject,
+  selectedSession = null,
   onStartNewChat,
   onOpenSettings,
   onShowTab,
@@ -115,6 +118,22 @@ export default function CommandPalette({
   const branches = useBranchesSource(projectId, open && showBranches);
   const git = useGitActions(projectId);
   const leoapi = useLeoapiSwitchSource(open && showLeoapi);
+  const handoff = useHandoffSource();
+  const showHandoff = page === 'handoff';
+  const currentSessionProvider = selectedSession?.__provider || null;
+
+  const runHandoff = React.useCallback(async (targetProvider: string) => {
+    if (!selectedSession || !selectedProject) return;
+    const text = await handoff.prepare(selectedSession.id, currentSessionProvider || 'agent');
+    setOpen(false);
+    // Provider switch reuses the preferences event the composer already
+    // listens to; the draft event fills the new session's composer.
+    window.dispatchEvent(new CustomEvent('leocodebox-preferences:changed', {
+      detail: { defaultProvider: targetProvider },
+    }));
+    onStartNewChat(selectedProject);
+    window.dispatchEvent(new CustomEvent('leocodebox:handoff-draft', { detail: { text } }));
+  }, [selectedSession, selectedProject, currentSessionProvider, handoff, onStartNewChat]);
 
   const sessionRows = React.useMemo(() => {
     if (!showSessions) return [];
@@ -229,6 +248,40 @@ export default function CommandPalette({
                   <Route className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
                   <span className="flex-1">{t('commandPalette.switchLeoapi')}</span>
                 </CommandItem>
+                {selectedSession && selectedProject && (
+                  <CommandItem
+                    value="Handoff to agent 交接 接力 续写"
+                    onSelect={() => pushPage('handoff')}
+                  >
+                    <ArrowUpFromLine className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                    <span className="flex-1">{t('commandPalette.handoff')}</span>
+                  </CommandItem>
+                )}
+              </CommandGroup>
+            )}
+
+            {showHandoff && (
+              <CommandGroup heading={t('commandPalette.handoffHeading')}>
+                {HANDOFF_TARGET_PROVIDERS
+                  .filter((target) => target !== currentSessionProvider)
+                  .map((target) => (
+                    <CommandItem
+                      key={target}
+                      value={`handoff ${target}`}
+                      disabled={handoff.preparing}
+                      onSelect={() => {
+                        void runHandoff(target).catch((error: unknown) => {
+                          console.error('Handoff failed:', error);
+                        });
+                      }}
+                    >
+                      <ArrowUpFromLine className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                      <span className="flex-1">{t('commandPalette.handoffTo', { provider: target })}</span>
+                    </CommandItem>
+                  ))}
+                <div className="px-3 py-1.5 text-xs text-muted-foreground">
+                  {handoff.preparing ? t('commandPalette.handoffPreparing') : t('commandPalette.handoffHint')}
+                </div>
               </CommandGroup>
             )}
 

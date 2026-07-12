@@ -371,6 +371,11 @@
     "confirmSwitch": "Switch to \"{{name}}\" (applies to new sessions)",
     "testNode": "Test \"{{name}}\"",
     "backToNodes": "Back to node list",
-    "sessionsCovered": "Sessions (full-text covers: {{providers}})"
+    "sessionsCovered": "Sessions (full-text covers: {{providers}})",
+    "handoff": "Handoff to another agent…",
+    "handoffHeading": "Handoff to…",
+    "handoffTo": "Handoff to {{provider}} (edit before sending)",
+    "handoffHint": "Recent messages become an editable preamble; nothing is auto-sent",
+    "handoffPreparing": "Collecting recent messages…"
   }
 }
