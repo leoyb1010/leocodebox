@@ -273,7 +273,14 @@ function notifyUserIfEnabled({ userId, event }: { userId: number | null | undefi
   }
 }
 
-function notifyRunStopped({ userId, provider, sessionId = null, stopReason = 'completed', sessionName = null }: { userId: number | null | undefined; provider: string; sessionId?: string | null; stopReason?: string; sessionName?: string | null }): void {
+// Runs shorter than this finish while the user is still watching; notifying
+// about them is noise. Runs with unknown duration keep notifying.
+const MIN_STOP_NOTIFY_DURATION_MS = 30_000;
+
+function notifyRunStopped({ userId, provider, sessionId = null, stopReason = 'completed', sessionName = null, durationMs = null }: { userId: number | null | undefined; provider: string; sessionId?: string | null; stopReason?: string; sessionName?: string | null; durationMs?: number | null }): void {
+  if (typeof durationMs === 'number' && durationMs >= 0 && durationMs < MIN_STOP_NOTIFY_DURATION_MS) {
+    return;
+  }
   notifyUserIfEnabled({
     userId,
     event: createNotificationEvent({

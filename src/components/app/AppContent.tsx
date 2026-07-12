@@ -146,6 +146,12 @@ function AppContentInner() {
     return () => window.clearInterval(interval);
   }, [refreshRunningSessions]);
 
+  // Mirror the running count onto the macOS Dock badge so a long task can be
+  // watched from outside the app.
+  useEffect(() => {
+    void window.leocodeboxDesktopTools?.setRunningBadge?.(processingSessions.size);
+  }, [processingSessions.size]);
+
   usePaletteOpsRegister({
     openSettings,
     refreshProjects: refreshProjectsSilently,

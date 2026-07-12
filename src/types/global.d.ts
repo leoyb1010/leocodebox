@@ -6,6 +6,7 @@ declare global {
     leocodeboxLocal?: { enabled: boolean; authReady?: boolean };
     leocodeboxDesktopTools?: {
       setThemeMode: (mode: 'system' | 'light' | 'dark') => Promise<unknown>;
+      setRunningBadge?: (count: number) => Promise<unknown>;
       onOpenModal: (callback: (tool: 'leoapi' | 'feedback') => void) => () => void;
     };
     leocodeboxDesktopUpdater?: {

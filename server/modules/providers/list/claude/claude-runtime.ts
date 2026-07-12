@@ -508,6 +508,7 @@ async function loadMcpConfig(cwd: string | undefined): Promise<Options['mcpServe
  * @returns {Promise<void>}
  */
 async function queryClaudeSDK(command: string, options: ClaudeRuntimeOptions = {}, writer: object): Promise<void> {
+  const runStartedAtMs = Date.now();
   const ws = writer as RuntimeWriter;
   const { abortSignal, appSessionId, sessionId, sessionSummary } = options;
   let capturedSessionId = sessionId;
@@ -761,7 +762,8 @@ async function queryClaudeSDK(command: string, options: ClaudeRuntimeOptions = {
       provider: 'claude',
       sessionId: capturedSessionId || sessionId || null,
       sessionName: sessionSummary,
-      stopReason: wasAborted ? 'aborted' : 'completed'
+      stopReason: wasAborted ? 'aborted' : 'completed',
+      durationMs: Date.now() - runStartedAtMs,
     });
     // Complete
 

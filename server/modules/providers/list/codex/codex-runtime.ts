@@ -258,6 +258,7 @@ function mapPermissionModeToCodexOptions(permissionMode: string | undefined): { 
  * @param {WebSocket|object} ws - WebSocket connection or response writer
  */
 export async function queryCodex(command: string, options: CodexRuntimeOptions = {}, writer: object): Promise<void> {
+  const runStartedAtMs = Date.now();
   const ws = writer as RuntimeWriter;
   const {
     sessionId,
@@ -433,7 +434,8 @@ export async function queryCodex(command: string, options: CodexRuntimeOptions =
           provider: 'codex',
           sessionId: capturedSessionId || sessionId || null,
           sessionName: sessionSummary,
-          stopReason: 'completed'
+          stopReason: 'completed',
+          durationMs: Date.now() - runStartedAtMs,
         });
       }
     }

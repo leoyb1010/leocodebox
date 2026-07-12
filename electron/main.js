@@ -984,6 +984,17 @@ function registerIpcHandlers() {
     return updateDesktopSetting('themeMode', mode);
   });
 
+  // Dock badge mirrors the number of running agent sessions so long tasks can
+  // be watched from outside the app. The local web UI reports the count.
+  ipcMain.handle('leocodebox-desktop:set-running-badge', (event, count) => {
+    requireTrustedLocalIpcSender(event);
+    const runningCount = Number.isInteger(count) && count > 0 ? count : 0;
+    if (process.platform === 'darwin' && app.dock) {
+      app.dock.setBadge(runningCount > 0 ? String(runningCount) : '');
+    }
+    return true;
+  });
+
   trustedHandle('leocodebox-desktop:connect-cloud', async () => ({
     ...getDesktopState(),
     connectUrl: await connectCloudAccount(),
@@ -1227,6 +1238,7 @@ async function bootstrap() {
     getAuthToken: getEnvironmentAuthToken,
     getIconPath: getWindowIconPath,
     openNotificationTarget,
+    isWindowFocused: () => Boolean(desktopWindow?.getMainWindow()?.isFocused()),
     onChange: syncDesktopState,
   });
   desktopUpdater = new DesktopUpdaterController({

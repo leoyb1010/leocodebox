@@ -86,6 +86,7 @@ if (isLocalHttpOrigin(window.location)) {
   });
   contextBridge.exposeInMainWorld('leocodeboxDesktopTools', {
     setThemeMode: (mode) => ipcRenderer.invoke('leocodebox-desktop:set-theme-mode', mode),
+    setRunningBadge: (count) => ipcRenderer.invoke('leocodebox-desktop:set-running-badge', count),
     onOpenModal: (callback) => {
       const listener = (_event, tool) => callback(tool);
       ipcRenderer.on('leocodebox-desktop:open-modal', listener);
