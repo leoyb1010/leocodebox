@@ -308,7 +308,11 @@ function AppContentInner() {
           externalMessageUpdate={externalMessageUpdate}
           newSessionTrigger={newSessionTrigger}
         />}
-        <WorkspaceStatusBar selectedProject={selectedProject} runningCount={processingSessions.size} />
+        <WorkspaceStatusBar
+          selectedProject={selectedProject}
+          runningCount={processingSessions.size}
+          activeProvider={selectedSession?.__provider ?? null}
+        />
       </div>
 
       <CommandPalette
