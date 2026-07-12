@@ -13,6 +13,7 @@ type ApiKeyRow = {
   id: number;
   key_name: string;
   api_key: string;
+  key_prefix: string | null;
   created_at: string;
   last_used: string | null;
   is_active: number;
@@ -39,6 +40,21 @@ function generateApiKey(): string {
   return 'ck_' + crypto.randomBytes(32).toString('hex');
 }
 
+const API_KEY_HASH_PREFIX = 'sha256:';
+
+/**
+ * Keys are stored as SHA-256 hashes (S-2): a leaked database no longer leaks
+ * usable credentials, and lookups stay a single indexed equality query.
+ */
+export function hashApiKey(apiKey: string): string {
+  return API_KEY_HASH_PREFIX + crypto.createHash('sha256').update(apiKey).digest('hex');
+}
+
+/** First characters of the real key, kept for list display only. */
+export function apiKeyDisplayPrefix(apiKey: string): string {
+  return apiKey.slice(0, 10);
+}
+
 // ---------------------------------------------------------------------------
 // Queries
 // ---------------------------------------------------------------------------
@@ -52,9 +68,9 @@ export const apiKeysDb = {
     const apiKey = generateApiKey();
     const result = db
       .prepare(
-        'INSERT INTO api_keys (user_id, key_name, api_key) VALUES (?, ?, ?)'
+        'INSERT INTO api_keys (user_id, key_name, api_key, key_prefix) VALUES (?, ?, ?, ?)'
       )
-      .run(userId, keyName, apiKey);
+      .run(userId, keyName, hashApiKey(apiKey), apiKeyDisplayPrefix(apiKey));
     return { id: result.lastInsertRowid, keyName, apiKey };
   },
 
@@ -63,7 +79,7 @@ export const apiKeysDb = {
     const db = getConnection();
     return db
       .prepare(
-        'SELECT id, key_name, api_key, created_at, last_used, is_active FROM api_keys WHERE user_id = ? ORDER BY created_at DESC'
+        'SELECT id, key_name, api_key, key_prefix, created_at, last_used, is_active FROM api_keys WHERE user_id = ? ORDER BY created_at DESC'
       )
       .all(userId) as ApiKeyRow[];
   },
@@ -75,6 +91,7 @@ export const apiKeysDb = {
    */
   validateApiKey(apiKey: string): ValidatedApiKeyUser | undefined {
     const db = getConnection();
+    // Stored keys are hashed; legacy plaintext rows are migrated at startup.
     const row = db
       .prepare(
         `SELECT u.id, u.username, ak.id as api_key_id
@@ -82,7 +99,7 @@ export const apiKeysDb = {
          JOIN users u ON ak.user_id = u.id
          WHERE ak.api_key = ? AND ak.is_active = 1 AND u.is_active = 1`
       )
-      .get(apiKey) as ValidatedApiKeyUser | undefined;
+      .get(hashApiKey(apiKey)) as ValidatedApiKeyUser | undefined;
 
     if (row) {
       db.prepare(

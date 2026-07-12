@@ -80,8 +80,9 @@ const validateExternalApiKey = (req: Request, res: Response, next: NextFunction)
     }
   }
 
-  // Self-hosted mode: Validate API key from header or query parameter
-  const apiKey = req.headers['x-api-key'] || req.query.apiKey;
+  // Header only: keys in a query string end up in access logs, proxy logs,
+  // and browser history (S-2 companion fix).
+  const apiKey = req.headers['x-api-key'];
 
   if (!apiKey) {
     return res.status(401).json({ error: 'API key required' });

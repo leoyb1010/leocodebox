@@ -96,9 +96,10 @@ router.get('/api-keys', async (req, res) => {
   try {
     const apiKeys = apiKeysDb.getApiKeys(req.user.id);
     // Don't send the full API key in the list for security
+    // Stored keys are hashes; the display prefix carries the recognizable part.
     const sanitizedKeys = apiKeys.map(key => ({
       ...key,
-      api_key: key.api_key.substring(0, 10) + '...'
+      api_key: (key.key_prefix || key.api_key.substring(0, 10)) + '...'
     }));
     res.json({ apiKeys: sanitizedKeys });
   } catch (error) {
