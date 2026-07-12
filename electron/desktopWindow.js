@@ -749,6 +749,19 @@ export class DesktopWindowManager {
       this.syncSettingsWindowBounds();
     });
 
+    this.mainWindow.on('close', (event) => {
+      // Hide instead of close so reopening from the tray/Dock is instant and
+      // the local server stays warm. Real quit (⌘Q / tray) bypasses this.
+      if (this.actions.isAppQuitting?.()) return;
+      event.preventDefault();
+      if (this.mainWindow.isFullScreen()) {
+        this.mainWindow.once('leave-full-screen', () => this.mainWindow?.hide());
+        this.mainWindow.setFullScreen(false);
+        return;
+      }
+      this.mainWindow.hide();
+    });
+
     this.mainWindow.on('closed', () => {
       if (this.contentViewResizeTimer) clearTimeout(this.contentViewResizeTimer);
       this.contentViewResizeTimer = null;

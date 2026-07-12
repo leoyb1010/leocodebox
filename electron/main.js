@@ -1093,15 +1093,25 @@ function registerAppEvents() {
   });
 
   app.on('before-quit', (event) => {
-    if (isQuitting || !localServer?.hasOwnedServer()) return;
+    if (isQuitting) return;
+    isQuitting = true;
+    if (!localServer?.hasOwnedServer()) return;
+
+    if (localServer.getSettings().keepLocalServerRunning) {
+      // Warm resume across app restarts: leave the server running; the next
+      // launch adopts it via the marker file instead of cold-starting.
+      localServer.detachOwnedServer();
+      return;
+    }
 
     event.preventDefault();
-    isQuitting = true;
     void localServer.shutdownOwnedServer().finally(() => app.quit());
   });
 
   app.on('window-all-closed', () => {
-    app.quit();
+    // Closing the window hides the app into the tray/Dock instead of quitting,
+    // keeping the local server warm. Quit stays on ⌘Q / tray "退出".
+    if (isQuitting) app.quit();
   });
 }
 
@@ -1141,6 +1151,7 @@ async function createDesktopWindow() {
       updateDesktopSetting,
       copyLocalWebUrl,
       openNotificationTarget,
+      isAppQuitting: () => isQuitting,
     },
   });
 
