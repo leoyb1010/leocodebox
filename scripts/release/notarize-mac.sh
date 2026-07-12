@@ -93,6 +93,32 @@ xcrun stapler validate "$STAPLED_APP"
 codesign --verify --deep --strict --verbose=2 "$STAPLED_APP"
 spctl -a -vvv --type execute "$STAPLED_APP"
 node scripts/release/finalize-notarized-mac-artifacts.js "$STAPLED_APP"
+
+echo "==> Rebuilding the DMG with the stapled app"
+DMG_IMAGE="$STAPLE_ROOT/image"
+REBUILT_DMG="$STAPLE_ROOT/$(basename "$DMG")"
+mkdir -p "$DMG_IMAGE"
+ditto --norsrc --noqtn "$STAPLED_APP" "$DMG_IMAGE/leocodebox.app"
+ln -s /Applications "$DMG_IMAGE/Applications"
+hdiutil create -volname leocodebox -srcfolder "$DMG_IMAGE" -ov -format UDZO "$REBUILT_DMG"
+hdiutil verify "$REBUILT_DMG"
+mv -f "$REBUILT_DMG" "$DMG"
+
+echo "==> Notarizing the final DMG that contains the stapled app"
+FINAL_SUBMISSION_JSON="$(xcrun notarytool submit "$DMG" \
+  --keychain-profile "$PROFILE" \
+  --wait \
+  --output-format json)"
+printf '%s\n' "$FINAL_SUBMISSION_JSON"
+FINAL_SUBMISSION_ID="$(printf '%s' "$FINAL_SUBMISSION_JSON" | plutil -extract id raw -o - -)"
+FINAL_SUBMISSION_STATUS="$(printf '%s' "$FINAL_SUBMISSION_JSON" | plutil -extract status raw -o - -)"
+if [ "$FINAL_SUBMISSION_STATUS" != "Accepted" ]; then
+  echo "error: final Apple notarization status is $FINAL_SUBMISSION_STATUS" >&2
+  xcrun notarytool log "$FINAL_SUBMISSION_ID" --keychain-profile "$PROFILE" || true
+  exit 1
+fi
+xcrun stapler staple "$DMG"
+xcrun stapler validate "$DMG"
 rm -rf "$STAPLE_ROOT"
 STAPLE_ROOT=""
 
@@ -105,6 +131,7 @@ if [ -z "$APP_PATH" ]; then
   exit 1
 fi
 spctl -a -vvv --type execute "$APP_PATH"
+xcrun stapler validate "$APP_PATH"
 hdiutil detach "$MOUNT_DIR" -quiet
 rmdir "$MOUNT_DIR"
 MOUNT_DIR=""
