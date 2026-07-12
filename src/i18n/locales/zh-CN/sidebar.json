@@ -17,7 +17,8 @@
     "projects": "项目",
     "noMatchingProjects": "未找到匹配的项目",
     "tryDifferentSearch": "尝试调整您的搜索词",
-    "runClaudeCli": "选择已安装的本机智能体开始使用"
+    "runClaudeCli": "选择已安装的本机智能体开始使用",
+    "installAgentCta": "安装本机 Agent"
   },
   "app": {
     "title": "leocodebox",

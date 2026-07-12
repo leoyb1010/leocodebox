@@ -1,4 +1,4 @@
-import { Folder, Search } from 'lucide-react';
+import { ArrowDownToLine, Folder, Search } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 import type { LoadingProgress } from '../../../../types/app';
@@ -8,6 +8,7 @@ type SidebarProjectsStateProps = {
   loadingProgress: LoadingProgress | null;
   projectsCount: number;
   filteredProjectsCount: number;
+  onOpenAgentSettings?: () => void;
   t: TFunction;
 };
 
@@ -16,6 +17,7 @@ export default function SidebarProjectsState({
   loadingProgress,
   projectsCount,
   filteredProjectsCount,
+  onOpenAgentSettings,
   t,
 }: SidebarProjectsStateProps) {
   if (isLoading) {
@@ -60,6 +62,15 @@ export default function SidebarProjectsState({
         </div>
         <h3 className="mb-2 text-base font-medium text-foreground md:mb-1">{t('projects.noProjects')}</h3>
         <p className="text-sm text-muted-foreground">{t('projects.runClaudeCli')}</p>
+        {onOpenAgentSettings && (
+          <button
+            onClick={onOpenAgentSettings}
+            className="mt-4 inline-flex items-center gap-1.5 rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
+          >
+            <ArrowDownToLine className="h-3.5 w-3.5" />
+            {t('projects.installAgentCta')}
+          </button>
+        )}
       </div>
     );
   }
