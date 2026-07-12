@@ -133,7 +133,7 @@
       flex: 0 0 auto; min-height: 34px; border: 0; border-radius: 5px; padding: 0 13px;
       background: transparent; color: var(--muted); font-weight: 600;
     }
-    .agent-tab img { width: 17px; height: 17px; opacity: .82; }
+    .agent-tab img { width: 18px; height: 18px; object-fit: contain; }
     .agent-tab:hover { color: var(--text); background: var(--tab-hover); }
     .agent-tab[aria-selected="true"] { color: var(--text); background: var(--tab-active); box-shadow: 0 1px 2px var(--shadow); }
     .top-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
@@ -220,7 +220,9 @@
     .menu-popover button:hover { background: var(--menu-hover); }
     .menu-popover button.danger { color: var(--red); }
     .menu-popover img { width: 17px; height: 17px; filter: var(--icon-filter); }
-    .empty-state { padding: 72px 24px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); text-align: center; color: var(--muted); }
+    .empty-state { position: relative; min-height: 320px; display: grid; place-content: center; padding: 72px 24px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); text-align: center; color: var(--muted); overflow: hidden; isolation: isolate; }
+    .empty-state::before { position: absolute; inset: 0; z-index: -2; background: url('/visuals/release/leoapi-overview.webp') center / cover no-repeat; opacity: .2; content: ''; }
+    .empty-state::after { position: absolute; inset: 0; z-index: -1; background: linear-gradient(90deg, var(--bg) 0%, transparent 48%, var(--bg) 100%); content: ''; }
     .empty-state strong { display: block; margin-bottom: 7px; color: var(--text); font-size: 17px; }
     .main-error {
       margin-bottom: 16px; padding: 12px 14px; border: 1px solid rgba(255, 102, 95, .5); border-radius: 8px;
@@ -815,7 +817,8 @@
     }
 
     function targetIcon(targetId) {
-      return icon(({ claude: "activity", codex: "file-json-2", gemini: "server", opencode: "sliders-horizontal", cursor: "play", hermes: "history" })[targetId] || "activity");
+      const supported = new Set(["claude", "codex", "gemini", "opencode", "cursor", "hermes"]);
+      return supported.has(targetId) ? `/icons/providers/${targetId}.svg` : "/logo.svg";
     }
 
     function providerMark(provider) {

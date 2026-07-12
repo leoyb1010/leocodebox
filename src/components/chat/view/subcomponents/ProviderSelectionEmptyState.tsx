@@ -185,9 +185,14 @@ export default function ProviderSelectionEmptyState({
 
   if (!selectedSession && !currentSessionId) {
     return (
-      <div className="flex h-full items-center justify-center px-4">
-        <div className="w-full max-w-[34.25rem]">
-          <div className="mb-8 text-center">
+      <div className="flex h-full items-center justify-center px-6">
+        <div className="grid w-full max-w-5xl items-center gap-8 lg:grid-cols-[1.05fr_.95fr] lg:gap-12">
+          <picture className="order-2 block overflow-hidden rounded-lg border border-border/60 bg-muted/20 shadow-sm lg:order-1">
+            <source media="(prefers-color-scheme: dark)" srcSet="/visuals/onboarding/local-workbench-dark.webp" />
+            <img src="/visuals/onboarding/local-workbench-light.webp" alt="" className="aspect-[16/10] w-full object-cover" />
+          </picture>
+          <div className="order-1 lg:order-2">
+          <div className="mb-8 text-left">
             <h2 className="text-lg font-semibold tracking-tight text-foreground sm:text-xl">
               {t("providerSelection.title")}
             </h2>
@@ -199,7 +204,7 @@ export default function ProviderSelectionEmptyState({
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
               <Card
-                className="group mx-auto max-w-xs cursor-pointer border-border/60 transition-all duration-150 hover:border-border hover:shadow-md active:scale-[0.99]"
+                className="group max-w-sm cursor-pointer border-border/60 transition-all duration-150 hover:border-border hover:shadow-md active:scale-[0.99]"
               >
                 <div className="flex items-center gap-2 p-3">
                   <SessionProviderLogo
@@ -339,6 +344,7 @@ export default function ProviderSelectionEmptyState({
               />
             </div>
           )}
+          </div>
         </div>
       </div>
     );

@@ -72,6 +72,19 @@ export default function AboutTab() {
 
   return (
     <div className="space-y-6">
+      <div className="relative h-40 overflow-hidden rounded-lg border border-border/60 bg-zinc-950">
+        <img
+          src={desktopUpdate?.status === 'downloaded' ? '/visuals/brand/update-complete-dark.webp' : '/visuals/release/local-security.webp'}
+          alt=""
+          className="h-full w-full object-cover opacity-90"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-black/65 via-black/10 to-transparent" />
+        <div className="absolute inset-y-0 left-0 flex items-end p-5 text-sm font-medium text-white">
+          {desktopUpdate?.status === 'downloaded'
+            ? t('about.downloaded', { version: desktopUpdate.latestVersion })
+            : t('about.localData')}
+        </div>
+      </div>
       <div className="flex items-center gap-3">
         <img src="/logo.svg" alt="leocodebox" className="h-10 w-10" />
         <div>
