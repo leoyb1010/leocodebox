@@ -250,7 +250,7 @@ export function findExecutableInPath(command, runtimePath, {
 
 export function getAgentCliDiagnostics(runtimePath) {
   return Object.fromEntries(
-    ['claude', 'codex', 'cursor-agent', 'opencode', 'gemini', 'hermes'].map((command) => [
+    ['claude', 'codex', 'cursor-agent', 'opencode', 'gemini', 'hermes', 'grok'].map((command) => [
       command,
       findExecutableInPath(command, runtimePath),
     ]),

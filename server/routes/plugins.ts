@@ -22,6 +22,7 @@ import {
   getPluginPort,
   isPluginRunning,
 } from '../utils/plugin-process-manager.js';
+import { requireLocalOnly } from '../shared/local-only.js';
 
 const router = express.Router();
 
@@ -101,7 +102,7 @@ router.get('/:name/assets/*', (req, res) => {
 });
 
 // PUT /:name/enable — Toggle plugin enabled/disabled (starts/stops server if applicable)
-router.put('/:name/enable', async (req, res) => {
+router.put('/:name/enable', requireLocalOnly, async (req, res) => {
   try {
     const { enabled } = req.body;
     if (typeof enabled !== 'boolean') {
@@ -141,7 +142,7 @@ router.put('/:name/enable', async (req, res) => {
 });
 
 // POST /install — Install plugin from git URL
-router.post('/install', async (req, res) => {
+router.post('/install', requireLocalOnly, async (req, res) => {
   try {
     const { url } = req.body;
     if (!url || typeof url !== 'string') {
@@ -174,7 +175,7 @@ router.post('/install', async (req, res) => {
 });
 
 // POST /:name/update — Pull latest from git (restarts server if running)
-router.post('/:name/update', async (req, res) => {
+router.post('/:name/update', requireLocalOnly, async (req, res) => {
   try {
     const pluginName = req.params.name;
 
@@ -287,7 +288,7 @@ router.all('/:name/rpc/*', async (req, res) => {
 });
 
 // DELETE /:name — Uninstall plugin (stops server first)
-router.delete('/:name', async (req, res) => {
+router.delete('/:name', requireLocalOnly, async (req, res) => {
   try {
     const pluginName = req.params.name;
 

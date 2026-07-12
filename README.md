@@ -1,22 +1,22 @@
 # leocodebox
 
-![version](https://img.shields.io/badge/version-1.38.0-blue)
+![version](https://img.shields.io/badge/version-1.39.0-blue)
 ![platform](https://img.shields.io/badge/platform-macOS%20arm64-lightgrey)
 ![signed](https://img.shields.io/badge/signed-Developer%20ID%20%2B%20Notarized-brightgreen)
 ![license](https://img.shields.io/badge/license-AGPL--3.0-orange)
 
-**leocodebox** 是一个本地优先的 macOS 桌面应用，用来在一个界面里统一管理本机的 AI 编码 Agent CLI —— Claude Code、Codex、Cursor、OpenCode。无需注册、无需云端账号，打开即用。
+**leocodebox** 是一个本地优先的 macOS 桌面应用，用来在一个界面里统一管理本机的 AI 编码 Agent CLI —— Claude Code、Codex、Cursor、OpenCode、Gemini CLI、Hermes 与 Grok Build。无需注册、无需云端账号，打开即用。
 
 > English: leocodebox is a local-only macOS desktop app that unifies the management of local coding-agent CLIs (Claude Code, Codex, Cursor, OpenCode) — projects, sessions, skills, MCP servers, and provider configuration — with no cloud account required.
 
 ## ⬇️ 下载
 
-[![下载 DMG](https://img.shields.io/badge/下载-leocodebox%201.38.0%20(mac--arm64)-brightgreen?style=for-the-badge)](https://github.com/leoyb1010/leocodebox/releases/latest)
+[![下载 DMG](https://img.shields.io/badge/下载-leocodebox%201.39.0%20(mac--arm64)-brightgreen?style=for-the-badge)](https://github.com/leoyb1010/leocodebox/releases/latest)
 
 - **最新版本**：<https://github.com/leoyb1010/leocodebox/releases/latest>
-- **当前正式版**：`1.38.0`
-- **直接下载 DMG**：[leocodebox-1.38.0-mac-arm64.dmg](https://github.com/leoyb1010/leocodebox/releases/download/v1.38.0/leocodebox-1.38.0-mac-arm64.dmg)（仅 Apple 芯片）
-- **SHA-256**：以 v1.38.0 Release 页面公布值为准。
+- **当前正式版**：`1.39.0`
+- **直接下载 DMG**：[leocodebox-1.39.0-mac-arm64.dmg](https://github.com/leoyb1010/leocodebox/releases/download/v1.39.0/leocodebox-1.39.0-mac-arm64.dmg)（仅 Apple 芯片）
+- **SHA-256**：以 v1.39.0 Release 页面公布值为准。
 
 已 **Developer ID 签名 + Apple 公证**：双击 DMG → 拖入「应用程序」→ 双击运行，无 Gatekeeper 警告，无需 `xattr` 去隔离。
 
@@ -27,9 +27,9 @@
 ## ✨ 特性
 
 - **本地优先，无 leocodebox 云端依赖**：打开 App 自动在 `127.0.0.1:38473` 启动本地服务，退出即停止并释放端口。项目索引、会话索引和工作台配置保存在本机。
-- **多智能体统一管理**：在一个界面里管理 Claude Code / Codex / Cursor / OpenCode 的认证、模型、权限模式、会话、技能和 MCP。
+- **多智能体统一管理**：在一个界面里管理 Claude Code / Codex / Cursor / OpenCode 的认证、模型、权限模式、会话、技能和 MCP，并集中检查 Gemini CLI、Hermes 与 Grok Build。
 - **跨设备发现本机 CLI**：从登录 Shell 和 npm、Homebrew、Volta、nvm、mise、asdf、fnm、bun、pnpm、yarn 等常见安装位置合并运行路径；支持 `CLAUDE_CONFIG_DIR`、`CODEX_HOME`、`OPENCODE_CONFIG_DIR`、`OPENCODE_DATA_DIR` 与 XDG 自定义目录。
-- **实时 CLI 版本与安全更新**：设置页显示每个 CLI 的实时版本；Claude Code、Codex 与 Cursor 使用自身更新命令。OpenCode、Gemini、Hermes 只提示状态，避免在不同安装方式的设备上误装第二份 CLI。
+- **实时 CLI 版本与安全更新**：识别 npm、Homebrew、pnpm、Volta、Bun 和官方独立安装器；支持逐个或批量更新，无法自动更新时提供可复制的安全命令，不会误装第二份 CLI。
 - **模型列表自动跟随 CLI**：模型目录随本机 CLI 更新自动刷新（例如 Codex 升级后自动出现新一代模型），带源文件指纹失效机制。
 - **Leoapi 接口切换**：接口配置切换器内置在应用内（不跳外部 App），支持多个请求地址、自动选择最快可用地址、模型列表读取、真实模型测速、Claude Sonnet/Opus/Haiku 映射、备份恢复，并可从旧切换器数据库（`~/.cc-switch/cc-switch.db`）一键导入。
 - **项目按 Agent 分类**：侧边栏项目列表按 Claude / Codex / OpenCode / Cursor / Gemini 显示彩色会话计数徽章，并过滤一次性/临时目录，只留真实项目。
@@ -46,6 +46,9 @@
 | **Codex** | OpenAI Codex CLI | ChatGPT 登录 / `OPENAI_API_KEY` |
 | **Cursor** | Cursor Agent CLI | `cursor-agent login` |
 | **OpenCode** | OpenCode CLI | OAuth / Provider API Key |
+| **Gemini CLI** | Google Gemini CLI | Google 登录 / API Key |
+| **Hermes** | Nous Research Hermes Agent | 本机 CLI 配置 |
+| **Grok Build** | xAI Grok Build TUI | 本机 `grok` 配置 |
 
 > Agent CLI 本身不打包在应用内。每台 Mac 安装 leocodebox 后，应用会检测并驱动该设备上已安装的 CLI；Agent 的登录与网络请求仍直接连接各自服务商。
 

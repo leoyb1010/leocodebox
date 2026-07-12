@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ArrowDownToLine, ArrowUpCircle, CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpCircle, CheckCircle2, CircleHelp, Copy, Loader2, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { apiRequest } from '../../../../../utils/api';
@@ -21,6 +21,8 @@ type CliToolStatus = {
   executablePath: string | null;
   canInstall: boolean;
   canSelfUpdate: boolean;
+  mutationsAllowed: boolean;
+  manualHint?: string | null;
   docsUrl?: string;
 };
 
@@ -28,6 +30,7 @@ type CliStatusResponse = {
   success: boolean;
   tools: CliToolStatus[];
   checkedAt?: string;
+  mutationsAllowed?: boolean;
 };
 
 type CliActionResponse = {
@@ -35,6 +38,7 @@ type CliActionResponse = {
   error?: string;
   changed?: boolean;
   currentVersion?: string | null;
+  output?: string;
 };
 
 /**
@@ -49,6 +53,8 @@ export default function CliToolsSection() {
   const [message, setMessage] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [checkedAt, setCheckedAt] = useState<string | null>(null);
+  const [mutationsAllowed, setMutationsAllowed] = useState(false);
+  const [detail, setDetail] = useState<string | null>(null);
 
   const load = useCallback(async (forceLatest = false) => {
     setLoading(true);
@@ -58,6 +64,7 @@ export default function CliToolsSection() {
       if (data?.success && Array.isArray(data.tools)) {
         setTools(data.tools);
         setCheckedAt(data.checkedAt || new Date().toISOString());
+        setMutationsAllowed(Boolean(data.mutationsAllowed));
       }
     } catch (error) {
       console.error('Failed to load CLI status:', error);
@@ -74,6 +81,7 @@ export default function CliToolsSection() {
   const runAction = useCallback(async (tool: CliToolStatus, action: 'install' | 'update') => {
     setUpdating(tool.id);
     setMessage(null);
+    setDetail(null);
     try {
       const data = await apiRequest(`/api/leocodebox/cli/${tool.id}/${action}`, {
         method: 'POST',
@@ -87,13 +95,21 @@ export default function CliToolsSection() {
       } else {
         setMessage(t('agents.cliTools.actionFailed', { tool: tool.label, action: t(`agents.cliTools.${action}`), error: data?.error ?? t('agents.cliTools.unknownError') }));
       }
+      if (data?.output) setDetail(data.output);
     } catch (error) {
       setMessage(t('agents.cliTools.actionFailed', { tool: tool.label, action: t(`agents.cliTools.${action}`), error: error instanceof Error ? error.message : t('agents.cliTools.unknownError') }));
     } finally {
       setUpdating(null);
-      void load(true);
+      void load(false);
     }
   }, [load, t]);
+
+  const updateable = tools.filter((tool) => tool.installed && tool.runnable && tool.canSelfUpdate
+    && (tool.updateAvailable || ['unsupported', 'unavailable'].includes(tool.latestVersionSource || '')));
+
+  const updateAll = useCallback(async () => {
+    for (const tool of updateable) await runAction(tool, 'update');
+  }, [runAction, updateable]);
 
   return (
     <div className="border-b border-border/60 bg-muted/20 px-4 py-3 md:px-6">
@@ -108,13 +124,20 @@ export default function CliToolsSection() {
           {t('agents.cliTools.refresh')}
         </button>
       </div>
+      {!mutationsAllowed && !loading && (
+        <p className="mb-2 text-[11px] text-muted-foreground">{t('agents.cliTools.desktopOnly')}</p>
+      )}
       {checkedAt && (
         <p className="mb-2 text-[11px] text-muted-foreground">
           {t('agents.cliTools.versionCheck', { time: new Date(checkedAt).toLocaleString(i18n.language) })} · {t('agents.cliTools.cacheHint')}
         </p>
       )}
 
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      {loading && tools.length === 0 ? (
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" aria-label={t('agents.cliTools.loading')}>
+          {Array.from({ length: 4 }, (_, index) => <div key={index} className="h-[58px] animate-pulse rounded-md bg-muted/70" />)}
+        </div>
+      ) : <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {tools.map((tool) => (
           <div
             key={tool.id}
@@ -129,10 +152,15 @@ export default function CliToolsSection() {
                       <ArrowUpCircle className="h-3 w-3" />
                       {t('agents.cliTools.updateAvailable')}
                     </span>
-                  ) : (
+                  ) : ['registry', 'cache', 'stale-cache'].includes(tool.latestVersionSource || '') ? (
                     <span className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
                       <CheckCircle2 className="h-3 w-3" />
                       {t('agents.cliTools.latest')}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                      <CircleHelp className="h-3 w-3" />
+                      {t('agents.cliTools.unavailable')}
                     </span>
                   )
                 ) : tool.installed ? (
@@ -155,15 +183,24 @@ export default function CliToolsSection() {
               </div>
             </div>
 
-            {tool.installed && tool.runnable && tool.updateAvailable && tool.canSelfUpdate && (
+            {tool.installed && tool.runnable && tool.canSelfUpdate
+              && (tool.updateAvailable || ['unsupported', 'unavailable'].includes(tool.latestVersionSource || '')) && (
               <button
                 onClick={() => void runAction(tool, 'update')}
-                disabled={updating !== null}
+                disabled={updating !== null || !mutationsAllowed}
+                title={!mutationsAllowed ? t('agents.cliTools.desktopOnly') : undefined}
                 className="inline-flex flex-shrink-0 items-center gap-1 rounded-md bg-primary px-2.5 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:opacity-50"
               >
                 {updating === tool.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <ArrowUpCircle className="h-3 w-3" />}
-                {t('agents.cliTools.update')}
+                {tool.updateAvailable ? t('agents.cliTools.update') : t('agents.cliTools.checkAndUpdate')}
               </button>
+            )}
+            {tool.installed && tool.runnable && !tool.canSelfUpdate && tool.manualHint && (
+              <button
+                onClick={() => void navigator.clipboard.writeText(tool.manualHint || '')}
+                className="inline-flex flex-shrink-0 items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-accent"
+                title={tool.manualHint}
+              ><Copy className="h-3 w-3" />{t('agents.cliTools.manualUpdate')}</button>
             )}
             {!tool.installed && tool.canInstall && (
               <button
@@ -187,10 +224,17 @@ export default function CliToolsSection() {
             )}
           </div>
         ))}
-      </div>
+      </div>}
+
+      {updateable.length > 1 && mutationsAllowed && (
+        <button onClick={() => void updateAll()} disabled={updating !== null} className="mt-2 inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1.5 text-xs hover:bg-accent disabled:opacity-50">
+          <ArrowUpCircle className="h-3 w-3" />{t('agents.cliTools.updateAll', { count: updateable.length })}
+        </button>
+      )}
 
       {loadError && <p role="alert" className="mt-2 text-xs text-destructive">{t('agents.cliTools.loadFailed')}: {loadError}</p>}
       {message && <p className="mt-2 text-xs text-muted-foreground">{message}</p>}
+      {detail && <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap rounded-md bg-muted p-2 text-[11px] text-muted-foreground">{detail}</pre>}
     </div>
   );
 }

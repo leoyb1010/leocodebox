@@ -717,6 +717,18 @@ data: {"type":"done"}</code></pre>
                 </div>
             </div>
 
+            <div class="section-row">
+                <div class="docs-section">
+                    <section id="local-cli-tools">
+                        <h2>Local Agent CLI Tools</h2>
+                        <p>These endpoints discover and manage CLIs installed on the current device. Mutations require local desktop mode.</p>
+                        <div class="endpoint"><div class="endpoint-header"><span class="method get">GET</span><span class="endpoint-path"><span class="api-url">http://localhost:38473</span>/api/leocodebox/cli/status</span></div><p>Returns installation source, executable path, current/latest version, update capability, and manual fallback for Claude Code, Codex, Cursor, OpenCode, Gemini CLI, Hermes, and Grok Build.</p></div>
+                        <div class="endpoint"><div class="endpoint-header"><span class="method post">POST</span><span class="endpoint-path"><span class="api-url">http://localhost:38473</span>/api/leocodebox/cli/:id/install</span></div><p>Installs a supported missing CLI using its verified installer.</p></div>
+                        <div class="endpoint"><div class="endpoint-header"><span class="method post">POST</span><span class="endpoint-path"><span class="api-url">http://localhost:38473</span>/api/leocodebox/cli/:id/update</span></div><p>Updates an installed CLI using the detected package manager or official self-updater.</p></div>
+                    </section>
+                </div>
+            </div>
+
             <!-- Usage Patterns Section -->
             <div class="section-row">
                 <div class="docs-section">

@@ -166,6 +166,7 @@ export default tseslint.config(
             "server/shared/provider-runtime-paths.ts",
             "server/shared/provider-templates.ts",
             "server/shared/network-hosts.{js,ts}",
+            "server/shared/local-only.{js,ts}",
             "server/services/notification-orchestrator.{js,ts}",
           ], // classify shared utility files so modules can depend on them explicitly
           mode: "file",

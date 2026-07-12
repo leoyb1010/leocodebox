@@ -358,7 +358,7 @@
       "alreadyLatest": "{{tool}} 已是最新版本（{{version}}）。",
       "latestVersion": "最新版本",
       "actionFailed": "{{tool}} {{action}}失敗：{{error}}",
-      "unknownError": "未知錯誤"
+      "unknownError": "未知錯誤", "unavailable": "無法檢查", "checkAndUpdate": "檢查並更新", "manualUpdate": "複製更新命令", "desktopOnly": "安裝和更新僅在桌面本機模式可用。", "updateAll": "更新全部（{{count}}）", "loading": "正在檢查本機智能體"
     },
     "authStatus": {
       "checking": "檢查中...",

@@ -3,11 +3,13 @@ import fs from 'node:fs/promises';
 
 import express from 'express';
 
+import { mutationsAllowed, requireLocalOnly } from '../../shared/local-only.js';
+
 import { compareSemver, fetchJson } from './version-network.utils.js';
 
 const router = express.Router();
 
-type CliInstallSource = 'unknown' | 'homebrew' | 'pnpm' | 'volta' | 'npm-global' | 'app-bundled' | 'standalone' | 'not-installed';
+type CliInstallSource = 'unknown' | 'homebrew' | 'pnpm' | 'volta' | 'bun' | 'npm-global' | 'app-bundled' | 'standalone' | 'shim' | 'not-installed';
 type CliTool = {
   id: string;
   label?: string;
@@ -35,9 +37,9 @@ const CLI_LATEST_VERSION_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 // Agent CLI tooling: live version + one-click self-update
 // ---------------------------------------------------------------------------
 
-const CLI_VERSION_TOKEN = /(?<![\d.])(\d+\.\d+[A-Za-z0-9.+_-]*)/;
+const CLI_VERSION_TOKEN = /(?:^|\s|v)(\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z.-]+)?)(?=\s|$|\))/m;
 
-const CLI_TOOLS: Record<string, CliTool> = {
+export const CLI_TOOLS: Record<string, CliTool> = {
   claude: {
     id: 'claude',
     label: 'Claude Code',
@@ -61,7 +63,7 @@ const CLI_TOOLS: Record<string, CliTool> = {
     label: 'OpenCode',
     cmd: 'opencode',
     // Update selection is resolved from the executable's verified install source.
-    updateArgs: null,
+    updateArgs: ['upgrade'],
     install: { command: 'npm', args: ['install', '--global', 'opencode-ai'] },
     npmPackage: 'opencode-ai',
     docsUrl: 'https://opencode.ai',
@@ -78,7 +80,7 @@ const CLI_TOOLS: Record<string, CliTool> = {
     id: 'gemini',
     label: 'Gemini CLI',
     cmd: 'gemini',
-    updateArgs: null,
+    updateArgs: ['update'],
     install: { command: 'npm', args: ['install', '--global', '@google/gemini-cli'] },
     npmPackage: '@google/gemini-cli',
     docsUrl: 'https://github.com/google-gemini/gemini-cli',
@@ -87,9 +89,17 @@ const CLI_TOOLS: Record<string, CliTool> = {
     id: 'hermes',
     label: 'Hermes Agent',
     cmd: 'hermes',
-    updateArgs: null,
+    updateArgs: ['update'],
     npmPackage: null,
     docsUrl: 'https://hermes-agent.nousresearch.com',
+  },
+  grok: {
+    id: 'grok',
+    label: 'Grok Build',
+    cmd: 'grok',
+    updateArgs: ['update'],
+    npmPackage: null,
+    docsUrl: 'https://grok.com/build',
   },
 };
 
@@ -99,8 +109,8 @@ function parseCliVersionText(output: unknown): string | null {
   return match ? match[1] : null;
 }
 
-export async function resolveExecutablePath(command: string): Promise<string | null> {
-  const result = await runCliCommand('which', [command], 5000);
+export async function resolveExecutablePath(command: string, platform = process.platform): Promise<string | null> {
+  const result = await runCliCommand(platform === 'win32' ? 'where' : 'which', [command], 5000);
   if (!result.ok) return null;
   const executablePath = result.stdout.trim().split(/\r?\n/)[0];
   if (!executablePath) return null;
@@ -115,8 +125,9 @@ export async function detectCliInstallSource(tool: CliTool, resolvePath: (comman
   const executablePath = await resolvePath(tool.cmd);
   if (!executablePath) return { source: 'unknown', executablePath: null };
   const normalized = executablePath.replaceAll('\\', '/');
-  if (/(^|\/)(Cellar|homebrew)(\/|$)/i.test(normalized)) {
-    return { source: 'homebrew', executablePath };
+  // npm installed by Homebrew's Node still lives under lib/node_modules.
+  if (/(^|\/)(lib\/node_modules|\.npm-global|npm\/bin)(\/|$)/i.test(normalized)) {
+    return { source: 'npm-global', executablePath };
   }
   if (/(^|\/)(pnpm|pnpm-global)(\/|$)/i.test(normalized)) {
     return { source: 'pnpm', executablePath };
@@ -124,14 +135,20 @@ export async function detectCliInstallSource(tool: CliTool, resolvePath: (comman
   if (/(^|\/)\.volta(\/|$)/i.test(normalized)) {
     return { source: 'volta', executablePath };
   }
-  if (/(^|\/)(lib\/node_modules|\.npm-global|npm\/bin)(\/|$)/i.test(normalized)) {
-    return { source: 'npm-global', executablePath };
+  if (/(^|\/)\.bun(\/|$)/i.test(normalized)) {
+    return { source: 'bun', executablePath };
+  }
+  if (/(^|\/)(Cellar|Caskroom)(\/|$)/i.test(normalized)) {
+    return { source: 'homebrew', executablePath };
   }
   if (normalized.includes('.app/Contents/')) {
     return { source: 'app-bundled', executablePath };
   }
-  if (/(^|\/)\.local\/(bin|share\/claude)(\/|$)/i.test(normalized)) {
+  if (/(^|\/)(\.local\/(bin|share\/[^/]+)|\.opencode\/bin|\.grok\/(bin|downloads))(\/|$)/i.test(normalized)) {
     return { source: 'standalone', executablePath };
+  }
+  if (/(^|\/)(\.asdf|\.local\/share\/mise|mise)\/shims(\/|$)/i.test(normalized)) {
+    return { source: 'shim', executablePath };
   }
   return { source: 'unknown', executablePath };
 }
@@ -141,15 +158,20 @@ export async function resolveCliUpdateCommand(tool: CliTool, source: CliInstallS
     return { command: 'npm', args: ['install', '--global', `${tool.npmPackage}@latest`] };
   }
   if (source === 'homebrew') {
-    const formulaById: Record<string, string> = { opencode: 'opencode' };
+    const formulaById: Record<string, { name: string; cask?: boolean }> = {
+      opencode: { name: 'opencode' }, gemini: { name: 'gemini-cli' }, codex: { name: 'codex' }, claude: { name: 'claude-code', cask: true },
+    };
     const formula = formulaById[tool.id];
-    if (formula) return { command: 'brew', args: ['upgrade', formula] };
+    if (formula) return { command: 'brew', args: ['upgrade', ...(formula.cask ? ['--cask'] : []), formula.name] };
   }
   if (source === 'pnpm' && tool.npmPackage) {
     return { command: 'pnpm', args: ['add', '--global', `${tool.npmPackage}@latest`] };
   }
   if (source === 'volta' && tool.npmPackage) {
     return { command: 'volta', args: ['install', `${tool.npmPackage}@latest`] };
+  }
+  if (source === 'bun' && tool.npmPackage) {
+    return { command: 'bun', args: ['add', '--global', `${tool.npmPackage}@latest`] };
   }
   if (source === 'standalone' && Array.isArray(tool.updateArgs)) {
     return { command: tool.cmd, args: tool.updateArgs };
@@ -172,9 +194,10 @@ export async function withCliMutation<T>(toolId: string, operation: () => Promis
   }
 }
 
-function runCliCommand(cmd: string, args: string[], timeoutMs = 10_000): Promise<CliCommandResult> {
+export function runCliCommand(cmd: string, args: string[], timeoutMs = 10_000): Promise<CliCommandResult> {
   return new Promise<CliCommandResult>((resolve) => {
-    execFile(cmd, args, { timeout: timeoutMs, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 }, (error, stdout, stderr) => {
+    const shell = process.platform === 'win32' && /\.(cmd|bat)$/i.test(cmd);
+    execFile(cmd, args, { timeout: timeoutMs, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024, shell }, (error, stdout, stderr) => {
       resolve({
         ok: !error,
         code: error?.code ?? 0,
@@ -191,7 +214,8 @@ export async function readCliLatestVersion(tool: CliTool, {
   now = Date.now(),
   loadLatest = async (packageName: string) => {
     const encoded = packageName.replace('@', '%40').replace('/', '%2F');
-    const info = await fetchJson(`https://registry.npmjs.org/${encoded}/latest`) as { version?: string };
+    const registry = String(process.env.npm_config_registry || process.env.NPM_CONFIG_REGISTRY || 'https://registry.npmjs.org').replace(/\/$/, '');
+    const info = await fetchJson(`${registry}/${encoded}/latest`) as { version?: string };
     return info.version || null;
   },
 } = {}) {
@@ -231,6 +255,10 @@ async function getCliToolStatus(tool: CliTool, { checkLatest = true, forceLatest
     ? await detectCliInstallSource(tool)
     : { source: 'not-installed', executablePath: null };
   const updateCommand = runnable ? await resolveCliUpdateCommand(tool, installInfo.source) : null;
+  const allowMutations = mutationsAllowed();
+  const manualHint = updateCommand
+    ? [updateCommand.command, ...updateCommand.args].join(' ')
+    : tool.npmPackage ? `npm install --global ${tool.npmPackage}@latest` : null;
   return {
     id: tool.id,
     label: tool.label,
@@ -247,6 +275,8 @@ async function getCliToolStatus(tool: CliTool, { checkLatest = true, forceLatest
     executablePath: installInfo.executablePath,
     canInstall: !installed && Boolean(tool.install),
     canSelfUpdate: runnable && Boolean(updateCommand),
+    mutationsAllowed: allowMutations,
+    manualHint,
     docsUrl: tool.docsUrl,
   };
 }
@@ -257,19 +287,21 @@ router.get('/status', async (req, res, next) => {
     const tools = await Promise.all(
       Object.values(CLI_TOOLS).map((tool) => getCliToolStatus(tool, { forceLatest })),
     );
-    res.json({ success: true, checkedAt: nowIso(), tools });
+    res.json({
+      success: true,
+      checkedAt: nowIso(),
+      mutationsAllowed: mutationsAllowed(),
+      tools,
+    });
   } catch (error) {
     next(error);
   }
 });
 
-router.post('/:id/install', async (req, res, next) => {
+router.post('/:id/install', requireLocalOnly, async (req, res, next) => {
   try {
-    if (process.env.LEOCODEBOX_LOCAL_ONLY !== '1' && !process.env.LEOCODEBOX_TEST_HOME) {
-      res.status(403).json({ success: false, error: 'CLI installs are available only in local-only mode.' });
-      return;
-    }
-    const tool = CLI_TOOLS[String(req.params.id || '').toLowerCase()];
+    const id = String(req.params.id || '').toLowerCase();
+    const tool = Object.hasOwn(CLI_TOOLS, id) ? CLI_TOOLS[id] : null;
     if (!tool) {
       res.status(404).json({ success: false, error: 'Unknown CLI tool.' });
       return;
@@ -303,13 +335,10 @@ router.post('/:id/install', async (req, res, next) => {
   }
 });
 
-router.post('/:id/update', async (req, res, next) => {
+router.post('/:id/update', requireLocalOnly, async (req, res, next) => {
   try {
-    if (process.env.LEOCODEBOX_LOCAL_ONLY !== '1' && !process.env.LEOCODEBOX_TEST_HOME) {
-      res.status(403).json({ success: false, error: 'CLI updates are available only in local-only mode.' });
-      return;
-    }
-    const tool = CLI_TOOLS[String(req.params.id || '').toLowerCase()];
+    const id = String(req.params.id || '').toLowerCase();
+    const tool = Object.hasOwn(CLI_TOOLS, id) ? CLI_TOOLS[id] : null;
     if (!tool) {
       res.status(404).json({ success: false, error: 'Unknown CLI tool.' });
       return;
@@ -327,7 +356,7 @@ router.post('/:id/update', async (req, res, next) => {
         error.statusCode = 409;
         throw error;
       }
-      const result = await runCliCommand(updateCommand.command, updateCommand.args, 180_000);
+      const result = await runCliCommand(updateCommand.command, updateCommand.args, 300_000);
       const after = await getCliToolStatus(tool, { checkLatest: false });
       return {
         success: result.ok,

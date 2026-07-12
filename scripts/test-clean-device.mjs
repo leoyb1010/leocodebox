@@ -18,6 +18,7 @@ const expectedTools = new Map([
   ['cursor-agent', '9.4.4'],
   ['gemini', '9.5.5'],
   ['hermes', '9.6.6'],
+  ['grok', '0.2.93'],
 ]);
 
 await fs.mkdir(fakeBin, { recursive: true });
@@ -101,7 +102,7 @@ try {
   assert.equal(authStatus.user.username, 'local-agent');
 
   const cliStatus = await fetchJson(`${marker.url}/api/leocodebox/cli/status`, token);
-  assert.equal(cliStatus.tools.length, 6);
+  assert.equal(cliStatus.tools.length, 7);
   for (const tool of cliStatus.tools) {
     const command = tool.id === 'cursor' ? 'cursor-agent' : tool.id;
     assert.equal(tool.installed, true, `${tool.label} was not discovered`);
@@ -114,7 +115,7 @@ try {
   assert.equal(Object.keys(switchStatus.targets).length, 6);
 
   await fetchJson(`${marker.url}/api/projects`, token);
-  process.stdout.write('Clean-device smoke test passed: no login, six CLI tools discovered, empty local state handled.\n');
+  process.stdout.write('Clean-device smoke test passed: no login, seven CLI tools discovered, empty local state handled.\n');
 } catch (error) {
   throw new Error(`${error.message}\nRecent desktop output:\n${output.slice(-6000)}`);
 } finally {

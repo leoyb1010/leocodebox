@@ -4,7 +4,7 @@
 
 ## 一句话简介
 
-本地优先的 macOS 桌面应用，在一个界面里统一管理本机的 AI 编码 Agent CLI（Claude Code、Codex、Cursor、OpenCode），以及项目、会话、Skills、MCP 和 Provider 配置。无需注册、无需云端账号。
+本地优先的 macOS 桌面应用，在一个界面里统一管理本机的 AI 编码 Agent CLI（Claude Code、Codex、Cursor、OpenCode、Gemini CLI、Hermes、Grok Build），以及项目、会话、Skills、MCP 和 Provider 配置。无需注册、无需云端账号。
 
 ## 本地模式
 
