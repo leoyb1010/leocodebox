@@ -239,7 +239,7 @@ export function clearCliLatestVersionCache(): void {
   cliLatestVersionCache.clear();
 }
 
-async function getCliToolStatus(tool: CliTool, { checkLatest = true, forceLatest = false }: { checkLatest?: boolean; forceLatest?: boolean } = {}) {
+export async function getCliToolStatus(tool: CliTool, { checkLatest = true, forceLatest = false }: { checkLatest?: boolean; forceLatest?: boolean } = {}) {
   const probe = await runCliCommand(tool.cmd, ['--version'], 5000);
   const installed = probe.code !== 'ENOENT';
   const runnable = probe.ok;
