@@ -116,9 +116,9 @@ export class DesktopWindowManager {
     await this.viewHost.showTabPlaceholder(tabId, target, message);
   }
 
-  async showLocalStartupTarget(target, logs) {
+  async showLocalStartupTarget(target, logs, phase) {
     const tabId = this.tabs.getTabIdForTarget(target);
-    await this.viewHost.showLocalStartupTarget(tabId, target, logs);
+    await this.viewHost.showLocalStartupTarget(tabId, target, logs, phase);
   }
 
   async showContentTarget(target) {

@@ -336,7 +336,11 @@ function syncDesktopState() {
   desktopWindow.buildAppMenu();
   desktopWindow.emitDesktopState();
   if (activeTarget?.kind === 'local' && !localServer?.getLocalServerUrl()) {
-    void desktopWindow.showLocalStartupTarget(localServer.getPendingTarget(), localServer.getStartupLogs())
+    void desktopWindow.showLocalStartupTarget(
+      localServer.getPendingTarget(),
+      localServer.getStartupLogs(),
+      localServer.getStartupPhase(),
+    )
       .catch((error) => {
         if (isExpectedNavigationAbort(error)) return;
         void showError('Could not update local startup log', error);

@@ -286,6 +286,9 @@ export class LocalServerController {
       || process.env.CLOUDCLI_DESKTOP_LOCAL_AUTH_TOKEN
       || randomBytes(32).toString('base64url');
     this.startupLogs = [];
+    // Real startup progress for the placeholder screen:
+    // 0 = discovering agents, 1 = starting server, 2 = preparing workspace.
+    this.startupPhase = 0;
     this.desktopSettings = {
       keepLocalServerRunning: false,
       exposeLocalServerOnNetwork: false,
@@ -327,6 +330,16 @@ export class LocalServerController {
 
   getStartupLogs() {
     return [...this.startupLogs];
+  }
+
+  getStartupPhase() {
+    return this.startupPhase;
+  }
+
+  setStartupPhase(phase) {
+    if (this.startupPhase === phase) return;
+    this.startupPhase = phase;
+    this.onChange?.();
   }
 
   getPendingTarget() {
@@ -428,6 +441,7 @@ export class LocalServerController {
         this.localAuthToken = markerToken;
         const displayUrl = getDisplayUrl(candidateUrl);
         this.localServerPort = getPortFromUrl(candidateUrl);
+        this.setStartupPhase(2);
         this.appendStartupLog(`Using existing Local leocodebox at ${displayUrl} (v${health.version})`);
         return displayUrl;
       }
@@ -559,6 +573,7 @@ export class LocalServerController {
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     });
+    this.setStartupPhase(1);
 
     const childProcess = this.ownedServerProcess;
 
@@ -599,6 +614,7 @@ export class LocalServerController {
   }
 
   async resolveLocalServerUrl() {
+    this.startupPhase = 0;
     const defaultUrl = `http://${HOST}:${DEFAULT_PORT}`;
     const defaultDisplayUrl = `http://${DISPLAY_HOST}:${DEFAULT_PORT}`;
     const devUrl = process.env.ELECTRON_DEV_URL;
@@ -639,6 +655,7 @@ export class LocalServerController {
       ].join('\n\n'));
     }
 
+    this.setStartupPhase(2);
     this.appendStartupLog(`Local leocodebox ready at ${displayUrl}`);
     this.localServerUrl = displayUrl;
     return displayUrl;
