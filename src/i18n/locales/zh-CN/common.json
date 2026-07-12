@@ -365,6 +365,11 @@
     "browseFiles": "浏览全部文件（{{count}}）",
     "browseCommits": "浏览全部提交（{{count}}）",
     "browseBranches": "浏览全部分支（{{count}}）",
-    "switchBranch": "切换到：{{name}}"
+    "switchBranch": "切换到：{{name}}",
+    "leoapi": "Leoapi 节点",
+    "switchLeoapi": "换轨 Leoapi 接口节点…",
+    "confirmSwitch": "确认切到「{{name}}」（对新会话生效）",
+    "testNode": "测速「{{name}}」",
+    "backToNodes": "返回节点列表"
   }
 }

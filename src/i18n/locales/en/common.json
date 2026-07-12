@@ -365,6 +365,11 @@
     "browseFiles": "Browse all files ({{count}})",
     "browseCommits": "Browse all commits ({{count}})",
     "browseBranches": "Browse all branches ({{count}})",
-    "switchBranch": "Switch to: {{name}}"
+    "switchBranch": "Switch to: {{name}}",
+    "leoapi": "Leoapi nodes",
+    "switchLeoapi": "Switch Leoapi API node…",
+    "confirmSwitch": "Switch to \"{{name}}\" (applies to new sessions)",
+    "testNode": "Test \"{{name}}\"",
+    "backToNodes": "Back to node list"
   }
 }

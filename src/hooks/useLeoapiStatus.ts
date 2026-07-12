@@ -66,11 +66,15 @@ export function useLeoapiStatus(): LeoapiActiveNodes {
     const onVisibilityChange = () => {
       if (document.visibilityState === 'visible') void load();
     };
+    const onSwitched = () => void load();
     document.addEventListener('visibilitychange', onVisibilityChange);
+    // Fired after a ⌘K node switch so the badge updates immediately.
+    window.addEventListener('leocodebox:leoapi-switched', onSwitched);
     return () => {
       cancelled = true;
       clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('leocodebox:leoapi-switched', onSwitched);
     };
   }, []);
 
