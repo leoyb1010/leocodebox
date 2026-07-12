@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useAppPreferences } from '../../../../../contexts/PreferencesContext';
 import type { AgentCategory, AgentProvider } from '../../../types/types';
@@ -8,6 +8,7 @@ import AgentCategoryContentSection from './sections/AgentCategoryContentSection'
 import AgentCategoryTabsSection from './sections/AgentCategoryTabsSection';
 import AgentSelectorSection from './sections/AgentSelectorSection';
 import CliToolsSection from './CliToolsSection';
+import type { CliToolStatus } from './CliToolsSection';
 
 export default function AgentsSettingsTab({
   providerAuthStatus,
@@ -23,6 +24,8 @@ export default function AgentsSettingsTab({
   const { preferences } = useAppPreferences();
   const [selectedAgent, setSelectedAgent] = useState<AgentProvider>(preferences.defaultProvider);
   const [selectedCategory, setSelectedCategory] = useState<AgentCategory>('account');
+  const [localTools, setLocalTools] = useState<CliToolStatus[]>([]);
+  const handleToolsChange = useCallback((tools: CliToolStatus[]) => setLocalTools(tools), []);
   const visibleCategories = useMemo<AgentCategory[]>(() => (
     selectedAgent === 'opencode'
       ? ['account', 'mcp']
@@ -70,13 +73,14 @@ export default function AgentsSettingsTab({
 
   return (
     <div className="-mx-4 -mb-4 -mt-2 flex min-h-[300px] min-w-0 flex-col overflow-hidden md:-mx-6 md:-mb-6 md:-mt-2 md:min-h-[500px]">
-      <CliToolsSection />
+      <CliToolsSection onToolsChange={handleToolsChange} />
 
       <AgentSelectorSection
         agents={visibleAgents}
         selectedAgent={selectedAgent}
         onSelectAgent={setSelectedAgent}
         agentContextById={agentContextById}
+        localTools={localTools}
       />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">

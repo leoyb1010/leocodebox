@@ -115,7 +115,7 @@ try {
   assert.equal(Object.keys(switchStatus.targets).length, 6);
 
   await fetchJson(`${marker.url}/api/projects`, token);
-  process.stdout.write('Clean-device smoke test passed: no login, seven CLI tools discovered, empty local state handled.\n');
+  process.stdout.write('Clean-device smoke test passed: no login, seven local agent CLIs discovered, empty local state handled.\n');
 } catch (error) {
   throw new Error(`${error.message}\nRecent desktop output:\n${output.slice(-6000)}`);
 } finally {

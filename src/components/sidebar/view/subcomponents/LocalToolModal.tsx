@@ -20,9 +20,12 @@ export default function LocalToolModal({ title, src, onClose }: LocalToolModalPr
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 p-3 backdrop-blur-sm motion-safe:duration-200 motion-safe:animate-in motion-safe:fade-in md:p-8" role="dialog" aria-modal="true" aria-label={title}>
       <div className="leocodebox-settings-dialog flex h-[min(90vh,900px)] w-full max-w-7xl flex-col overflow-hidden rounded-2xl border border-border/70 bg-background shadow-2xl motion-safe:duration-200 motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95">
       <div className="leocodebox-main-header flex h-14 shrink-0 items-center justify-between border-b border-border/70 px-4">
-        <div className="flex min-w-0 items-baseline gap-2">
-          <strong className="truncate text-sm font-semibold text-foreground">{title}</strong>
-          <span className="hidden text-xs text-muted-foreground sm:inline">leocodebox</span>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <img src="/logo-32.png" alt="leocodebox" className="h-7 w-7 rounded-md" />
+          <div className="min-w-0">
+            <strong className="block truncate text-sm font-semibold text-foreground">leocodebox</strong>
+            <span className="block truncate text-[11px] text-muted-foreground">{title}</span>
+          </div>
         </div>
         <button
           type="button"

@@ -1073,11 +1073,11 @@ function registerAppEvents() {
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
-      if (desktopWindow) {
-        void desktopWindow.createWindow();
-      } else {
-        void createDesktopWindow();
-      }
+      const reopen = desktopWindow ? desktopWindow.createWindow() : createDesktopWindow();
+      void reopen.catch((error) => {
+        if (isExpectedNavigationAbort(error)) return;
+        void showError('Could not reopen leocodebox', error);
+      });
       return;
     }
 

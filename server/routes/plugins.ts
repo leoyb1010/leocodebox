@@ -28,11 +28,21 @@ const router = express.Router();
 
 function errorMessage(error: unknown): string { return error instanceof Error ? error.message : String(error ?? ''); }
 
+const PLUGIN_ZH: Record<string, { displayName: string; description: string; author: string }> = {
+  'project-stats': { displayName: '项目统计', description: '查看当前工作区的文件、代码与项目概况。', author: 'leocodebox 兼容插件' },
+  'web-terminal': { displayName: '网页终端', description: '基于 xterm.js 的多标签本机终端。', author: 'leocodebox 兼容插件' },
+};
+
+function localizePlugin<T extends { name: string; displayName?: string; description?: string; author?: string }>(plugin: T): T {
+  const translated = PLUGIN_ZH[plugin.name];
+  return translated ? { ...plugin, ...translated } : plugin;
+}
+
 // GET / — List all installed plugins (includes server running status)
 router.get('/', (req, res) => {
   try {
     const plugins = scanPlugins().map(p => ({
-      ...p,
+      ...localizePlugin(p),
       serverRunning: p.server ? isPluginRunning(p.name) : false,
     }));
     res.json({ plugins });

@@ -1,3 +1,5 @@
+import { Bot, Braces, Sparkles, TerminalSquare } from 'lucide-react';
+
 import type { LLMProvider } from '../../types/app';
 
 import ClaudeLogo from './ClaudeLogo';
@@ -26,5 +28,22 @@ export default function SessionProviderLogo({
     return <OpenCodeLogo className={className} />;
   }
 
-  return <ClaudeLogo className={className} />;
+  if (provider === 'gemini') {
+    return <Sparkles aria-label="Gemini CLI" className={`${className} text-blue-500`} />;
+  }
+
+  if (provider === 'hermes') {
+    return <TerminalSquare aria-label="Hermes Agent" className={`${className} text-amber-600`} />;
+  }
+
+  if (provider === 'grok') {
+    return <Braces aria-label="Grok Build" className={`${className} text-zinc-800 dark:text-zinc-100`} />;
+  }
+
+  if (provider === 'antigravity') {
+    return <Bot aria-label="Antigravity" className={`${className} text-indigo-500`} />;
+  }
+
+  if (provider === 'claude') return <ClaudeLogo className={className} />;
+  return <TerminalSquare aria-label={String(provider || 'Agent')} className={`${className} text-muted-foreground`} />;
 }

@@ -453,6 +453,10 @@ export async function getProjectsWithSessions(
     if (!isStarred) {
       if (isJunkProjectPath(projectPath)) continue;
       if (!(await directoryExists(projectPath))) continue;
+      // Keep the default sidebar focused on actual conversation history. Empty
+      // repositories remain reachable by creating a project again, while a
+      // starred empty project is intentionally preserved above.
+      if (sessionsPage.total === 0) continue;
     }
 
     projects.push({

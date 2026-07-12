@@ -4,8 +4,9 @@ import { useTranslation } from 'react-i18next';
 
 import { apiRequest } from '../../../../../utils/api';
 import { cn } from '../../../../../lib/utils';
+import SessionProviderLogo from '../../../../llm-logo-provider/SessionProviderLogo';
 
-type CliToolStatus = {
+export type CliToolStatus = {
   id: string;
   label: string;
   command: string;
@@ -26,6 +27,8 @@ type CliToolStatus = {
   docsUrl?: string;
 };
 
+type CliToolsSectionProps = { onToolsChange?: (tools: CliToolStatus[]) => void };
+
 type CliStatusResponse = {
   success: boolean;
   tools: CliToolStatus[];
@@ -45,7 +48,7 @@ type CliActionResponse = {
  * Live view of the locally installed agent CLIs: current version, whether a
  * newer version exists on the registry, and a one-click self-update button.
  */
-export default function CliToolsSection() {
+export default function CliToolsSection({ onToolsChange }: CliToolsSectionProps) {
   const { t, i18n } = useTranslation('settings');
   const [tools, setTools] = useState<CliToolStatus[]>([]);
   const [loading, setLoading] = useState(true);
@@ -63,6 +66,7 @@ export default function CliToolsSection() {
       const data = await apiRequest(`/api/leocodebox/cli/status${forceLatest ? '?refresh=1' : ''}`) as CliStatusResponse;
       if (data?.success && Array.isArray(data.tools)) {
         setTools(data.tools);
+        onToolsChange?.(data.tools);
         setCheckedAt(data.checkedAt || new Date().toISOString());
         setMutationsAllowed(Boolean(data.mutationsAllowed));
       }
@@ -72,7 +76,7 @@ export default function CliToolsSection() {
     } finally {
       setLoading(false);
     }
-  }, [t]);
+  }, [onToolsChange, t]);
 
   useEffect(() => {
     void load(false);
@@ -105,7 +109,7 @@ export default function CliToolsSection() {
   }, [load, t]);
 
   const updateable = tools.filter((tool) => tool.installed && tool.runnable && tool.canSelfUpdate
-    && (tool.updateAvailable || ['unsupported', 'unavailable'].includes(tool.latestVersionSource || '')));
+    && tool.updateAvailable);
 
   const updateAll = useCallback(async () => {
     for (const tool of updateable) await runAction(tool, 'update');
@@ -141,10 +145,12 @@ export default function CliToolsSection() {
         {tools.map((tool) => (
           <div
             key={tool.id}
+            id={`cli-tool-${tool.id}`}
             className="flex items-center justify-between gap-2 rounded-md border border-border/50 bg-background/60 px-3 py-2"
           >
             <div className="min-w-0">
               <div className="flex items-center gap-2">
+                <SessionProviderLogo provider={tool.id} className="h-4 w-4 flex-shrink-0" />
                 <span className="truncate text-sm font-medium text-foreground">{tool.label}</span>
                 {tool.installed && tool.runnable ? (
                   tool.updateAvailable ? (
@@ -183,8 +189,7 @@ export default function CliToolsSection() {
               </div>
             </div>
 
-            {tool.installed && tool.runnable && tool.canSelfUpdate
-              && (tool.updateAvailable || ['unsupported', 'unavailable'].includes(tool.latestVersionSource || '')) && (
+            {tool.installed && tool.runnable && tool.canSelfUpdate && (
               <button
                 onClick={() => void runAction(tool, 'update')}
                 disabled={updating !== null || !mutationsAllowed}

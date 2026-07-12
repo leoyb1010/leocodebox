@@ -8,6 +8,8 @@ import type {
   SettingsProject,
 } from '../../../types/types';
 
+import type { CliToolStatus } from './CliToolsSection';
+
 export type AgentContext = {
   authStatus: AuthStatus;
   onLogin: () => void;
@@ -40,6 +42,7 @@ export type AgentSelectorSectionProps = {
   selectedAgent: AgentProvider;
   onSelectAgent: (agent: AgentProvider) => void;
   agentContextById: AgentContextByProvider;
+  localTools?: CliToolStatus[];
 };
 
 export type AgentCategoryContentSectionProps = {

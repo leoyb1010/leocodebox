@@ -133,6 +133,7 @@
       flex: 0 0 auto; min-height: 34px; border: 0; border-radius: 5px; padding: 0 13px;
       background: transparent; color: var(--muted); font-weight: 600;
     }
+    .agent-tab img { width: 17px; height: 17px; opacity: .82; }
     .agent-tab:hover { color: var(--text); background: var(--tab-hover); }
     .agent-tab[aria-selected="true"] { color: var(--text); background: var(--tab-active); box-shadow: 0 1px 2px var(--shadow); }
     .top-actions { display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
@@ -178,6 +179,7 @@
       width: 38px; height: 38px; display: grid; place-items: center; border-radius: 7px;
       border: 1px solid var(--mark-line); background: var(--mark-bg); color: var(--mark-text); font-size: 15px; font-weight: 700;
     }
+    .provider-mark img { width: 22px; height: 22px; }
     .provider-card.is-active .provider-mark { border-color: var(--active-mark-line); background: var(--active-mark-bg); color: var(--active-mark-text); }
     .provider-info { min-width: 0; }
     .provider-title { display: flex; align-items: center; flex-wrap: wrap; gap: 9px; }
@@ -809,7 +811,11 @@
     function renderTabs() {
       const targets = orderedTargets();
       if (!state.targets[selectedTarget] && targets.length) selectedTarget = targets[0].id;
-      $("#agentTabs").innerHTML = targets.map((target) => `<button class="agent-tab" type="button" role="tab" aria-selected="${target.id === selectedTarget}" data-target="${escapeHtml(target.id)}">${escapeHtml(target.label)}</button>`).join("");
+      $("#agentTabs").innerHTML = targets.map((target) => `<button class="agent-tab" type="button" role="tab" aria-selected="${target.id === selectedTarget}" data-target="${escapeHtml(target.id)}"><img src="${targetIcon(target.id)}" alt="">${escapeHtml(target.label)}</button>`).join("");
+    }
+
+    function targetIcon(targetId) {
+      return icon(({ claude: "activity", codex: "file-json-2", gemini: "server", opencode: "sliders-horizontal", cursor: "play", hermes: "history" })[targetId] || "activity");
     }
 
     function providerMark(provider) {
@@ -864,7 +870,7 @@
       }
       const nativeCard = `<article class="provider-card${nativeActive ? " is-active is-selected" : ""}" data-card-native="${escapeHtml(selectedTarget)}">
         <div class="drag-handle" aria-hidden="true"><img src="${icon("rotate-ccw")}" alt=""></div>
-        <div class="provider-mark" aria-hidden="true">L</div>
+        <div class="provider-mark" aria-hidden="true"><img src="${targetIcon(selectedTarget)}" alt=""></div>
         <div class="provider-info">
           <div class="provider-title"><strong>本机原配置</strong>${nativeActive ? `<span class="state-chip">${text("active")}</span>` : ""}</div>
           <span class="provider-url">登录授权 / CLI 原生配置</span>
@@ -883,7 +889,7 @@
         const backup = health.id === "failed" ? failoverCandidate(provider) : null;
         return `<article class="provider-card${active ? " is-active" : ""}${selected ? " is-selected" : ""}" data-card-provider="${providerId}" tabindex="0">
           <div class="drag-handle" aria-hidden="true"><img src="${icon("grip-vertical")}" alt=""></div>
-          <div class="provider-mark" aria-hidden="true">${providerMark(provider)}</div>
+          <div class="provider-mark" aria-hidden="true"><img src="${targetIcon(provider.target)}" alt=""></div>
           <div class="provider-info">
             <div class="provider-title"><strong>${providerName}</strong>${active ? `<span class="state-chip">${text("active")}</span>` : !target?.writable ? `<span class="state-chip readonly">${text("readonly")}</span>` : ""}<span class="state-chip ${health.className}" title="${escapeHtml(health.detail)}">${health.label}</span></div>
             <button class="provider-url" type="button" data-copy="${providerId}" title="${text("copy")}">${url}</button>

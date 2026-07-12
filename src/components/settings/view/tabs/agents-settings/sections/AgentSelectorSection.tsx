@@ -15,7 +15,9 @@ export default function AgentSelectorSection({
   selectedAgent,
   onSelectAgent,
   agentContextById,
+  localTools = [],
 }: AgentSelectorSectionProps) {
+  const secondaryTools = localTools.filter((tool) => !agents.includes(tool.id as AgentProvider));
   return (
     <div className="flex-shrink-0 border-b border-border px-3 py-2 md:px-4 md:py-3">
       <PillBar className="w-full md:w-auto">
@@ -40,6 +42,18 @@ export default function AgentSelectorSection({
             </Pill>
           );
         })}
+        {secondaryTools.map((tool) => (
+          <Pill
+            key={tool.id}
+            isActive={false}
+            onClick={() => document.getElementById(`cli-tool-${tool.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+            className="min-w-0 flex-1 justify-center md:flex-initial"
+          >
+            <SessionProviderLogo provider={tool.id} className="h-4 w-4 flex-shrink-0" />
+            <span className="truncate">{tool.label}</span>
+            <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${tool.runnable ? 'bg-emerald-500' : 'bg-muted-foreground/40'}`} />
+          </Pill>
+        ))}
       </PillBar>
     </div>
   );

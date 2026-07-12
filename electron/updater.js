@@ -3,6 +3,7 @@ import path from 'node:path';
 
 const DEFAULT_GITHUB_OWNER = 'leoyb1010';
 const DEFAULT_GITHUB_REPO = 'leocodebox';
+const DEFAULT_GENERIC_FEED_URL = 'https://github.com/leoyb1010/leocodebox-updates/releases/latest/download/';
 const UPDATE_CHECK_TIMEOUT_MS = 45_000;
 export { VERSION_RESET_TARGET, LEGACY_UPDATE_BRIDGE_VERSION } from './versionBridge.js';
 import { VERSION_RESET_TARGET, LEGACY_UPDATE_BRIDGE_VERSION } from './versionBridge.js';
@@ -70,7 +71,7 @@ export class DesktopUpdaterController {
     this.storage = storage;
     this.state = createInitialState(appVersion);
     this.githubToken = '';
-    this.genericFeedUrl = String(process.env.LEOCODEBOX_UPDATE_URL || '').trim();
+    this.genericFeedUrl = String(process.env.LEOCODEBOX_UPDATE_URL || DEFAULT_GENERIC_FEED_URL).trim();
     this.eventsRegistered = false;
   }
 

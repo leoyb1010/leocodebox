@@ -575,6 +575,24 @@ export function useChatSessionState({
     sessionStore,
   ]);
 
+  // A newly allocated session can enter the URL before the provider persists
+  // its first transcript row. Hydrate that exact running session until the
+  // first message arrives, without requiring a second sidebar click.
+  useEffect(() => {
+    if (!activeSessionId || !isProcessing || chatMessages.length > 0) return;
+    let cancelled = false;
+    const hydrate = async () => {
+      try {
+        await sessionStore.refreshFromServer(activeSessionId);
+      } catch {
+        // The transcript may not exist yet; the bounded interval retries.
+      }
+    };
+    void hydrate();
+    const timer = window.setInterval(() => { if (!cancelled) void hydrate(); }, 750);
+    return () => { cancelled = true; window.clearInterval(timer); };
+  }, [activeSessionId, chatMessages.length, isProcessing, sessionStore]);
+
   // External message update (e.g. WebSocket reconnect, background refresh)
   useEffect(() => {
     if (!externalMessageUpdate || !selectedSession || !selectedProject) return;

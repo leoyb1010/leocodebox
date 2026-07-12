@@ -57,6 +57,7 @@ test('private updater requires a credential and never exposes the saved token in
     updater,
     storage: fakeStorage,
   });
+  controller.genericFeedUrl = '';
 
   try {
     await controller.load();
@@ -82,6 +83,21 @@ test('private updater requires a credential and never exposes the saved token in
     });
     assert.equal(prepared, true);
     assert.equal(updater.didInstall, true);
+  } finally {
+    await fs.rm(root, { recursive: true, force: true });
+  }
+});
+
+test('packaged clients use the public release feed without credentials by default', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'leocodebox-updater-public-'));
+  const updater = new FakeUpdater();
+  const controller = new DesktopUpdaterController({ appVersion: '1.39.0', isPackaged: true, settingsPath: path.join(root, 'updater.json'), updater, storage: fakeStorage });
+  try {
+    const state = await controller.load();
+    assert.equal(state.configured, true);
+    assert.equal(state.credentialRequired, false);
+    assert.equal(updater.feed.provider, 'generic');
+    assert.match(updater.feed.url, /leocodebox-updates\/releases\/latest\/download/);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }
