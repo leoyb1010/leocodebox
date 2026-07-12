@@ -12,8 +12,18 @@ export default function LocalToolModal({ title, src, onClose }: LocalToolModalPr
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
     };
+    // Esc pressed inside the iframe never reaches this window; the embedded
+    // page relays it as a same-origin close message instead.
+    const handleMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if ((event.data as { type?: string } | null)?.type === 'leocodebox-switch:close') onClose();
+    };
     window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
+    window.addEventListener('message', handleMessage);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('message', handleMessage);
+    };
   }, [onClose]);
 
   return (

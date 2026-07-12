@@ -13,6 +13,8 @@ export type SwitchProvider = {
   name: string;
   baseUrl: string;
   endpoints: string[];
+  /** Optional human nicknames keyed by normalized endpoint URL（如「家里光猫」）. */
+  endpointLabels: Record<string, string>;
   autoSelectEndpoint: boolean;
   endpointStats: Record<string, unknown>;
   apiKey: string;
@@ -82,6 +84,20 @@ export function normalizeEndpointUrls(input: SwitchProviderInput, existing: Swit
   return urls;
 }
 
+export function normalizeEndpointLabels(input: SwitchProviderInput, existing: SwitchProvider | null): Record<string, string> {
+  const source = input?.endpointLabels && typeof input.endpointLabels === 'object'
+    ? input.endpointLabels
+    : existing?.endpointLabels && typeof existing.endpointLabels === 'object' ? existing.endpointLabels : {};
+  const labels: Record<string, string> = {};
+  for (const [rawUrl, rawLabel] of Object.entries(source)) {
+    const url = safeText(rawUrl, 800).replace(/\/+$/, '');
+    const label = safeText(rawLabel, 60);
+    if (url && label) labels[url] = label;
+    if (Object.keys(labels).length >= 20) break;
+  }
+  return labels;
+}
+
 export function normalizeModelMapping(input: SwitchProviderInput, existing: SwitchProvider | null, fallbackModel: string): ProviderModelMapping {
   const source = input?.modelMapping && typeof input.modelMapping === 'object'
     ? input.modelMapping
@@ -112,6 +128,7 @@ export function normalizeProvider(input: SwitchProviderInput, existing: SwitchPr
     name,
     baseUrl,
     endpoints: normalizeEndpointUrls(input, existing, baseUrl),
+    endpointLabels: normalizeEndpointLabels(input, existing),
     autoSelectEndpoint: typeof input?.autoSelectEndpoint === 'boolean' ? input.autoSelectEndpoint : Boolean(existing?.autoSelectEndpoint),
     endpointStats: existing?.endpointStats && typeof existing.endpointStats === 'object' ? existing.endpointStats : {},
     apiKey: nextApiKey,

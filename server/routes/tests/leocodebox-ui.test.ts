@@ -11,8 +11,21 @@ test('Leoapi provider cards expose health and user-confirmed failover controls',
   assert.match(html, /modelDiscoveryError/);
   assert.match(html, /latencyMs/);
   assert.match(html, /data-failover=/);
-  assert.match(html, /window\.confirm\(prompt\)/);
+  assert.match(html, /await confirmDialog\(prompt\)/);
+  assert.doesNotMatch(html, /window\.confirm\(/);
   assert.match(html, /切换前会自动备份现有配置/);
+});
+
+test('Leoapi provider list tells the three-card story with styled confirmation', async () => {
+  const html = await fs.readFile(pagePath, 'utf8');
+  assert.match(html, /本机原配置/);
+  assert.match(html, /今天在用/);
+  assert.match(html, /备选节点/);
+  assert.match(html, /id="confirmDialog"/);
+  assert.match(html, /data-endpoint-label/);
+  assert.match(html, /endpointLabels/);
+  assert.match(html, /endpoint-bar/);
+  assert.match(html, /leocodebox-switch:close/);
 });
 
 test('Leoapi uses the same local provider identity set as the workbench', async () => {
