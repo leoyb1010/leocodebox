@@ -10,7 +10,9 @@
       * { box-sizing: border-box; }
       html, body { margin: 0; height: 100%; background: #f8f9fa; color: #17191c; }
       body { display: grid; place-items: center; overflow: hidden; }
+      body::before { position: fixed; inset: 0; background: linear-gradient(90deg, rgba(248,249,250,.98) 0%, rgba(248,249,250,.92) 42%, rgba(248,249,250,.18) 72%), url('../public/visuals/brand/launch-light.webp') 72% 50% / cover no-repeat; content: ''; }
       .shell { width: min(430px, calc(100vw - 48px)); text-align: center; animation: shell-in .38s cubic-bezier(.2,0,0,1) both; }
+      .shell { position: relative; z-index: 1; margin-right: min(44vw, 620px); }
       .logo-wrap { position: relative; width: 72px; height: 72px; margin: 0 auto 22px; overflow: hidden; border-radius: 16px; animation: logo-in .5s cubic-bezier(.2,0,0,1) both; }
       .logo { width: 72px; height: 72px; border-radius: 16px; box-shadow: 0 12px 34px rgba(24, 35, 56, .14); }
       .scan { position: absolute; left: 8px; right: 8px; top: 8px; height: 2px; border-radius: 2px; background: #36c9b7; opacity: 0; animation: scan 1.25s .35s cubic-bezier(.2,0,0,1) both; }
@@ -41,7 +43,9 @@
         details { color: #747c84; }
         pre { border-color: #2d3238; background: #181b1f; color: #b7bdc3; }
         .logo { box-shadow: 0 12px 34px rgba(0, 0, 0, .35); }
+        body::before { background-image: linear-gradient(90deg, rgba(17,19,22,.98) 0%, rgba(17,19,22,.92) 42%, rgba(17,19,22,.22) 72%), url('../public/visuals/brand/launch-dark.webp'); }
       }
+      @media (max-width: 900px) { body::before { opacity: .18; background-position: center; } .shell { margin-right: 0; } }
       @media (prefers-reduced-motion: reduce) { .shell, .logo-wrap, .scan, .step::before { animation: none; } .bar { animation-duration: 3s; } }
     </style>
   </head>

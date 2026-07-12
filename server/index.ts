@@ -32,6 +32,7 @@ import { assetsRoutes } from './modules/assets/index.js';
 import { filesRoutes } from './modules/files/index.js';
 import tokenUsageRoutes from './modules/usage/token-usage.routes.js';
 import browserUseMcpRoutes from './modules/browser-use/browser-use-mcp.routes.js';
+import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { startServerLifecycle } from './runtime/server-lifecycle.js';
 import { attachWebSocketRuntime } from './runtime/websocket-runtime.js';
 import { validateApiKey, authenticateToken, IS_LOCAL_ONLY_AUTH } from './middleware/auth.js';
@@ -244,4 +245,7 @@ const globalErrorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
 app.use(globalErrorHandler);
 
 
+void browserUseService.repairAgentMcpRegistration().catch((error) => {
+    console.warn('[Browser] Failed to repair managed MCP registration:', error instanceof Error ? error.message : error);
+});
 void startServerLifecycle({ server, appRoot: APP_ROOT, installMode, runningVersion: RUNNING_VERSION });

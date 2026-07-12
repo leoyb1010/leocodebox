@@ -159,19 +159,23 @@ function getPlaywright(): any | null {
   }
 }
 
-function getMcpCommand(): { command: string; args: string[] } {
+export function getMcpRegistration(): { command: string; args: string[]; env: Record<string, string> } {
   const serverDir = path.resolve(__dirname, '..', '..');
   const mcpScriptPath = path.join(serverDir, 'browser-use-mcp.js');
   if (fs.existsSync(mcpScriptPath)) {
     return {
       command: process.execPath,
       args: [mcpScriptPath],
+      // The packaged server runs under Electron's executable. Without this
+      // flag, an MCP reconnect launches the GUI instead of the stdio script.
+      env: { ELECTRON_RUN_AS_NODE: '1' },
     };
   }
 
   return {
     command: 'leocodebox',
     args: ['browser-use-mcp'],
+    env: {},
   };
 }
 
@@ -472,7 +476,7 @@ export const browserUseService = {
   },
 
   async registerAgentMcp() {
-    const { command, args } = getMcpCommand();
+    const { command, args, env: runtimeEnv } = getMcpRegistration();
     await Promise.all(LEGACY_MCP_SERVER_NAMES.map((name) => removeMcpServerFromAllProviders(name)));
     const results = await providerMcpService.addMcpServerToAllProviders({
       name: MCP_SERVER_NAME,
@@ -481,11 +485,18 @@ export const browserUseService = {
       command,
       args,
       env: {
+        ...runtimeEnv,
         LEOCODEBOX_BROWSER_USE_MCP_TOKEN: getOrCreateMcpToken(),
         LEOCODEBOX_BROWSER_USE_API_URL: getMcpApiUrl(),
       },
     });
     return { name: MCP_SERVER_NAME, command, args, results };
+  },
+
+  async repairAgentMcpRegistration() {
+    if (!readSettings().enabled) return { repaired: false };
+    await this.registerAgentMcp();
+    return { repaired: true };
   },
 
   getMcpToken() {

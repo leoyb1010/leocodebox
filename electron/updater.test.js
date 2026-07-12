@@ -98,6 +98,7 @@ test('packaged clients use the public release feed without credentials by defaul
     assert.equal(state.credentialRequired, false);
     assert.equal(updater.feed.provider, 'generic');
     assert.match(updater.feed.url, /leocodebox-updates\/releases\/latest\/download/);
+    assert.equal(updater.autoInstallOnAppQuit, false);
   } finally {
     await fs.rm(root, { recursive: true, force: true });
   }

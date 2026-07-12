@@ -87,7 +87,10 @@ export class DesktopUpdaterController {
   async load() {
     this.registerEvents();
     this.updater.autoDownload = false;
-    this.updater.autoInstallOnAppQuit = true;
+    // A normal quit must stay a real quit. Installation is triggered only by
+    // the explicit restart-and-install action; otherwise a downloaded update
+    // can unexpectedly reopen the app after the user exits.
+    this.updater.autoInstallOnAppQuit = false;
     this.updater.allowPrerelease = false;
     this.updater.allowDowngrade = false;
     this.updater.logger = console;

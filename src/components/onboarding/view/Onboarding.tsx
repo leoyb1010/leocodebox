@@ -132,14 +132,21 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
   return (
     <>
       <div className="relative h-screen overflow-y-auto bg-background">
-        <div aria-hidden className="pointer-events-none fixed inset-0">
-          <div className="absolute -top-40 left-1/2 h-[36rem] w-[36rem] -translate-x-1/2 rounded-full bg-primary/10 blur-3xl" />
-          <div className="absolute -bottom-32 -left-24 h-[26rem] w-[26rem] rounded-full bg-primary/5 blur-3xl" />
-          <div className="absolute inset-0 bg-[radial-gradient(hsl(var(--foreground)/0.04)_1px,transparent_1px)] opacity-60 [background-size:22px_22px]" />
-        </div>
-
-        <div className="relative mx-auto flex min-h-full w-full max-w-2xl items-center justify-center p-4">
-          <div className="w-full py-6">
+        <div className="relative mx-auto flex min-h-full w-full max-w-6xl items-center justify-center p-5 lg:p-8">
+          <div className="grid w-full items-center gap-8 py-6 lg:grid-cols-[minmax(0,1fr)_minmax(32rem,38rem)]">
+          <div aria-hidden className="hidden min-w-0 lg:block">
+            <img
+              src={currentStep === 0 ? '/visuals/onboarding/local-workbench-light.webp' : '/visuals/onboarding/cli-discovery-light.webp'}
+              alt=""
+              className="block w-full dark:hidden"
+            />
+            <img
+              src={currentStep === 0 ? '/visuals/onboarding/local-workbench-dark.webp' : '/visuals/onboarding/cli-discovery-dark.webp'}
+              alt=""
+              className="hidden w-full dark:block"
+            />
+          </div>
+          <div className="w-full">
           <OnboardingStepProgress currentStep={currentStep} />
 
           <div className="rounded-2xl border border-border/70 bg-card/90 p-6 shadow-[0_24px_60px_-20px_hsl(var(--foreground)/0.18)] ring-1 ring-foreground/5 backdrop-blur-xl">
@@ -217,6 +224,7 @@ export default function Onboarding({ onComplete }: OnboardingProps) {
                 )}
               </div>
             </div>
+          </div>
           </div>
           </div>
         </div>

@@ -29,6 +29,7 @@ const updateMetadataVersion = getUpdateMetadataVersion(packageJson.version);
 const signIdentity = (process.env.LEOCODEBOX_SIGN_IDENTITY || '').trim();
 const signerPath = path.resolve('scripts/release/sign-macos-app.sh');
 const signatureVerifierPath = path.resolve('scripts/release/verify-macos-signatures.sh');
+const dmgBuilderPath = path.resolve('scripts/release/create-macos-dmg.sh');
 const githubPublish = packageJson.build?.publish?.find((entry) => entry?.provider === 'github');
 if (!githubPublish?.owner || !githubPublish?.repo) {
   throw new Error('package.json build.publish must define a GitHub owner and repo.');
@@ -116,11 +117,7 @@ try {
   run('/usr/bin/ditto', ['--norsrc', '--noqtn', signedApp, path.join(dmgRoot, appName)]);
   await symlink('/Applications', path.join(dmgRoot, 'Applications'));
   await rm(outputDmg, { force: true });
-  run('/usr/bin/hdiutil', [
-    'create', '-volname', 'leocodebox', '-srcfolder', dmgRoot,
-    '-ov', '-format', 'UDZO', outputDmg,
-  ]);
-  run('/usr/bin/hdiutil', ['verify', outputDmg]);
+  run('/bin/bash', [dmgBuilderPath, dmgRoot, outputDmg]);
   console.log(`Created ${signIdentity ? 'signed' : 'UNSIGNED'} DMG: ${outputDmg}`);
   if (signIdentity) {
     console.log(`Created updater ZIP: ${outputZip}`);
