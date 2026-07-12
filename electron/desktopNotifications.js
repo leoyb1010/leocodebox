@@ -109,7 +109,10 @@ export class DesktopNotificationsController {
       const stored = JSON.parse(raw);
       this.settings = { enabled: Boolean(stored.enabled) };
     } catch {
-      this.settings = { enabled: false };
+      // First run: native completion notifications are on by default — the
+      // server already applies a duration threshold and window-focus checks
+      // keep them quiet while the user is watching.
+      this.settings = { enabled: true };
     }
     return this.settings;
   }
