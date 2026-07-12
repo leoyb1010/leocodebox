@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..', '..');
 const stageDir = path.join(rootDir, '.desktop-build', 'desktop-app');
+const macOutputDir = path.join(rootDir, 'release', 'desktop', 'mac-arm64');
 
 const packageJson = JSON.parse(
   await fs.readFile(path.join(rootDir, 'package.json'), 'utf8'),
@@ -116,7 +117,13 @@ function buildDesktopPackageJson(copiedOptionalDependencies) {
   };
 }
 
-await fs.rm(stageDir, { recursive: true, force: true });
+// electron-builder does not reliably replace an existing .app bundle on APFS;
+// it can create conflict copies such as `leocodebox 2.app`, then recurse into
+// a malformed directory tree. Every release stage starts from clean outputs.
+await Promise.all([
+  fs.rm(stageDir, { recursive: true, force: true }),
+  fs.rm(macOutputDir, { recursive: true, force: true }),
+]);
 await fs.mkdir(stageDir, { recursive: true });
 
 await copyRequired('electron');
