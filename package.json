@@ -88,7 +88,8 @@
       "README.md",
       "LICENSE",
       "NOTICE",
-      "!**/node_modules/@anthropic-ai/claude-agent-sdk-{darwin,linux,win32}-*/**"
+      "!**/node_modules/@anthropic-ai/claude-agent-sdk-{darwin,linux,win32}-*/**",
+      "!**/node_modules/@openai/codex-{darwin,linux,win32}-*/**"
     ],
     "mac": {
       "category": "public.app-category.developer-tools",

@@ -101,6 +101,10 @@ function buildDesktopPackageJson(copiedOptionalDependencies) {
         // so the bundled binary is dead weight. Mirrors the exclusion in the
         // root package.json build.files that the staged config previously lost.
         '!**/node_modules/@anthropic-ai/claude-agent-sdk-{darwin,linux,win32}-*/**',
+        // The codex fallback binary (~300MB) is downloaded on first use into
+        // ~/.leocodebox/vendor/codex instead of shipping inside the DMG
+        // (see server/modules/providers/list/codex/codex-fallback.service.ts).
+        '!**/node_modules/@openai/codex-{darwin,linux,win32}-*/**',
         'package.json',
         'README.md',
         'README.zh-CN.md',
