@@ -1,4 +1,4 @@
-window.__APP_VERSION__ = '1.39.3';
+window.__APP_VERSION__ = '1.39.4';
 window.__MOCK_STATE__ = {
   localOnly: true,
   account: { connected: false, email: null, authState: 'local_only' },
