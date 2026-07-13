@@ -2,7 +2,7 @@
 
 复审日期：2026-07-13<br>
 基线报告：`docs/AUDIT-1.40.4-MULTI-ROLE-2026-07-13.md`<br>
-结论：**原报告 5 项 P1 与 7 项 P2 已完成修复并通过源码、隔离环境和打包 App 三层验证，可进入签名、公证和发布。**
+结论：**原报告 5 项 P1 与 7 项 P2 已完成修复，并通过源码、隔离环境、正式 App、Developer ID 签名、Apple 公证和 GitHub 发布六层验证。**
 
 ## 修复闭环
 
@@ -14,7 +14,7 @@
 | 红色关闭只隐藏窗口 | 关闭触发真实 quit | 实际点击红色按钮后进程退出、38473 释放 |
 | Leoapi 备份不可辨认 | 返回并展示 Agent、文件、时间、大小和目标路径 | 服务端测试与页面渲染通过 |
 | MCP token 暴露于 argv | 改用 `0600` 文件 | 正式 App 临时 HOME 权限实测 `-rw-------` |
-| 冲突副本进入包 | 删除 5 个副本，打包前递归拦截 | 正式 App 无 `* 2.js` |
+| 冲突副本进入包 | 删除 5 个源码副本；拦截源码副本并自动清理依赖副本 | 最终正式 App 冲突副本为 0 |
 | 视觉资产仅堆在目录 | 合格素材映射到启动、工作台、关于、Leoapi、纹理、README、DMG | 浅色/深色截图通过 |
 | 设置入口分裂与标签截断 | 顶栏设置进入统一设置中心，标签可横向滚动 | 1152x780 截图通过 |
 | 浏览器 URL 显示登录页 | App 生成两分钟单次授权，交换后清除 URL | 首次 200、复用 403、页面无 401 |
@@ -33,7 +33,7 @@
 | Leoapi 用户 | 通过 | 导入、模型读取、测速、应用、回退、备份与恢复信息可辨认 |
 | 浏览器 Agent 用户 | 通过 | 正式包运行时、自修复目录、MCP 凭据和真实 Session 均通过 |
 | 安全与隐私 | 通过 | 127.0.0.1、能力 token、单次链接、argv 无密钥、诊断脱敏 |
-| 发布与运维 | 通过 | lint/typecheck/tests/build/clean-device/audit/package 均通过 |
+| 发布与运维 | 通过 | lint/typecheck/tests/build/clean-device/audit/package/sign/notarize/release 均通过 |
 | UI 与可访问性 | 通过，保留素材限制 | 浅深色统一、窄窗口无截断；不合格棋盘格素材已排除 |
 
 ## 视觉资产审查说明
@@ -46,6 +46,7 @@
 - `npm run lint`、`npm run typecheck`、`npm run build` 全部通过。
 - `npm run test:clean-device` 通过；`npm audit --omit=dev` 为 0。
 - 打包目录 App 版本、原生模块 ABI、Browser Session、七类 CLI、红色关闭释放端口全部通过。
+- 最终 `1.40.5` DMG 与 App 的公证票据、Gatekeeper、深层签名验证全部通过；GitHub 资产摘要与本地 SHA-256 一致。
 - 截图位于 `docs/audit-1.40.4/screenshots/fixed-*.png`。
 
 ## 残余边界
