@@ -927,7 +927,15 @@
       const nativeActive = !state.activeByTarget?.[selectedTarget];
       const nativeAvailable = Boolean(state.nativeAvailableByTarget?.[selectedTarget]);
       $("#currentTargetTitle").textContent = target?.label || text("config");
-      $("#currentTargetMeta").textContent = `${providers.length + 1} 个配置 · 选择需要使用的接口`;
+      const shellOverride = state.shellOverrides?.[selectedTarget];
+      const activeProviderForTarget = state.providers.find((provider) => state.activeByTarget?.[provider.target] === provider.id && provider.target === selectedTarget);
+      let overrideNote = "";
+      if (selectedTarget === "claude" && shellOverride?.baseUrl && shellOverride.baseUrl !== activeProviderForTarget?.baseUrl) {
+        overrideNote = ` · ⚠️ 检测到 shell 环境变量 ANTHROPIC_BASE_URL=${shellOverride.baseUrl}（可能来自 cc-switch 等），终端会话会优先走它；本应用内会话由 Leoapi 接管`;
+      } else if (selectedTarget === "codex" && shellOverride?.apiKeyPresent && activeProviderForTarget) {
+        overrideNote = " · ⚠️ 检测到 shell 环境变量 OPENAI_API_KEY，终端会话会优先使用它；本应用内会话由 Leoapi 接管";
+      }
+      $("#currentTargetMeta").textContent = `${providers.length + 1} 个配置 · 选择需要使用的接口${overrideNote}`;
       if (nativeActive) {
         selectedProvider = "";
       } else if (!providers.some((provider) => provider.id === selectedProvider)) {
@@ -1358,11 +1366,13 @@
       }
       return dropdown;
     }
-    function renderModelDropdown(inputId) {
+    function renderModelDropdown(inputId, options) {
       const input = document.getElementById(inputId);
       const dropdown = getModelDropdown(inputId);
       const all = modelOptionSets.get(inputId) || [];
-      const query = input.value.trim().toLowerCase();
+      // Focus shows the FULL list (the previous value would otherwise filter
+      // everything out and the picker looked empty); only live typing filters.
+      const query = options && options.filter ? input.value.trim().toLowerCase() : "";
       const models = query ? all.filter((model) => model.toLowerCase().includes(query)) : all;
       if (!all.length) { dropdown.hidden = true; return; }
       dropdown.innerHTML = models.length
@@ -1380,8 +1390,8 @@
       if (!input || input.dataset.dropdownWired) return;
       input.dataset.dropdownWired = "1";
       const dropdown = getModelDropdown(inputId);
-      input.addEventListener("focus", () => renderModelDropdown(inputId));
-      input.addEventListener("input", () => renderModelDropdown(inputId));
+      input.addEventListener("focus", () => renderModelDropdown(inputId, { filter: false }));
+      input.addEventListener("input", () => renderModelDropdown(inputId, { filter: true }));
       input.addEventListener("keydown", (event) => {
         if (event.key === "Escape" && !dropdown.hidden) { dropdown.hidden = true; event.stopPropagation(); }
       });

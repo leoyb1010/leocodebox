@@ -20,6 +20,7 @@ import { buildCodexInputItems, normalizeImageDescriptors } from '@/shared/image-
 import { notifyRunFailed, notifyRunStopped } from '@/services/notification-orchestrator.js';
 import { sessionsService } from '@/modules/providers/services/sessions.service.js';
 import { providerAuthService } from '@/modules/providers/services/provider-auth.service.js';
+import { getActiveSwitchEnvOverlay } from '@/modules/leocodebox/provider-session-env.service.js';
 import { providerModelsService } from '@/modules/providers/services/provider-models.service.js';
 import { createCompleteMessage, createNormalizedMessage } from '@/shared/utils.js';
 
@@ -329,7 +330,12 @@ export async function queryCodex(command: string, options: CodexRuntimeOptions =
 
     codex = new Codex({
       codexPathOverride: process.env.CODEX_CLI_PATH || fallbackCodexPath || undefined,
-      env: Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === 'string')) ,
+      env: {
+        ...Object.fromEntries(Object.entries(process.env).filter((entry): entry is [string, string] => typeof entry[1] === 'string')),
+        // Active Leoapi provider beats inherited shell exports (see
+        // provider-session-env.service.ts).
+        ...await getActiveSwitchEnvOverlay('codex'),
+      },
     });
 
     const threadOptions: ThreadOptions = {

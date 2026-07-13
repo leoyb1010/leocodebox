@@ -103,6 +103,14 @@ router.get('/switch/status', async (_req, res, next) => {
       lastAppliedByTarget: store.activeByTarget,
       providers: store.providers.map(sanitizeProvider),
       storePath: providerStorePath(),
+      // Shell exports (e.g. left behind by another switcher like cc-switch)
+      // outrank config files for TERMINAL sessions — surface them so a switch
+      // that "does nothing in the terminal" is explainable at a glance.
+      // In-app sessions are covered by the active-provider env overlay.
+      shellOverrides: {
+        claude: process.env.ANTHROPIC_BASE_URL ? { baseUrl: process.env.ANTHROPIC_BASE_URL } : null,
+        codex: process.env.OPENAI_API_KEY ? { apiKeyPresent: true } : null,
+      },
     });
   } catch (error) {
     next(error);

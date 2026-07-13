@@ -23,6 +23,7 @@ import type { EffortLevel, Options, PermissionMode, Query, SDKMessage, SDKUserMe
 import { buildClaudeUserContent, normalizeImageDescriptors } from '@/shared/image-attachments.js';
 import { isMissingCliExecutableError } from '@/shared/provider-errors.js';
 import { providerModelsService } from '@/modules/providers/services/provider-models.service.js';
+import { getActiveSwitchEnvOverlay } from '@/modules/leocodebox/provider-session-env.service.js';
 import { resolveClaudeCodeExecutablePath } from '@/shared/claude-cli-path.js';
 import {
   createNotificationEvent,
@@ -539,6 +540,10 @@ async function queryClaudeSDK(command: string, options: ClaudeRuntimeOptions = {
       model: resolvedModel || options.model,
       effortModels,
     });
+    // The active Leoapi provider must beat any ANTHROPIC_* vars inherited
+    // from the login shell (e.g. exports left behind by another switcher) —
+    // otherwise switching endpoints in Leoapi silently does nothing here.
+    sdkOptions.env = { ...sdkOptions.env, ...await getActiveSwitchEnvOverlay('claude') };
 
     const mcpServers = await loadMcpConfig(options.cwd);
     if (mcpServers) {
