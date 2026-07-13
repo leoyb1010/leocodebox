@@ -7,6 +7,14 @@ import { apiRequest } from '../../../../../utils/api';
 import { cn } from '../../../../../lib/utils';
 import SessionProviderLogo from '../../../../llm-logo-provider/SessionProviderLogo';
 
+export type CliCopyInfo = {
+  path: string;
+  realPath: string;
+  version: string | null;
+  source: string;
+  active: boolean;
+};
+
 export type CliToolStatus = {
   id: string;
   label: string;
@@ -21,6 +29,7 @@ export type CliToolStatus = {
   latestVersionSource?: string;
   installSource: string;
   executablePath: string | null;
+  copies?: CliCopyInfo[];
   canInstall: boolean;
   canSelfUpdate: boolean;
   mutationsAllowed: boolean;
@@ -42,6 +51,8 @@ type CliActionResponse = {
   error?: string;
   changed?: boolean;
   currentVersion?: string | null;
+  notice?: string | null;
+  activePath?: string | null;
   output?: string;
 };
 
@@ -109,13 +120,15 @@ export default function CliToolsSection({ onToolsChange }: CliToolsSectionProps)
         method: 'POST',
       }) as CliActionResponse;
       if (data?.success) {
-        setMessage(action === 'install'
+        const base = action === 'install'
           ? t('agents.cliTools.installSuccess', { tool: tool.label, version: data.currentVersion || '' })
           : data.changed
             ? t('agents.cliTools.updateSuccess', { tool: tool.label, version: data.currentVersion ?? t('agents.cliTools.latestVersion') })
-            : t('agents.cliTools.alreadyLatest', { tool: tool.label, version: data.currentVersion ?? tool.currentVersion ?? '' }));
+            : t('agents.cliTools.alreadyLatest', { tool: tool.label, version: data.currentVersion ?? tool.currentVersion ?? '' });
+        setMessage(data.notice ? `${base}\n${data.notice}` : base);
       } else {
-        setMessage(t('agents.cliTools.actionFailed', { tool: tool.label, action: t(`agents.cliTools.${action}`), error: data?.error ?? t('agents.cliTools.unknownError') }));
+        const failure = t('agents.cliTools.actionFailed', { tool: tool.label, action: t(`agents.cliTools.${action}`), error: data?.error ?? t('agents.cliTools.unknownError') });
+        setMessage(data?.notice ? `${failure}\n${data.notice}` : failure);
       }
       if (data?.output) setDetail(data.output);
     } catch (error) {
@@ -215,6 +228,17 @@ export default function CliToolsSection({ onToolsChange }: CliToolsSectionProps)
                   <span>{t('agents.cliTools.commandMissing', { command: tool.command })}</span>
                 )}
               </div>
+              {tool.copies && tool.copies.length > 1 && (
+                <p
+                  className="mt-0.5 truncate text-[10px] text-amber-700 dark:text-amber-300"
+                  title={tool.copies.map((copy) => `${copy.active ? '● ' : '○ '}${copy.path} → ${copy.version ?? '?'}（${copy.source}）`).join('\n')}
+                >
+                  {t('agents.cliTools.multipleCopies', {
+                    count: tool.copies.length,
+                    versions: [...new Set(tool.copies.map((copy) => copy.version ?? '?'))].join(' / '),
+                  })}
+                </p>
+              )}
             </div>
 
             {tool.installed && tool.runnable && tool.canSelfUpdate && (
@@ -266,7 +290,7 @@ export default function CliToolsSection({ onToolsChange }: CliToolsSectionProps)
       )}
 
       {loadError && <p role="alert" className="mt-2 text-xs text-destructive">{t('agents.cliTools.loadFailed')}: {loadError}</p>}
-      {message && <p className="mt-2 text-xs text-muted-foreground">{message}</p>}
+      {message && <p className="mt-2 whitespace-pre-line text-xs text-muted-foreground">{message}</p>}
       {detail && <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap rounded-md bg-muted p-2 text-[11px] text-muted-foreground">{detail}</pre>}
     </div>
   );

@@ -6,7 +6,9 @@ import express from 'express';
 
 import {
   CLI_TOOLS,
+  classifyInstallSource,
   clearCliLatestVersionCache,
+  deriveNpmPrefixFromCopyPath,
   detectCliInstallSource,
   readCliLatestVersion,
   resolveCliUpdateCommand,
@@ -33,6 +35,56 @@ test('CLI install source detection uses strict known path segments', async () =>
   assert.equal((await detectCliInstallSource(opencode, async () => '/Users/test/.volta/bin/opencode')).source, 'volta');
   assert.equal((await detectCliInstallSource(opencode, async () => '/Users/test/bin/npm/opencode')).source, 'unknown');
   assert.equal((await detectCliInstallSource(opencode, async () => null)).source, 'unknown');
+});
+
+test('native installer binaries in writable bin dirs are classified standalone', () => {
+  // Claude's native installer drops a self-updating binary straight into
+  // /opt/homebrew/bin without any brew formula owning it.
+  assert.equal(classifyInstallSource('/opt/homebrew/bin/claude'), 'standalone');
+  assert.equal(classifyInstallSource('/usr/local/bin/claude'), 'standalone');
+  assert.equal(classifyInstallSource('/Users/test/bin/claude'), 'standalone');
+  // Package-manager copies still resolve into their real buckets first.
+  assert.equal(classifyInstallSource('/Users/test/.nvm/versions/node/v22.0.0/lib/node_modules/@anthropic-ai/claude-code/bin/claude'), 'npm-global');
+  assert.equal(classifyInstallSource('/opt/homebrew/Cellar/foo/1/bin/foo'), 'homebrew');
+  assert.equal(classifyInstallSource('/Users/test/bin/npm/opencode'), 'unknown');
+});
+
+test('npm prefix derivation pins updates to the copy the user actually runs', () => {
+  assert.equal(
+    deriveNpmPrefixFromCopyPath('/Users/test/.nvm/versions/node/v22.22.3/lib/node_modules/@anthropic-ai/claude-code/bin/claude'),
+    '/Users/test/.nvm/versions/node/v22.22.3',
+  );
+  assert.equal(
+    deriveNpmPrefixFromCopyPath('/Users/test/.local/lib/node_modules/@openai/codex/bin/codex.js'),
+    '/Users/test/.local',
+  );
+  assert.equal(deriveNpmPrefixFromCopyPath('/opt/homebrew/bin/claude'), null);
+});
+
+test('update commands target the active copy: npm gets --prefix, standalone runs the exact path', async () => {
+  const nvmCopy = {
+    path: '/Users/test/.nvm/versions/node/v22.22.3/bin/claude',
+    realPath: '/Users/test/.nvm/versions/node/v22.22.3/lib/node_modules/@anthropic-ai/claude-code/bin/claude',
+    version: '2.1.206',
+    source: 'npm-global' as const,
+    active: true,
+  };
+  assert.deepEqual(await resolveCliUpdateCommand(CLI_TOOLS.claude, 'npm-global', nvmCopy), {
+    command: 'npm',
+    args: ['install', '--global', '--prefix=/Users/test/.nvm/versions/node/v22.22.3', '@anthropic-ai/claude-code@latest'],
+  });
+
+  const nativeCopy = {
+    path: '/opt/homebrew/bin/claude',
+    realPath: '/opt/homebrew/bin/claude',
+    version: '2.1.206',
+    source: 'standalone' as const,
+    active: true,
+  };
+  assert.deepEqual(await resolveCliUpdateCommand(CLI_TOOLS.claude, 'standalone', nativeCopy), {
+    command: '/opt/homebrew/bin/claude',
+    args: ['update'],
+  });
 });
 
 test('all supported standalone agents expose their verified updater', async () => {

@@ -389,7 +389,8 @@
       "updateAll": "Update all ({{count}})",
       "loading": "Checking local agents",
       "diagnostics": "Export diagnostics",
-      "diagnosticsHint": "Download redacted diagnostics JSON (CLI inventory and Leoapi state, keys masked)"
+      "diagnosticsHint": "Download redacted diagnostics JSON (CLI inventory and Leoapi state, keys masked)",
+      "multipleCopies": "{{count}} copies detected (versions {{versions}}); the app manages the first one on PATH — hover for all paths"
     },
     "authStatus": {
       "checking": "Checking...",

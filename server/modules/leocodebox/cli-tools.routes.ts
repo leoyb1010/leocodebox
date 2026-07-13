@@ -20,6 +20,14 @@ type CliTool = {
   docsUrl?: string;
 };
 type CliCommandResult = { ok: boolean; code: string | number; stdout: string; stderr: string; error: string | null };
+type CliCopy = {
+  /** Path as resolved from PATH order — the first entry is what commands actually run. */
+  path: string;
+  realPath: string;
+  version: string | null;
+  source: CliInstallSource;
+  active: boolean;
+};
 type CliLatestCacheEntry = { version: string | null; updatedAt: number };
 type CliLatestResult = { version: string | null; checkedAt: string | null; source: string };
 type CliLatestOptions = { force?: boolean; now?: number; loadLatest?: (packageName: string) => Promise<string | null> };
@@ -121,41 +129,117 @@ export async function resolveExecutablePath(command: string, platform = process.
   }
 }
 
-export async function detectCliInstallSource(tool: CliTool, resolvePath: (command: string) => Promise<string | null> = resolveExecutablePath): Promise<{ source: CliInstallSource; executablePath: string | null }> {
-  const executablePath = await resolvePath(tool.cmd);
-  if (!executablePath) return { source: 'unknown', executablePath: null };
+export function classifyInstallSource(executablePath: string): CliInstallSource {
   const normalized = executablePath.replaceAll('\\', '/');
   // npm installed by Homebrew's Node still lives under lib/node_modules.
   if (/(^|\/)(lib\/node_modules|\.npm-global|npm\/bin)(\/|$)/i.test(normalized)) {
-    return { source: 'npm-global', executablePath };
+    return 'npm-global';
   }
   if (/(^|\/)(pnpm|pnpm-global)(\/|$)/i.test(normalized)) {
-    return { source: 'pnpm', executablePath };
+    return 'pnpm';
   }
   if (/(^|\/)\.volta(\/|$)/i.test(normalized)) {
-    return { source: 'volta', executablePath };
+    return 'volta';
   }
   if (/(^|\/)\.bun(\/|$)/i.test(normalized)) {
-    return { source: 'bun', executablePath };
+    return 'bun';
   }
   if (/(^|\/)(Cellar|Caskroom)(\/|$)/i.test(normalized)) {
-    return { source: 'homebrew', executablePath };
+    return 'homebrew';
   }
   if (normalized.includes('.app/Contents/')) {
-    return { source: 'app-bundled', executablePath };
-  }
-  if (/(^|\/)(\.local\/(bin|share\/[^/]+)|\.opencode\/bin|\.grok\/(bin|downloads))(\/|$)/i.test(normalized)) {
-    return { source: 'standalone', executablePath };
+    return 'app-bundled';
   }
   if (/(^|\/)(\.asdf|\.local\/share\/mise|mise)\/shims(\/|$)/i.test(normalized)) {
-    return { source: 'shim', executablePath };
+    return 'shim';
   }
-  return { source: 'unknown', executablePath };
+  if (/(^|\/)(\.local\/(bin|share\/[^/]+)|\.opencode\/bin|\.grok\/(bin|downloads))(\/|$)/i.test(normalized)) {
+    return 'standalone';
+  }
+  // Native installers (e.g. Claude's) drop a self-updating binary straight
+  // into a writable bin directory. Classification runs on the realpath, so
+  // package-manager symlinks resolve into their real buckets above and never
+  // reach this rule.
+  if (/^(\/opt\/homebrew\/bin|\/usr\/local\/bin)\/[^/]+$/.test(normalized)
+    || /^\/Users\/[^/]+\/bin\/[^/]+$/.test(normalized)
+    || /^\/home\/[^/]+\/bin\/[^/]+$/.test(normalized)) {
+    return 'standalone';
+  }
+  return 'unknown';
 }
 
-export async function resolveCliUpdateCommand(tool: CliTool, source: CliInstallSource): Promise<{ command: string; args: string[] } | null> {
+export async function detectCliInstallSource(tool: CliTool, resolvePath: (command: string) => Promise<string | null> = resolveExecutablePath): Promise<{ source: CliInstallSource; executablePath: string | null }> {
+  const executablePath = await resolvePath(tool.cmd);
+  if (!executablePath) return { source: 'unknown', executablePath: null };
+  return { source: classifyInstallSource(executablePath), executablePath };
+}
+
+/**
+ * Every copy of the CLI reachable through PATH, in resolution order. The
+ * first entry is the copy that actually runs when the user (and this app)
+ * invokes the bare command — status and updates must anchor on it, otherwise
+ * the app "updates" a copy the user never executes and the whole feature
+ * reads as fake.
+ */
+export async function discoverCliCopies(tool: CliTool): Promise<CliCopy[]> {
+  const lookup = process.platform === 'win32'
+    ? await runCliCommand('where', [tool.cmd], 5000)
+    : await runCliCommand('which', ['-a', tool.cmd], 5000);
+  const rawPaths = lookup.ok ? lookup.stdout.trim().split(/\r?\n/).map((line) => line.trim()).filter(Boolean) : [];
+
+  const copies: CliCopy[] = [];
+  const seenRealPaths = new Set<string>();
+  for (const rawPath of rawPaths.slice(0, 8)) {
+    let realPath = rawPath;
+    try {
+      realPath = await fs.realpath(rawPath);
+    } catch {
+      // Broken symlink or vanished file: keep the raw path for display.
+    }
+    if (seenRealPaths.has(realPath)) continue;
+    seenRealPaths.add(realPath);
+    copies.push({
+      path: rawPath,
+      realPath,
+      version: null,
+      source: classifyInstallSource(realPath),
+      active: copies.length === 0,
+    });
+  }
+
+  await Promise.all(copies.map(async (copy) => {
+    const probe = await runCliCommand(copy.path, ['--version'], 5000);
+    copy.version = probe.ok ? parseCliVersionText(`${probe.stdout}\n${probe.stderr}`) : null;
+  }));
+
+  return copies;
+}
+
+/**
+ * Extracts the npm prefix that owns an installed copy, e.g.
+ * `~/.nvm/versions/node/v22.22.3/lib/node_modules/pkg/bin/x` → the v22 root.
+ * Updating with an explicit --prefix guarantees npm writes to the SAME
+ * install the user runs, instead of whichever npm happens to be on PATH.
+ */
+export function deriveNpmPrefixFromCopyPath(realPath: string): string | null {
+  const normalized = realPath.replaceAll('\\', '/');
+  const marker = normalized.indexOf('/lib/node_modules/');
+  if (marker > 0) return normalized.slice(0, marker);
+  return null;
+}
+
+export async function resolveCliUpdateCommand(tool: CliTool, source: CliInstallSource, activeCopy?: CliCopy | null): Promise<{ command: string; args: string[] } | null> {
   if (source === 'npm-global' && tool.npmPackage) {
-    return { command: 'npm', args: ['install', '--global', `${tool.npmPackage}@latest`] };
+    const prefix = activeCopy ? deriveNpmPrefixFromCopyPath(activeCopy.realPath) : null;
+    return {
+      command: 'npm',
+      args: [
+        'install',
+        '--global',
+        ...(prefix ? [`--prefix=${prefix}`] : []),
+        `${tool.npmPackage}@latest`,
+      ],
+    };
   }
   if (source === 'homebrew') {
     const formulaById: Record<string, { name: string; cask?: boolean }> = {
@@ -174,7 +258,10 @@ export async function resolveCliUpdateCommand(tool: CliTool, source: CliInstallS
     return { command: 'bun', args: ['add', '--global', `${tool.npmPackage}@latest`] };
   }
   if (source === 'standalone' && Array.isArray(tool.updateArgs)) {
-    return { command: tool.cmd, args: tool.updateArgs };
+    // Run the exact copy that PATH resolves to, so a native install at e.g.
+    // /opt/homebrew/bin self-updates in place rather than resolving to some
+    // other copy in the server's environment.
+    return { command: activeCopy?.path || tool.cmd, args: tool.updateArgs };
   }
   return null;
 }
@@ -240,10 +327,21 @@ export function clearCliLatestVersionCache(): void {
 }
 
 export async function getCliToolStatus(tool: CliTool, { checkLatest = true, forceLatest = false }: { checkLatest?: boolean; forceLatest?: boolean } = {}) {
-  const probe = await runCliCommand(tool.cmd, ['--version'], 5000);
-  const installed = probe.code !== 'ENOENT';
-  const runnable = probe.ok;
-  const currentVersion = runnable ? parseCliVersionText(probe.stdout || probe.stderr) : null;
+  // Anchor everything on the PATH-active copy: that is the binary the bare
+  // command actually runs. Additional copies are reported so version drift
+  // between package managers is visible instead of silently confusing.
+  const copies = await discoverCliCopies(tool);
+  const active = copies[0] ?? null;
+  const installed = Boolean(active);
+  let runnable = Boolean(active?.version);
+  let probeError: string | null = null;
+  if (active && !active.version) {
+    const probe = await runCliCommand(active.path, ['--version'], 5000);
+    runnable = probe.ok;
+    probeError = (probe.stderr || probe.error || `${tool.cmd} could not run`).trim();
+    if (probe.ok) active.version = parseCliVersionText(probe.stdout || probe.stderr);
+  }
+  const currentVersion = active?.version ?? null;
   const latest = checkLatest && runnable
     ? await readCliLatestVersion(tool, { force: forceLatest })
     : { version: null, checkedAt: null, source: 'skipped' };
@@ -251,10 +349,8 @@ export async function getCliToolStatus(tool: CliTool, { checkLatest = true, forc
   const updateAvailable = Boolean(
     currentVersion && latestVersion && compareSemver(latestVersion, currentVersion) > 0,
   );
-  const installInfo: { source: CliInstallSource; executablePath: string | null } = installed
-    ? await detectCliInstallSource(tool)
-    : { source: 'not-installed', executablePath: null };
-  const updateCommand = runnable ? await resolveCliUpdateCommand(tool, installInfo.source) : null;
+  const installSource: CliInstallSource = active ? active.source : 'not-installed';
+  const updateCommand = runnable ? await resolveCliUpdateCommand(tool, installSource, active) : null;
   const allowMutations = mutationsAllowed();
   const manualHint = updateCommand
     ? [updateCommand.command, ...updateCommand.args].join(' ')
@@ -265,14 +361,15 @@ export async function getCliToolStatus(tool: CliTool, { checkLatest = true, forc
     command: tool.cmd,
     installed,
     runnable,
-    error: runnable ? null : (probe.stderr || probe.error || `${tool.cmd} could not run`).trim(),
+    error: runnable ? null : (probeError || `${tool.cmd} could not run`),
     currentVersion,
     latestVersion,
     latestCheckedAt: latest.checkedAt,
     latestVersionSource: latest.source,
     updateAvailable,
-    installSource: installInfo.source,
-    executablePath: installInfo.executablePath,
+    installSource,
+    executablePath: active?.path ?? null,
+    copies,
     canInstall: !installed && Boolean(tool.install),
     canSelfUpdate: runnable && Boolean(updateCommand),
     mutationsAllowed: allowMutations,
@@ -350,7 +447,8 @@ router.post('/:id/update', requireLocalOnly, async (req, res, next) => {
         error.statusCode = 409;
         throw error;
       }
-      const updateCommand = await resolveCliUpdateCommand(tool, before.installSource as CliInstallSource);
+      const activeBefore = before.copies.find((copy) => copy.active) ?? null;
+      const updateCommand = await resolveCliUpdateCommand(tool, before.installSource as CliInstallSource, activeBefore);
       if (!updateCommand) {
         const error: StatusError = new Error(`${tool.label} 的安装来源为 ${before.installSource}，无法安全自动更新。`);
         error.statusCode = 409;
@@ -358,14 +456,39 @@ router.post('/:id/update', requireLocalOnly, async (req, res, next) => {
       }
       const result = await runCliCommand(updateCommand.command, updateCommand.args, 300_000);
       const after = await getCliToolStatus(tool, { checkLatest: false });
+      // Compare the SAME copy before and after; a bare currentVersion diff
+      // could be another copy shadowing the one we just updated.
+      const afterAtSamePath = activeBefore
+        ? after.copies.find((copy) => copy.path === activeBefore.path) ?? null
+        : null;
+      const versionAtPathAfter = afterAtSamePath?.version ?? after.currentVersion;
+      const combinedOutput = `${result.stdout}\n${result.stderr}`;
+
+      let friendlyError = result.ok ? null : (result.error || 'Update command failed.');
+      if (!result.ok && /unauthenticated/i.test(combinedOutput)) {
+        friendlyError = `${tool.label} 的自更新需要该 CLI 自己的登录态，请在你的终端运行 ${updateCommand.command} ${updateCommand.args.join(' ')}（必要时先登录）。`;
+      }
+
+      let notice: string | null = null;
+      if (tool.npmPackage && /allow-scripts/i.test(combinedOutput) && combinedOutput.includes(tool.npmPackage)) {
+        notice = `npm 的 allow-scripts 拦截了 ${tool.npmPackage} 的安装脚本，更新可能不完整。终端执行一次：npm install -g --allow-scripts=${tool.npmPackage} ${tool.npmPackage}@latest`;
+      }
+      if (result.ok && after.copies.length > 1) {
+        const shadowNote = `本机存在 ${after.copies.length} 份 ${tool.label}，已更新 PATH 首位的这份（${activeBefore?.path ?? after.executablePath}）。若终端里版本未变，说明你的终端解析到了另一份副本。`;
+        notice = notice ? `${notice}\n${shadowNote}` : shadowNote;
+      }
+
       return {
         success: result.ok,
         tool: tool.id,
-        previousVersion: before.currentVersion,
-        currentVersion: after.currentVersion,
-        changed: before.currentVersion !== after.currentVersion,
-        output: `${result.stdout}\n${result.stderr}`.trim().slice(0, 8000),
-        error: result.ok ? null : (result.error || 'Update command failed.'),
+        previousVersion: activeBefore?.version ?? before.currentVersion,
+        currentVersion: versionAtPathAfter,
+        changed: (activeBefore?.version ?? before.currentVersion) !== versionAtPathAfter,
+        activePath: activeBefore?.path ?? before.executablePath,
+        copies: after.copies,
+        notice,
+        output: combinedOutput.trim().slice(0, 8000),
+        error: friendlyError,
       };
     });
     res.json(payload);
