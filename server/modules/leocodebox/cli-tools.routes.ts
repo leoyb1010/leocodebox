@@ -175,16 +175,31 @@ export async function detectCliInstallSource(tool: CliTool, resolvePath: (comman
 }
 
 /**
- * Every copy of the CLI reachable through PATH, in resolution order. The
- * first entry is the copy that actually runs when the user (and this app)
- * invokes the bare command — status and updates must anchor on it, otherwise
- * the app "updates" a copy the user never executes and the whole feature
- * reads as fake.
+ * Every copy of the CLI reachable through the USER'S terminal PATH, in
+ * resolution order. The first entry is the copy that actually runs when the
+ * user types the bare command — status and updates must anchor on it,
+ * otherwise the app "updates" a copy the user never executes and the whole
+ * feature reads as fake.
+ *
+ * The lookup deliberately uses the login-shell PATH captured by the desktop
+ * shell (LEOCODEBOX_LOGIN_SHELL_PATH), NOT this server's own augmented PATH:
+ * the augmented PATH drags in copies from every nvm/fnm node version, which
+ * the user's terminal never resolves and which must not count as references.
  */
 export async function discoverCliCopies(tool: CliTool): Promise<CliCopy[]> {
-  const lookup = process.platform === 'win32'
-    ? await runCliCommand('where', [tool.cmd], 5000)
-    : await runCliCommand('which', ['-a', tool.cmd], 5000);
+  const userShellPath = (process.env.LEOCODEBOX_LOGIN_SHELL_PATH || '').trim();
+  const lookupEnv = userShellPath ? { ...process.env, PATH: userShellPath } : undefined;
+  const runLookup = (env?: NodeJS.ProcessEnv) => (process.platform === 'win32'
+    ? runCliCommand('where', [tool.cmd], 5000, { env })
+    : runCliCommand('which', ['-a', tool.cmd], 5000, { env }));
+
+  let lookup = await runLookup(lookupEnv);
+  if (lookupEnv && (!lookup.ok || !lookup.stdout.trim())) {
+    // The user's shell PATH may genuinely miss the CLI (e.g. installed via a
+    // manager the shell config no longer sources). Fall back to the server's
+    // broader PATH so detection never regresses below the old behavior.
+    lookup = await runLookup(undefined);
+  }
   const rawPaths = lookup.ok ? lookup.stdout.trim().split(/\r?\n/).map((line) => line.trim()).filter(Boolean) : [];
 
   const copies: CliCopy[] = [];
@@ -281,10 +296,10 @@ export async function withCliMutation<T>(toolId: string, operation: () => Promis
   }
 }
 
-export function runCliCommand(cmd: string, args: string[], timeoutMs = 10_000): Promise<CliCommandResult> {
+export function runCliCommand(cmd: string, args: string[], timeoutMs = 10_000, options: { env?: NodeJS.ProcessEnv } = {}): Promise<CliCommandResult> {
   return new Promise<CliCommandResult>((resolve) => {
     const shell = process.platform === 'win32' && /\.(cmd|bat)$/i.test(cmd);
-    execFile(cmd, args, { timeout: timeoutMs, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024, shell }, (error, stdout, stderr) => {
+    execFile(cmd, args, { timeout: timeoutMs, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024, shell, ...(options.env ? { env: options.env } : {}) }, (error, stdout, stderr) => {
       resolve({
         ok: !error,
         code: error?.code ?? 0,
@@ -473,8 +488,9 @@ router.post('/:id/update', requireLocalOnly, async (req, res, next) => {
       if (tool.npmPackage && /allow-scripts/i.test(combinedOutput) && combinedOutput.includes(tool.npmPackage)) {
         notice = `npm 的 allow-scripts 拦截了 ${tool.npmPackage} 的安装脚本，更新可能不完整。终端执行一次：npm install -g --allow-scripts=${tool.npmPackage} ${tool.npmPackage}@latest`;
       }
-      if (result.ok && after.copies.length > 1) {
-        const shadowNote = `本机存在 ${after.copies.length} 份 ${tool.label}，已更新 PATH 首位的这份（${activeBefore?.path ?? after.executablePath}）。若终端里版本未变，说明你的终端解析到了另一份副本。`;
+      const divergentVersions = new Set(after.copies.map((copy) => copy.version ?? '?'));
+      if (result.ok && after.copies.length > 1 && divergentVersions.size > 1) {
+        const shadowNote = `你的终端 PATH 里有 ${after.copies.length} 份 ${tool.label} 且版本不一致，已更新首位这份（${activeBefore?.path ?? after.executablePath}）。若终端里版本未变，请清理旧副本。`;
         notice = notice ? `${notice}\n${shadowNote}` : shadowNote;
       }
 

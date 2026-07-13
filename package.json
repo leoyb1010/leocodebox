@@ -1,6 +1,6 @@
 {
   "name": "leocodebox",
-  "version": "1.40.1",
+  "version": "1.40.2",
   "productName": "leocodebox",
   "description": "Local desktop controller for coding agents",
   "type": "module",

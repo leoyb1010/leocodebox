@@ -390,7 +390,7 @@
       "loading": "Checking local agents",
       "diagnostics": "Export diagnostics",
       "diagnosticsHint": "Download redacted diagnostics JSON (CLI inventory and Leoapi state, keys masked)",
-      "multipleCopies": "{{count}} copies detected (versions {{versions}}); the app manages the first one on PATH — hover for all paths"
+      "multipleCopies": "{{count}} copies with mismatched versions on your terminal PATH ({{versions}}); the app manages the first one — hover for paths"
     },
     "authStatus": {
       "checking": "Checking...",

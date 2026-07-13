@@ -544,6 +544,9 @@ export class LocalServerController {
       CLOUDCLI_DESKTOP_LOCAL_ONLY: LOCAL_ONLY_ENV_VALUE,
       LEOCODEBOX_LOCAL_AUTH_TOKEN: this.localAuthToken,
       CLOUDCLI_DESKTOP_LOCAL_AUTH_TOKEN: this.localAuthToken,
+      // The user's login-shell PATH, unmerged: CLI status/updates must see
+      // exactly what the user's terminal resolves — nothing more.
+      ...(loginShellEnvironment.PATH ? { LEOCODEBOX_LOGIN_SHELL_PATH: loginShellEnvironment.PATH } : {}),
       // Keep-alive servers must outlive this process, so skip the parent
       // watchdog that would otherwise stop them ~1s after Electron exits.
       ...(this.desktopSettings.keepLocalServerRunning

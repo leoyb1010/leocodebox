@@ -228,7 +228,8 @@ export default function CliToolsSection({ onToolsChange }: CliToolsSectionProps)
                   <span>{t('agents.cliTools.commandMissing', { command: tool.command })}</span>
                 )}
               </div>
-              {tool.copies && tool.copies.length > 1 && (
+              {tool.copies && tool.copies.length > 1
+                && new Set(tool.copies.map((copy) => copy.version ?? '?')).size > 1 && (
                 <p
                   className="mt-0.5 truncate text-[10px] text-amber-700 dark:text-amber-300"
                   title={tool.copies.map((copy) => `${copy.active ? '● ' : '○ '}${copy.path} → ${copy.version ?? '?'}（${copy.source}）`).join('\n')}

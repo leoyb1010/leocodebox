@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { AddressInfo } from 'node:net';
+import fs from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 
 import express from 'express';
 
@@ -10,6 +13,7 @@ import {
   clearCliLatestVersionCache,
   deriveNpmPrefixFromCopyPath,
   detectCliInstallSource,
+  discoverCliCopies,
   readCliLatestVersion,
   resolveCliUpdateCommand,
   withCliMutation,
@@ -35,6 +39,41 @@ test('CLI install source detection uses strict known path segments', async () =>
   assert.equal((await detectCliInstallSource(opencode, async () => '/Users/test/.volta/bin/opencode')).source, 'volta');
   assert.equal((await detectCliInstallSource(opencode, async () => '/Users/test/bin/npm/opencode')).source, 'unknown');
   assert.equal((await detectCliInstallSource(opencode, async () => null)).source, 'unknown');
+});
+
+test('copy discovery follows the user login-shell PATH, not the server PATH', async (t) => {
+  const scratch = await fs.mkdtemp(path.join(os.tmpdir(), 'leocodebox-cli-copies-'));
+  const userBin = path.join(scratch, 'user-bin');
+  const serverOnlyBin = path.join(scratch, 'server-only-bin');
+  await fs.mkdir(userBin);
+  await fs.mkdir(serverOnlyBin);
+  const script = '#!/bin/sh\necho "9.9.9"\n';
+  await fs.writeFile(path.join(userBin, 'fakecli'), script, { mode: 0o755 });
+  await fs.writeFile(path.join(serverOnlyBin, 'fakecli'), '#!/bin/sh\necho "1.0.0"\n', { mode: 0o755 });
+
+  const previousLoginPath = process.env.LEOCODEBOX_LOGIN_SHELL_PATH;
+  const previousPath = process.env.PATH;
+  // Server PATH sees both dirs (server-only first); the user's shell only sees user-bin.
+  process.env.PATH = `${serverOnlyBin}:${userBin}:${previousPath}`;
+  process.env.LEOCODEBOX_LOGIN_SHELL_PATH = `${userBin}:/usr/bin:/bin`;
+  t.after(() => {
+    process.env.PATH = previousPath;
+    if (previousLoginPath === undefined) delete process.env.LEOCODEBOX_LOGIN_SHELL_PATH;
+    else process.env.LEOCODEBOX_LOGIN_SHELL_PATH = previousLoginPath;
+  });
+
+  const fakeTool = { id: 'fakecli', cmd: 'fakecli', npmPackage: null, updateArgs: null };
+  const copies = await discoverCliCopies(fakeTool);
+  assert.equal(copies.length, 1, 'server-only copies must not count as references');
+  assert.equal(copies[0].path, path.join(userBin, 'fakecli'));
+  assert.equal(copies[0].active, true);
+  assert.equal(copies[0].version, '9.9.9');
+
+  // A CLI missing from the user's shell PATH falls back to server-wide lookup.
+  process.env.LEOCODEBOX_LOGIN_SHELL_PATH = '/usr/bin:/bin';
+  const fallback = await discoverCliCopies(fakeTool);
+  assert.equal(fallback.length >= 1, true);
+  assert.equal(fallback[0].path, path.join(serverOnlyBin, 'fakecli'));
 });
 
 test('native installer binaries in writable bin dirs are classified standalone', () => {
