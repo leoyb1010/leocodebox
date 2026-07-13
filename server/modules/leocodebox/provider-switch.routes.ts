@@ -184,7 +184,7 @@ function scheduleProviderModelDiscovery(provider: SwitchProvider, timeoutMs: unk
 
 router.post('/switch/providers', async (req, res, next) => {
   try {
-    const provider = await withSwitchMutation(async () => {
+    const { provider, reapplied, activeModel } = await withSwitchMutation(async () => {
       const store = await readStore();
       const existing = req.body?.id ? store.providers.find((item) => item.id === req.body.id) : null;
       const savedProvider = normalizeProvider(req.body, existing);
@@ -197,13 +197,35 @@ router.post('/switch/providers', async (req, res, next) => {
       }
       upsertProviderInStore(store, savedProvider);
       await writeStore(store);
-      return savedProvider;
+
+      // Editing the provider that is currently live for its target must
+      // rewrite the agent config immediately — otherwise the store and the
+      // real config silently diverge and the edit "does not take effect".
+      if (store.activeByTarget[savedProvider.target] === savedProvider.id) {
+        await ensureDefaultSnapshot(savedProvider.target, store);
+        await applyProviderTransactionally(savedProvider, async () => {
+          savedProvider.lastAppliedAt = nowIso();
+          savedProvider.updatedAt = nowIso();
+          upsertProviderInStore(store, savedProvider);
+          await writeStore(store);
+        });
+        return {
+          provider: savedProvider,
+          reapplied: true,
+          activeModel: savedProvider.target === 'opencode' && savedProvider.model
+            ? `leocodebox_${sanitizeIdPart(savedProvider.id)}/${savedProvider.model}`
+            : savedProvider.model || null,
+        };
+      }
+      return { provider: savedProvider, reapplied: false, activeModel: null };
     });
 
     const shouldDiscover = req.body?.autoDiscover === true && provider.baseUrl && provider.apiKey;
     res.json({
       success: true,
       provider: sanitizeProvider(provider),
+      reapplied,
+      activeModel,
       discovery: shouldDiscover ? 'pending' : null,
       warning: null,
     });

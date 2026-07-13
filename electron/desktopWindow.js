@@ -672,7 +672,9 @@ export class DesktopWindowManager {
   configurePermissions() {
     const isAllowedPermission = (webContents, permission) => {
       const sourceUrl = webContents.getURL();
-      const allowedPermissions = new Set(['clipboard-read', 'media', 'notifications']);
+      // clipboard-sanitized-write backs navigator.clipboard.writeText —
+      // without it every in-app "copy" button fails with a permission error.
+      const allowedPermissions = new Set(['clipboard-read', 'clipboard-sanitized-write', 'media', 'notifications']);
       return isAllowedPermissionOrigin(
         sourceUrl,
         this.getCloudState().controlPlaneUrl,

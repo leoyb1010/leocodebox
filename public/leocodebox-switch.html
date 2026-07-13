@@ -343,6 +343,13 @@
     }
     @keyframes surface-enter { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
     @media (prefers-reduced-motion: reduce) { .app-shell { animation: none; } }
+
+    .cc-model-dropdown { position: absolute; z-index: 60; margin-top: 4px; max-height: 220px; overflow-y: auto; min-width: 220px; border: 1px solid var(--border, #d5d9dd); border-radius: 8px; background: var(--surface, #fff); box-shadow: 0 10px 30px rgba(15, 26, 36, .16); }
+    .cc-model-dropdown[hidden] { display: none; }
+    .cc-model-dropdown .cc-model-option { padding: 7px 10px; font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .cc-model-dropdown .cc-model-option:hover, .cc-model-dropdown .cc-model-option.hl { background: rgba(23, 143, 130, .12); }
+    .cc-model-dropdown .cc-model-empty { padding: 7px 10px; font-size: 12px; color: #8a9198; }
+    html[data-theme="dark"] .cc-model-dropdown { background: #1b1f24; border-color: #2d3238; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
   </style>
 </head>
 <body>
@@ -406,10 +413,9 @@
           <div class="field">
             <label for="providerModel">模型</label>
             <div style="display:flex;gap:8px">
-              <input id="providerModel" name="model" list="providerModelOptions" placeholder="模型名称" style="flex:1">
+              <input id="providerModel" name="model" placeholder="模型名称" autocomplete="off" style="flex:1">
               <button class="quiet-button" id="discoverDraftModels" type="button">自动获取</button>
             </div>
-            <datalist id="providerModelOptions"></datalist>
           </div>
           <div class="field span-2">
             <label for="providerBaseUrl">接口地址</label>
@@ -482,8 +488,7 @@
         <p>读取接口公开的模型列表；模型测速会发送最短测试请求，可能产生极少量计费。</p>
         <div class="field">
           <label for="testModel">测试模型</label>
-          <input id="testModel" list="modelOptions" placeholder="先读取模型，或直接输入模型名称">
-          <datalist id="modelOptions"></datalist>
+          <input id="testModel" placeholder="先读取模型，或直接输入模型名称" autocomplete="off">
         </div>
         <div class="setting-actions">
           <button class="quiet-button" id="loadModels" type="button"><img class="button-icon" src="/icons/lucide/download.svg" alt="">读取模型列表</button>
@@ -822,7 +827,7 @@
             wireApi: form.elements.wireApi.value,
           }),
         });
-        $("#providerModelOptions").innerHTML = (result.models || []).map((model) => `<option value="${escapeHtml(model)}"></option>`).join("");
+        setModelOptions("providerModel", result.models || []);
         if (!form.elements.model.value && result.models?.length) form.elements.model.value = result.models[0];
         const cacheLabel = modelCacheSourceLabel(result.cache);
         showToast(`已获取 ${result.models?.length || 0} 个模型${cacheLabel ? ` · ${cacheLabel}` : ""}`, "ok");
@@ -1054,7 +1059,7 @@
       $("#toolsDialogTitle").textContent = `${provider.name} · 管理与测速`;
       $("#autoSelectEndpoint").checked = Boolean(provider.autoSelectEndpoint);
       $("#testModel").value = provider.model || "";
-      $("#modelOptions").innerHTML = "";
+      setModelOptions("testModel", []);
       renderEndpointEditor(provider);
       setDiagnosticResult("可读取模型列表、测试多个请求地址，或执行最短模型请求测速。");
       $("#toolsDialog").showModal();
@@ -1113,7 +1118,7 @@
         method: "POST",
         body: JSON.stringify({ timeoutMs: settings.timeoutSeconds * 1000, bypassCache: true }),
       });
-      $("#modelOptions").innerHTML = result.models.map((model) => `<option value="${escapeHtml(model)}"></option>`).join("");
+      setModelOptions("testModel", result.models);
       if (!$("#testModel").value && result.models[0]) $("#testModel").value = result.models[0];
       const cacheLabel = modelCacheSourceLabel(result.cache);
       setDiagnosticResult(
@@ -1265,7 +1270,7 @@
       form.elements.baseUrl.value = provider.baseUrl || "";
       form.elements.apiKey.value = "";
       form.elements.model.value = provider.model || "";
-      $("#providerModelOptions").innerHTML = (provider.discoveredModels || []).map((model) => `<option value="${escapeHtml(model)}"></option>`).join("");
+      setModelOptions("providerModel", provider.discoveredModels || []);
       form.elements.notes.value = provider.notes || "";
       $("#providerSonnetModel").value = provider.modelMapping?.sonnet || provider.model || "";
       $("#providerOpusModel").value = provider.modelMapping?.opus || provider.model || "";
@@ -1296,11 +1301,20 @@
       localStorage.setItem("leoapi-target", selectedTarget);
       $("#providerDialog").close();
       await refresh();
+      if (result.reapplied) {
+        // Editing the live provider rewrote the agent config — tell the app
+        // shell so open composers pick up the new model for new sessions.
+        window.parent.dispatchEvent(new CustomEvent("leocodebox-provider:applied", {
+          detail: { target: result.provider.target, activeModel: result.activeModel || null },
+        }));
+      }
       if (result.warning) {
         showToast(result.warning, "error");
       } else if (result.discovery === "pending") {
         showToast(`${text("saved")}：${result.provider.name} · 正在后台发现模型`, "ok");
         void pollProviderDiscovery(result.provider.id);
+      } else if (result.reapplied) {
+        showToast(`${text("saved")}：${result.provider.name} · 已重新应用，对新会话生效`, "ok");
       } else {
         showToast(`${text("saved")}：${result.provider.name}`, "ok");
       }
@@ -1322,6 +1336,67 @@
         }
       }
     }
+
+
+    // Scrollable model pickers: datalist only filters as you type, so the full
+    // list was effectively invisible. These dropdowns open on focus, scroll,
+    // and filter as you type.
+    const modelOptionSets = new Map();
+    function setModelOptions(inputId, models) {
+      modelOptionSets.set(inputId, Array.isArray(models) ? models.filter(Boolean) : []);
+      const input = document.getElementById(inputId);
+      if (input && document.activeElement === input) renderModelDropdown(inputId);
+    }
+    function getModelDropdown(inputId) {
+      let dropdown = document.getElementById(`${inputId}Dropdown`);
+      if (!dropdown) {
+        dropdown = document.createElement("div");
+        dropdown.id = `${inputId}Dropdown`;
+        dropdown.className = "cc-model-dropdown";
+        dropdown.hidden = true;
+        document.getElementById(inputId).closest("dialog, body").appendChild(dropdown);
+      }
+      return dropdown;
+    }
+    function renderModelDropdown(inputId) {
+      const input = document.getElementById(inputId);
+      const dropdown = getModelDropdown(inputId);
+      const all = modelOptionSets.get(inputId) || [];
+      const query = input.value.trim().toLowerCase();
+      const models = query ? all.filter((model) => model.toLowerCase().includes(query)) : all;
+      if (!all.length) { dropdown.hidden = true; return; }
+      dropdown.innerHTML = models.length
+        ? models.map((model) => `<div class="cc-model-option" data-model="${escapeHtml(model)}">${escapeHtml(model)}</div>`).join("")
+        : '<div class="cc-model-empty">无匹配模型</div>';
+      const rect = input.getBoundingClientRect();
+      const host = dropdown.parentElement.getBoundingClientRect();
+      dropdown.style.left = `${rect.left - host.left}px`;
+      dropdown.style.top = `${rect.bottom - host.top}px`;
+      dropdown.style.width = `${Math.max(rect.width, 220)}px`;
+      dropdown.hidden = false;
+    }
+    function attachModelDropdown(inputId) {
+      const input = document.getElementById(inputId);
+      if (!input || input.dataset.dropdownWired) return;
+      input.dataset.dropdownWired = "1";
+      const dropdown = getModelDropdown(inputId);
+      input.addEventListener("focus", () => renderModelDropdown(inputId));
+      input.addEventListener("input", () => renderModelDropdown(inputId));
+      input.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && !dropdown.hidden) { dropdown.hidden = true; event.stopPropagation(); }
+      });
+      input.addEventListener("blur", () => { window.setTimeout(() => { dropdown.hidden = true; }, 150); });
+      dropdown.addEventListener("mousedown", (event) => {
+        const option = event.target.closest("[data-model]");
+        if (!option) return;
+        event.preventDefault();
+        input.value = option.getAttribute("data-model");
+        input.dispatchEvent(new Event("change", { bubbles: true }));
+        dropdown.hidden = true;
+      });
+    }
+    attachModelDropdown("providerModel");
+    attachModelDropdown("testModel");
 
     async function applyProvider(id) {
       const provider = state.providers.find((item) => item.id === id);
@@ -1362,11 +1437,31 @@
       showToast(`${result.note || (result.reachable ? "连接成功" : "连接失败")}${latency}`, tone);
     }
 
+    async function copyTextToClipboard(value) {
+      try {
+        await navigator.clipboard.writeText(value);
+        return true;
+      } catch {
+        // Clipboard API can be denied inside embedded views; fall back to the
+        // selection-based path which does not require a permission grant.
+        const holder = document.createElement("textarea");
+        holder.value = value;
+        holder.style.position = "fixed";
+        holder.style.opacity = "0";
+        document.body.appendChild(holder);
+        holder.select();
+        let copied = false;
+        try { copied = document.execCommand("copy"); } catch { copied = false; }
+        holder.remove();
+        return copied;
+      }
+    }
+
     async function copyProviderUrl(id) {
       const provider = state.providers.find((item) => item.id === id);
       if (!provider?.baseUrl) return;
-      await navigator.clipboard.writeText(provider.baseUrl);
-      showToast(text("copied"), "ok");
+      const copied = await copyTextToClipboard(provider.baseUrl);
+      showToast(copied ? text("copied") : "复制失败，请手动选择地址复制", copied ? "ok" : "error");
     }
 
     async function deleteProvider(id) {

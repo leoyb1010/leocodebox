@@ -249,8 +249,12 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
   useEffect(() => {
     const handleProviderApplied = (event: Event) => {
       const detail = (event as CustomEvent<{ target?: LLMProvider; activeModel?: string | null }>).detail;
-      if (detail?.target === 'opencode' && detail.activeModel) {
-        setStoredProviderModel('opencode', detail.activeModel);
+      // The composer sends its remembered model explicitly with every message,
+      // so a Leoapi switch only truly takes effect once that selection is
+      // repointed at the newly applied provider's model.
+      const modelSwitchTargets: LLMProvider[] = ['claude', 'codex', 'opencode'];
+      if (detail?.target && detail.activeModel && modelSwitchTargets.includes(detail.target)) {
+        setStoredProviderModel(detail.target, detail.activeModel);
       }
       void loadProviderModels({ bypassCache: true });
     };
