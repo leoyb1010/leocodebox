@@ -108,11 +108,11 @@ export default function App() {
     <I18nextProvider i18n={i18n}>
       <ThemeProvider>
         <AuthProvider>
-          <WebSocketProvider>
-            <PluginsProvider>
-              <TasksSettingsProvider>
-                <TaskMasterProvider>
-                <ProtectedRoute>
+          <ProtectedRoute>
+            <WebSocketProvider>
+              <PluginsProvider>
+                <TasksSettingsProvider>
+                  <TaskMasterProvider>
                   <PreferencesProvider>
                     <Router basename={routerBasename}>
                       <Routes>
@@ -121,11 +121,11 @@ export default function App() {
                       </Routes>
                     </Router>
                   </PreferencesProvider>
-                </ProtectedRoute>
-                </TaskMasterProvider>
-              </TasksSettingsProvider>
-            </PluginsProvider>
-          </WebSocketProvider>
+                  </TaskMasterProvider>
+                </TasksSettingsProvider>
+              </PluginsProvider>
+            </WebSocketProvider>
+          </ProtectedRoute>
         </AuthProvider>
       </ThemeProvider>
     </I18nextProvider>

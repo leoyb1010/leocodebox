@@ -636,6 +636,7 @@ export class DesktopWindowManager {
 
   async showDesktopSettings() {
     if (!this.mainWindow) return this.getDesktopState();
+    if (this.emitLocalModal('settings')) return this.getDesktopState();
     await this.ensureSettingsWindow('desktop-settings');
     return this.getDesktopState();
   }
@@ -752,16 +753,13 @@ export class DesktopWindowManager {
     });
 
     this.mainWindow.on('close', (event) => {
-      // Hide instead of close so reopening from the tray/Dock is instant and
-      // the local server stays warm. Real quit (⌘Q / tray) bypasses this.
       if (this.actions.isAppQuitting?.()) return;
       event.preventDefault();
-      if (this.mainWindow.isFullScreen()) {
-        this.mainWindow.once('leave-full-screen', () => this.mainWindow?.hide());
-        this.mainWindow.setFullScreen(false);
-        return;
-      }
-      this.mainWindow.hide();
+      // leocodebox owns the local server lifecycle: closing the app must be a
+      // real quit so port 38473 and all child processes are released. Users who
+      // explicitly enable keepLocalServerRunning still get the documented
+      // detached-server behavior in main.js before-quit handling.
+      this.actions.requestQuit?.();
     });
 
     this.mainWindow.on('closed', () => {

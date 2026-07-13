@@ -65,6 +65,33 @@ async function copyNodeModule(packageName) {
   return true;
 }
 
+async function findConflictCopies(directory) {
+  const matches = [];
+  for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
+    const fullPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      matches.push(...await findConflictCopies(fullPath));
+    } else if (/(?:\s2| copy|conflicted copy)\.[^.]+$/i.test(entry.name)) {
+      matches.push(path.relative(rootDir, fullPath));
+    }
+  }
+  return matches;
+}
+
+async function removeConflictCopies(directory) {
+  let removed = 0;
+  for (const entry of await fs.readdir(directory, { withFileTypes: true })) {
+    const fullPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      removed += await removeConflictCopies(fullPath);
+    } else if (/(?:\s2| copy|conflicted copy)\.[^.]+$/i.test(entry.name)) {
+      await fs.rm(fullPath, { force: true });
+      removed += 1;
+    }
+  }
+  return removed;
+}
+
 function buildDesktopPackageJson(copiedOptionalDependencies) {
   return {
     name: `${packageJson.name}-desktop`,
@@ -105,6 +132,9 @@ function buildDesktopPackageJson(copiedOptionalDependencies) {
         // ~/.leocodebox/vendor/codex instead of shipping inside the DMG
         // (see server/modules/providers/list/codex/codex-fallback.service.ts).
         '!**/node_modules/@openai/codex-{darwin,linux,win32}-*/**',
+        // Browser automation uses the smaller headless shell. Exclude the full
+        // Chrome-for-Testing bundle if a developer installed both variants.
+        '!**/node_modules/playwright-core/.local-browsers/chromium-*/**',
         'package.json',
         'README.md',
         'README.zh-CN.md',
@@ -130,11 +160,33 @@ await Promise.all([
 ]);
 await fs.mkdir(stageDir, { recursive: true });
 
+const conflictCopies = (await Promise.all(
+  ['src', 'server', 'electron', 'scripts'].map((directory) => findConflictCopies(path.join(rootDir, directory))),
+)).flat();
+if (conflictCopies.length > 0) {
+  throw new Error(`Release input contains conflict-copy files:\n${conflictCopies.join('\n')}`);
+}
+
 await copyRequired('electron');
 await copyRequired('dist');
 await copyRequired('dist-server');
 await copyRequired('public');
 await copyRequired('node_modules');
+
+// Finder/iCloud conflict copies occasionally appear inside installed packages.
+// They are never part of the dependency graph and must not enter a release.
+const removedDependencyConflictCopies = await removeConflictCopies(
+  path.join(stageDir, 'node_modules'),
+);
+
+const stagedBrowserRoot = path.join(stageDir, 'node_modules', 'playwright-core', '.local-browsers');
+if (await pathExists(stagedBrowserRoot)) {
+  for (const entry of await fs.readdir(stagedBrowserRoot)) {
+    if (entry.startsWith('chromium-')) {
+      await fs.rm(path.join(stagedBrowserRoot, entry), { recursive: true, force: true });
+    }
+  }
+}
 await copyRequired('README.md');
 await copyRequired('README.zh-CN.md');
 await copyRequired('LICENSE');
@@ -166,6 +218,7 @@ await fs.writeFile(
 );
 
 console.log(`Prepared thin desktop app at ${path.relative(rootDir, stageDir)}`);
+console.log(`Removed dependency conflict copies: ${removedDependencyConflictCopies}`);
 console.log(`Runtime dependencies: ${copiedRuntimeDependencies.join(', ')}`);
 if (Object.keys(copiedOptionalDependencies).length) {
   console.log(`Optional dependencies: ${Object.keys(copiedOptionalDependencies).join(', ')}`);

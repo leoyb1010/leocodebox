@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { IS_PLATFORM } from '../../../constants/config';
 import { useAuth } from '../context/AuthContext';
 import Onboarding from '../../onboarding/view/Onboarding';
+import VisualStateArtwork from '../../ui/VisualStateArtwork';
 
 import AuthLoadingScreen from './AuthLoadingScreen';
 import LoginForm from './LoginForm';
@@ -34,6 +35,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-background p-6 text-foreground">
         <div role="alert" className="w-full max-w-lg border border-destructive/40 bg-card p-6">
+          <VisualStateArtwork name="local-service-failed" category="errors" className="mx-auto mb-3 h-40 w-full max-w-sm" />
           <h1 className="text-lg font-semibold">{t('localDesktop.localServiceTitle')}</h1>
           <p className="mt-2 text-sm leading-6 text-muted-foreground">{error}</p>
           <button

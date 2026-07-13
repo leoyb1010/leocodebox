@@ -5,8 +5,8 @@ window.__MOCK_STATE__ = {
   activeTarget: { kind: 'launcher', name: '启动台', url: null },
   cloudLoading: false,
   desktopSettings: { keepLocalServerRunning: false, exposeLocalServerOnNetwork: false, themeMode: 'system' },
-  localWebUrl: 'http://localhost:3001',
-  shareableWebUrl: 'http://localhost:3001',
+  localWebUrl: 'http://localhost:38473',
+  shareableWebUrl: 'http://localhost:38473',
   localServerRunning: false,
   localStartupLogs: [],
   environments: [],
@@ -312,21 +312,21 @@ window.__MOCK_STATE__ = {
 	        if (CC.localOnly(CC.state)) return;
 	        return CC.run('Logging out...', function () { return bridge.disconnectCloud(); });
       case 'open-web':
-        return CC.run('Opening local web UI in your browser...', function () { return bridge.openLocalWebUi(); });
+        return CC.run('正在浏览器中打开本机工作台...', function () { return bridge.openLocalWebUi(); });
       case 'copy-web':
-        return CC.run('Copied local URL to clipboard', function () { return bridge.copyLocalWebUrl(); });
+        return CC.run('正在复制本机网页链接...', function () { return bridge.copyLocalWebUrl(); });
       case 'diagnostics':
-        return CC.run('Copied diagnostics to clipboard', function () { return bridge.copyDiagnostics(); });
+        return CC.run('正在复制诊断信息...', function () { return bridge.copyDiagnostics(); });
       case 'set-setting':
-        return CC.run('Saved', function () { return bridge.updateSetting(node.key, node.value); });
+        return CC.run('正在保存...', function () { return bridge.updateSetting(node.key, node.value); });
       case 'set-theme-mode':
-        return CC.run('Saved', function () { return bridge.updateSetting('themeMode', node.value); });
+        return CC.run('正在保存...', function () { return bridge.updateSetting('themeMode', node.value); });
       case 'settings-toggle':
-        return CC.run('Opening desktop settings...', function () { return bridge.showDesktopSettings(); });
+        return CC.run('正在打开设置...', function () { return bridge.showDesktopSettings(); });
       case 'desktop-settings-toggle':
-        return CC.run('Opening desktop settings...', function () { return bridge.showDesktopSettings(); });
+        return CC.run('正在打开设置...', function () { return bridge.showDesktopSettings(); });
       case 'local-settings-toggle':
-        return CC.run('Opening local settings...', function () { return bridge.showLocalSettings(); });
+        return CC.run('正在打开本机设置...', function () { return bridge.showLocalSettings(); });
       case 'settings-close':
         return CC.closeSheet();
 	      case 'dashboard':
@@ -336,7 +336,7 @@ window.__MOCK_STATE__ = {
 	        if (CC.localOnly(CC.state)) return;
 	        return CC.run('Refreshing cloud environments...', function () { return bridge.refreshEnvironments(); });
       case 'refresh-tab':
-        return CC.run('Refreshing tab...', function () { return bridge.refreshActiveTab(); });
+        return CC.run('正在刷新...', function () { return bridge.refreshActiveTab(); });
       case 'env-action':
         return CC.run('Opening environment...', function () { return bridge.runActiveEnvironmentAction(node.getAttribute('data-cc-env-action')); });
       case 'env-menu':
@@ -462,7 +462,7 @@ window.__MOCK_STATE__ = {
     options = options || {};
     var settings = state.desktopSettings || {};
     var keepRunning = settings.keepLocalServerRunning === true;
-    var url = localUrl(state) || 'starts on demand';
+    var url = localUrl(state) || '按需启动';
     var body = '<div class="cc-surface">' +
       '<div class="cc-meta mono">' + esc(url) + '</div>' +
       '<p class="cc-note">' + (keepRunning

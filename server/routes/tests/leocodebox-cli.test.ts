@@ -76,6 +76,42 @@ test('copy discovery follows the user login-shell PATH, not the server PATH', as
   assert.equal(fallback[0].path, path.join(serverOnlyBin, 'fakecli'));
 });
 
+test('explicit Agent PATH stays ahead of login-shell and host server copies', async (t) => {
+  const scratch = await fs.mkdtemp(path.join(os.tmpdir(), 'leocodebox-cli-explicit-'));
+  const explicitBin = path.join(scratch, 'explicit-bin');
+  const shellBin = path.join(scratch, 'shell-bin');
+  const hostBin = path.join(scratch, 'host-bin');
+  await Promise.all([explicitBin, shellBin, hostBin].map((dir) => fs.mkdir(dir)));
+  await fs.writeFile(path.join(explicitBin, 'fakecli'), '#!/bin/sh\necho "9.1.1"\n', { mode: 0o755 });
+  await fs.writeFile(path.join(shellBin, 'fakecli'), '#!/bin/sh\necho "8.1.1"\n', { mode: 0o755 });
+  await fs.writeFile(path.join(hostBin, 'fakecli'), '#!/bin/sh\necho "2.1.207"\n', { mode: 0o755 });
+
+  const previous = {
+    agentPath: process.env.LEOCODEBOX_AGENT_PATH,
+    loginPath: process.env.LEOCODEBOX_LOGIN_SHELL_PATH,
+    path: process.env.PATH,
+  };
+  process.env.LEOCODEBOX_AGENT_PATH = explicitBin;
+  process.env.LEOCODEBOX_LOGIN_SHELL_PATH = `${shellBin}:/usr/bin:/bin`;
+  process.env.PATH = `${hostBin}:${previous.path || ''}`;
+  t.after(() => {
+    for (const [key, value] of Object.entries({
+      LEOCODEBOX_AGENT_PATH: previous.agentPath,
+      LEOCODEBOX_LOGIN_SHELL_PATH: previous.loginPath,
+      PATH: previous.path,
+    })) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  });
+
+  const copies = await discoverCliCopies({ id: 'fakecli', cmd: 'fakecli', npmPackage: null, updateArgs: null });
+  assert.deepEqual(copies.map((copy) => copy.version), ['9.1.1', '8.1.1']);
+  assert.equal(copies[0].path, path.join(explicitBin, 'fakecli'));
+  assert.equal(copies[0].active, true);
+  assert.equal(copies.some((copy) => copy.path.startsWith(hostBin)), false);
+});
+
 test('native installer binaries in writable bin dirs are classified standalone', () => {
   // Claude's native installer drops a self-updating binary straight into
   // /opt/homebrew/bin without any brew formula owning it.

@@ -187,16 +187,18 @@ export async function detectCliInstallSource(tool: CliTool, resolvePath: (comman
  * the user's terminal never resolves and which must not count as references.
  */
 export async function discoverCliCopies(tool: CliTool): Promise<CliCopy[]> {
+  const explicitAgentPath = (process.env.LEOCODEBOX_AGENT_PATH || '').trim();
   const userShellPath = (process.env.LEOCODEBOX_LOGIN_SHELL_PATH || '').trim();
-  const lookupEnv = userShellPath ? { ...process.env, PATH: userShellPath } : undefined;
+  const discoveryPath = [explicitAgentPath, userShellPath].filter(Boolean).join(process.platform === 'win32' ? ';' : ':');
+  const lookupEnv = discoveryPath ? { ...process.env, PATH: discoveryPath } : undefined;
   const runLookup = (env?: NodeJS.ProcessEnv) => (process.platform === 'win32'
     ? runCliCommand('where', [tool.cmd], 5000, { env })
     : runCliCommand('which', ['-a', tool.cmd], 5000, { env }));
 
   let lookup = await runLookup(lookupEnv);
   if (lookupEnv && (!lookup.ok || !lookup.stdout.trim())) {
-    // The user's shell PATH may genuinely miss the CLI (e.g. installed via a
-    // manager the shell config no longer sources). Fall back to the server's
+    // The explicit/search PATH may genuinely miss the CLI (e.g. installed via
+    // a manager the shell config no longer sources). Fall back to the server's
     // broader PATH so detection never regresses below the old behavior.
     lookup = await runLookup(undefined);
   }

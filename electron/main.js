@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { DesktopWindowManager } from './desktopWindow.js';
 import { DesktopNotificationsController } from './desktopNotifications.js';
 import { LocalServerController } from './localServer.js';
+import { disableConflictingLegacyLaunchAgent } from './legacyMigration.js';
 import { readProductVersion } from './productMetadata.js';
 import { TabsController } from './tabs.js';
 import { isFirstPartyShellUrl } from './trustPolicy.js';
@@ -331,36 +332,38 @@ async function copyDiagnostics() {
 }
 
 async function copyLocalWebUrl() {
-  await localServer.ensureLocalServer();
-  const shareableUrl = localServer.getShareableWebUrl();
-  const localUrl = localServer.getLocalServerUrl();
-
-  if (!shareableUrl) {
-    throw new Error('Local leocodebox URL is not available yet.');
-  }
-
-  clipboard.writeText(shareableUrl);
-  const isLanUrl = shareableUrl !== localUrl;
+  const browserUrl = await createLocalBrowserUrl();
+  clipboard.writeText(browserUrl);
   await dialog.showMessageBox(desktopWindow?.getMainWindow() || undefined, {
     type: 'info',
-    title: 'Web URL copied',
-    message: isLanUrl ? 'LAN web URL copied.' : 'Local web URL copied.',
-    detail: isLanUrl
-      ? `${shareableUrl}\n\nUse this URL from another device on the same network.`
-      : `${shareableUrl}\n\nThis URL works on this computer. Enable LAN access before starting Local leocodebox to copy a phone-accessible URL.`,
+    title: '本机网页链接已复制',
+    message: '请在两分钟内打开链接。',
+    detail: '链接只可使用一次；进入后会自动清除地址中的临时授权信息。',
   });
 
   return getDesktopState();
 }
 
-async function openLocalWebUi() {
+async function createLocalBrowserUrl() {
   await localServer.ensureLocalServer();
-  const url = localServer.getShareableWebUrl() || localServer.getLocalServerUrl();
-  if (!url) {
-    throw new Error('Local leocodebox URL is not available yet.');
-  }
+  const localUrl = localServer.getLocalServerUrl();
+  if (!localUrl) throw new Error('本机 leocodebox 服务尚未就绪。');
 
-  await openExternalUrl(url);
+  const response = await fetch(new URL('/api/auth/local-bootstrap', localUrl), {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${localServer.getLocalAuthToken()}` },
+  });
+  if (!response.ok) throw new Error('无法创建本机浏览器授权。');
+  const payload = await response.json();
+  if (!payload?.code) throw new Error('本机浏览器授权返回无效。');
+
+  const browserUrl = new URL(localUrl);
+  browserUrl.searchParams.set('leocodebox_bootstrap', payload.code);
+  return browserUrl.toString();
+}
+
+async function openLocalWebUi() {
+  await openExternalUrl(await createLocalBrowserUrl());
   return getDesktopState();
 }
 
@@ -615,6 +618,7 @@ async function createDesktopWindow() {
       copyLocalWebUrl,
       openNotificationTarget,
       isAppQuitting: () => isQuitting,
+      requestQuit: () => app.quit(),
     },
   });
 
@@ -656,6 +660,11 @@ async function bootstrap() {
   });
 
   await clearLocalOnlyWebCaches();
+
+  const legacyMigration = await disableConflictingLegacyLaunchAgent();
+  if (legacyMigration.migrated) {
+    console.info(`Disabled conflicting legacy CloudCLI LaunchAgent: ${legacyMigration.disabledPath}`);
+  }
 
   localServer = new LocalServerController({
     appRoot: getAppRoot(),

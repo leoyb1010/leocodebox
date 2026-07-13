@@ -37,7 +37,12 @@ export default function MainContentStateView({ mode, isMobile, onMenuClick }: Ma
         </div>
       ) : (
         <div className="leocodebox-workspace-enter flex flex-1 items-center justify-center px-6">
-          <div className="w-full max-w-2xl">
+          <div className="grid w-full max-w-5xl items-center gap-8 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+            <picture className="block overflow-hidden rounded-lg border border-border/60 bg-muted/20 shadow-sm">
+              <source media="(prefers-color-scheme: dark)" srcSet="/visuals/onboarding/local-workbench-dark.webp" />
+              <img src="/visuals/onboarding/local-workbench-light.webp" alt="" className="aspect-[16/10] w-full object-cover" />
+            </picture>
+            <div>
             <div className="mb-7 flex items-start gap-4">
               <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-lg border border-border bg-card">
                 <FolderSearch className="h-5 w-5 text-primary" />
@@ -69,6 +74,7 @@ export default function MainContentStateView({ mode, isMobile, onMenuClick }: Ma
             <p className="mt-5 text-xs text-muted-foreground">
               {isMobile ? t('mainContent.createProjectMobile') : t('mainContent.createProjectDesktop')}
             </p>
+            </div>
           </div>
         </div>
       )}

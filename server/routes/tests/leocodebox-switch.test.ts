@@ -19,7 +19,15 @@ type ApiJson = {
   providers: ProviderJson[];
   presets: PresetJson[];
   targets: Record<string, { files: Array<{ path: string }> }>;
-  backups: Array<{ relativePath: string; targetPath: string | null }>;
+  backups: Array<{
+    relativePath: string;
+    targetPath: string | null;
+    targetId: string | null;
+    targetLabel: string;
+    fileName: string;
+    createdAt: string;
+    size: number;
+  }>;
   imported: ProviderJson[];
   results: ProbeResultJson[];
   models: string[];
@@ -301,6 +309,12 @@ test('provider switch preserves Codex top-level semantics and serializes concurr
 
   const backups = await fetch(`${base}/switch/backups`).then(readApiJson);
   assert.ok(backups.backups.some((entry) => entry.relativePath.endsWith('.claude/settings.json')));
+  for (const backup of backups.backups) {
+    assert.ok(backup.targetLabel.length > 0);
+    assert.ok(backup.fileName.length > 0);
+    assert.ok(Number.isFinite(Date.parse(backup.createdAt)));
+    assert.ok(backup.size >= 0);
+  }
 
   if (process.platform !== 'win32') {
     const switchMode = (await fs.stat(path.join(home, '.leocodebox', 'switch'))).mode & 0o777;

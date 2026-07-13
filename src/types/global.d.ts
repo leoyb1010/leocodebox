@@ -7,7 +7,7 @@ declare global {
     leocodeboxDesktopTools?: {
       setThemeMode: (mode: 'system' | 'light' | 'dark') => Promise<unknown>;
       setRunningBadge?: (count: number) => Promise<unknown>;
-      onOpenModal: (callback: (tool: 'leoapi' | 'feedback') => void) => () => void;
+      onOpenModal: (callback: (tool: 'settings' | 'leoapi' | 'feedback') => void) => () => void;
     };
     leocodeboxDesktopUpdater?: {
       getState: () => Promise<DesktopUpdateState>;

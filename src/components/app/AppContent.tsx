@@ -157,6 +157,10 @@ function AppContentInner() {
     refreshProjects: refreshProjectsSilently,
   });
 
+  useEffect(() => window.leocodeboxDesktopTools?.onOpenModal((tool) => {
+    if (tool === 'settings') openSettings();
+  }), [openSettings]);
+
   useEffect(() => {
     if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) {
       return undefined;

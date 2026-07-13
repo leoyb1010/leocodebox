@@ -73,18 +73,40 @@ export default function AboutTab() {
   return (
     <div className="space-y-6">
       <div className="relative h-40 overflow-hidden rounded-lg border border-border/60 bg-zinc-950">
-        <img
-          src={desktopUpdate?.status === 'downloaded' ? '/visuals/brand/update-complete-dark.webp' : '/visuals/release/local-security.webp'}
-          alt=""
-          className="h-full w-full object-cover opacity-90"
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/65 via-black/10 to-transparent" />
+        <img src="/visuals/release/feature-overview.webp" alt="" className="h-full w-full object-cover opacity-90" />
+        <div className="absolute inset-0 bg-black/35" />
         <div className="absolute inset-y-0 left-0 flex items-end p-5 text-sm font-medium text-white">
           {desktopUpdate?.status === 'downloaded'
             ? t('about.downloaded', { version: desktopUpdate.latestVersion })
             : t('about.localData')}
         </div>
       </div>
+
+      <section className="grid gap-3 sm:grid-cols-3" aria-label="本机能力概览">
+        {[
+          ['/visuals/release/local-security.webp', '本机数据'],
+          ['/visuals/release/multi-device-local-discovery.webp', '设备发现'],
+          ['/visuals/release/leoapi-overview.webp', 'Leoapi 路由'],
+        ].map(([src, label]) => (
+          <figure key={src} className="overflow-hidden rounded-md border border-border/60 bg-muted/20">
+            <img src={src} alt="" className="aspect-[16/9] w-full object-cover" />
+            <figcaption className="px-3 py-2 text-xs text-muted-foreground">{label}</figcaption>
+          </figure>
+        ))}
+      </section>
+
+      <section className="grid gap-3 sm:grid-cols-2" aria-label="本机工作流">
+        {[
+          ['local-permissions', '权限只作用于本机'],
+          ['leoapi-routing', '接口路由清晰可见'],
+        ].map(([name, label]) => (
+          <figure key={name} className="overflow-hidden rounded-md border border-border/60 bg-muted/20">
+            <img src={`/visuals/onboarding/${name}-light.webp`} alt="" className="aspect-[16/9] w-full object-cover dark:hidden" />
+            <img src={`/visuals/onboarding/${name}-dark.webp`} alt="" className="hidden aspect-[16/9] w-full object-cover dark:block" />
+            <figcaption className="px-3 py-2 text-xs text-muted-foreground">{label}</figcaption>
+          </figure>
+        ))}
+      </section>
       <div className="flex items-center gap-3">
         <img src="/logo.svg" alt="leocodebox" className="h-10 w-10" />
         <div>

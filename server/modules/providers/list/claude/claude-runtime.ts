@@ -23,7 +23,7 @@ import type { EffortLevel, Options, PermissionMode, Query, SDKMessage, SDKUserMe
 import { buildClaudeUserContent, normalizeImageDescriptors } from '@/shared/image-attachments.js';
 import { isMissingCliExecutableError } from '@/shared/provider-errors.js';
 import { providerModelsService } from '@/modules/providers/services/provider-models.service.js';
-import { getActiveSwitchEnvOverlay } from '@/modules/leocodebox/provider-session-env.service.js';
+import { getActiveSwitchEnvOverlay } from '@/modules/leocodebox/index.js';
 import { resolveClaudeCodeExecutablePath } from '@/shared/claude-cli-path.js';
 import {
   createNotificationEvent,

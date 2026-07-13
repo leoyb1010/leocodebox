@@ -2,7 +2,7 @@
 
 ![leocodebox 本地 Agent 工作台](public/visuals/release/readme-hero.webp)
 
-![version](https://img.shields.io/badge/version-1.40.4-blue)
+![version](https://img.shields.io/badge/version-1.40.5-blue)
 ![platform](https://img.shields.io/badge/platform-macOS%20arm64-lightgrey)
 ![signed](https://img.shields.io/badge/signed-Developer%20ID%20%2B%20Notarized-brightgreen)
 ![license](https://img.shields.io/badge/license-AGPL--3.0-orange)
@@ -13,12 +13,12 @@
 
 ## ⬇️ 下载
 
-[![下载 DMG](https://img.shields.io/badge/下载-leocodebox%201.40.4%20(mac--arm64)-brightgreen?style=for-the-badge)](https://github.com/leoyb1010/leocodebox/releases/latest)
+[![下载 DMG](https://img.shields.io/badge/下载-leocodebox%201.40.5%20(mac--arm64)-brightgreen?style=for-the-badge)](https://github.com/leoyb1010/leocodebox/releases/latest)
 
 - **最新版本**：<https://github.com/leoyb1010/leocodebox/releases/latest>
-- **当前正式版**：`1.40.4`
-- **直接下载 DMG**：[leocodebox-1.40.4-mac-arm64.dmg](https://github.com/leoyb1010/leocodebox/releases/download/v1.40.4/leocodebox-1.40.4-mac-arm64.dmg)（仅 Apple 芯片）
-- **SHA-256**：`a8eda70b7f44bdd86347e92c3e849143fa28143781b96de42f468085d4da4fb7`
+- **当前正式版**：`1.40.5`
+- **直接下载 DMG**：[leocodebox-1.40.5-mac-arm64.dmg](https://github.com/leoyb1010/leocodebox/releases/download/v1.40.5/leocodebox-1.40.5-mac-arm64.dmg)（仅 Apple 芯片）
+- **SHA-256**：`08523f27e520ff48afc1cc2be0bef2877556d8cf72e9a2a655660b2c57eaa58b`
 
 已 **Developer ID 签名 + Apple 公证**：双击 DMG → 拖入「应用程序」→ 双击运行，无 Gatekeeper 警告，无需 `xattr` 去隔离。
 
@@ -36,7 +36,8 @@
 - **Leoapi 接口切换**：接口配置切换器内置在应用内（不跳外部 App），支持多个请求地址、自动选择最快可用地址、模型列表读取、真实模型测速、Claude Sonnet/Opus/Haiku 映射、备份恢复，并可从旧切换器数据库（`~/.cc-switch/cc-switch.db`）一键导入。
 - **项目按 Agent 分类**：侧边栏项目列表按 Claude / Codex / OpenCode / Cursor / Gemini 显示彩色会话计数徽章，并过滤一次性/临时目录，只留真实项目。
 - **简体中文默认**，深色/浅色/跟随系统主题。
-- **桌面模式完全免登录**：本地能力 token 由 Electron 自动注入，只允许本机应用访问；不显示账号密码页。
+- **桌面模式完全免登录**：本地能力 token 由 Electron 自动注入，只允许本机应用访问；从 App 打开浏览器时使用两分钟、单次有效的临时授权链接，不显示 leocodebox 账号密码页。
+- **内置浏览器运行环境**：正式包自带 Playwright headless Chromium，安装后可直接交给 Agent 使用；修复运行环境只写入 `~/.leocodebox/runtime`，不会修改已签名 App。
 - **应用内热更新**：1.39.1 起默认使用公开签名资产源，在“设置 → 关于”即可检查、下载并重启安装，无需 GitHub Token；源码仓库仍保持私有。
 - **签名 + 公证发布**：提供 Apple Developer ID 签名并经 Apple 公证的 DMG，别人下载双击即可运行，无 Gatekeeper 警告。
 

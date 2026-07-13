@@ -10,6 +10,7 @@ const appRoot = process.cwd();
 const expectedAppVersion = JSON.parse(await fs.readFile(path.join(appRoot, 'package.json'), 'utf8')).version;
 const tempHome = await fs.mkdtemp(path.join(os.tmpdir(), 'leocodebox-clean-device-'));
 const fakeBin = path.join(tempHome, '.local', 'bin');
+const electronUserData = path.join(tempHome, 'Library', 'Application Support', 'leocodebox-clean-device');
 const markerPath = path.join(tempHome, '.leocodebox', 'local-server.json');
 const expectedTools = new Map([
   ['claude', '9.1.1'],
@@ -30,7 +31,10 @@ for (const [command, version] of expectedTools) {
   );
 }
 
-const desktop = spawn(electronPath, [path.join(appRoot, 'electron', 'main.js')], {
+const desktop = spawn(electronPath, [
+  `--user-data-dir=${electronUserData}`,
+  path.join(appRoot, 'electron', 'main.js'),
+], {
   cwd: appRoot,
   env: {
     HOME: tempHome,

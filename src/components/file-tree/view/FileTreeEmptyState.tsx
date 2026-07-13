@@ -17,4 +17,3 @@ export default function FileTreeEmptyState({ icon: Icon, title, description }: F
     </div>
   );
 }
-

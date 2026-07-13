@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import './load-env.js';
+import fs from 'node:fs';
 
 type JsonRpcRequest = {
   jsonrpc: '2.0';
@@ -36,9 +37,21 @@ const readNumber = (value: unknown): number | undefined =>
 const apiUrl = (
   process.env.LEOCODEBOX_BROWSER_USE_API_URL
   || process.env.CLOUDCLI_BROWSER_USE_API_URL
-  || 'http://127.0.0.1:3001/api/browser-use-mcp'
+  || 'http://127.0.0.1:38473/api/browser-use-mcp'
 ).replace(/\/$/, '');
-const apiToken = process.env.LEOCODEBOX_BROWSER_USE_MCP_TOKEN || process.env.CLOUDCLI_BROWSER_USE_MCP_TOKEN || '';
+function readApiToken(): string {
+  const direct = process.env.LEOCODEBOX_BROWSER_USE_MCP_TOKEN || process.env.CLOUDCLI_BROWSER_USE_MCP_TOKEN || '';
+  if (direct) return direct;
+  const tokenFile = process.env.LEOCODEBOX_BROWSER_USE_MCP_TOKEN_FILE || '';
+  if (!tokenFile) return '';
+  try {
+    return fs.readFileSync(tokenFile, 'utf8').trim();
+  } catch {
+    return '';
+  }
+}
+
+const apiToken = readApiToken();
 const API_TIMEOUT_MS = Number.parseInt(
   process.env.LEOCODEBOX_BROWSER_USE_API_TIMEOUT_MS
   || process.env.CLOUDCLI_BROWSER_USE_API_TIMEOUT_MS
@@ -48,7 +61,7 @@ const API_TIMEOUT_MS = Number.parseInt(
 
 async function callBrowserUseApi(toolName: string, input: Record<string, unknown>) {
   if (!apiToken) {
-    throw new Error('LEOCODEBOX_BROWSER_USE_MCP_TOKEN is not configured.');
+    throw new Error('Browser MCP authentication is not configured.');
   }
 
   const response = await fetch(`${apiUrl}/tools/${encodeURIComponent(toolName)}`, {

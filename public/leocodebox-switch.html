@@ -98,7 +98,8 @@
     }
     * { box-sizing: border-box; }
     html, body { min-height: 100%; }
-    body { margin: 0; background: var(--bg); color: var(--text); font-size: 14px; }
+    body { margin: 0; background: linear-gradient(rgba(248, 249, 250, .84), rgba(248, 249, 250, .84)), var(--bg) url('/visuals/textures/local-signal-light.webp') center / cover fixed; color: var(--text); font-size: 14px; }
+    html[data-theme="dark"] body { background-image: linear-gradient(rgba(16, 18, 21, .82), rgba(16, 18, 21, .82)), url('/visuals/textures/local-signal-dark.webp'); }
     html[data-embedded="true"] .app-shell { padding: 16px 22px 28px; }
     html[data-embedded="true"] #backToMain { display: none; }
     button, input, select, textarea { font: inherit; letter-spacing: 0; }
@@ -293,6 +294,12 @@
     .path-group h4 { margin: 0 0 9px; font-size: 13px; }
     .path-row, .backup-row { min-height: 43px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid var(--row-line); }
     .path-row code, .backup-row code { min-width: 0; overflow-wrap: anywhere; color: var(--muted); font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .backup-row { padding: 10px 0; }
+    .backup-main { min-width: 0; display: grid; gap: 4px; }
+    .backup-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+    .backup-title strong { color: var(--text); font-size: 13px; }
+    .backup-title span { color: var(--muted); font-size: 12px; }
+    .backup-meta { color: var(--subtle); font-size: 11px; }
     .file-state { flex: 0 0 auto; color: var(--green); font-size: 12px; }
     .file-state.missing { color: var(--subtle); }
     .restore-button { flex: 0 0 auto; min-height: 30px; border: 1px solid var(--line); border-radius: 6px; padding: 0 10px; background: transparent; color: var(--text); }
@@ -1194,7 +1201,17 @@
         box.innerHTML = `<div class="path-row"><span class="file-state missing">${text("noBackups")}</span></div>`;
         return;
       }
-      box.innerHTML = backups.slice(0, 30).map((backup) => `<div class="backup-row"><code>${escapeHtml(backup.targetPath || backup.relativePath)}</code><button class="restore-button" type="button" data-restore="${escapeHtml(backup.relativePath)}">恢复</button></div>`).join("");
+      const locale = language() === "en" ? "en-US" : "zh-CN";
+      const dateTime = new Intl.DateTimeFormat(locale, { dateStyle: "medium", timeStyle: "short" });
+      const formatSize = (size) => size < 1024 ? `${size} B` : `${(size / 1024).toFixed(size < 10240 ? 1 : 0)} KB`;
+      box.innerHTML = backups.slice(0, 30).map((backup) => `<div class="backup-row">
+        <div class="backup-main">
+          <div class="backup-title"><strong>${escapeHtml(backup.targetLabel || "未知智能体")}</strong><span>${escapeHtml(backup.fileName || "配置文件")}</span></div>
+          <code>${escapeHtml(backup.targetPath || backup.relativePath)}</code>
+          <span class="backup-meta">${escapeHtml(dateTime.format(new Date(backup.createdAt)))} · ${escapeHtml(formatSize(Number(backup.size) || 0))}</span>
+        </div>
+        <button class="restore-button" type="button" data-restore="${escapeHtml(backup.relativePath)}">恢复</button>
+      </div>`).join("");
     }
 
     function renderLanguage() {
@@ -1485,7 +1502,10 @@
     }
 
     async function restoreBackup(relativePath) {
-      if (!(await confirmDialog(`确认恢复此备份并替换当前配置文件？\n\n${relativePath}`))) return;
+      const backup = backups.find((item) => item.relativePath === relativePath);
+      const target = backup?.targetPath || relativePath;
+      const source = backup ? `${backup.targetLabel} · ${backup.fileName}` : "配置备份";
+      if (!(await confirmDialog(`确认恢复 ${source}？\n\n将替换：${target}\n恢复前会再次备份当前文件。`))) return;
       const result = await api("/api/leocodebox/switch/backups/restore", { method: "POST", body: JSON.stringify({ relativePath }) });
       await refresh();
       showToast(`${text("restored")}：${result.restoredPath}`, "ok");

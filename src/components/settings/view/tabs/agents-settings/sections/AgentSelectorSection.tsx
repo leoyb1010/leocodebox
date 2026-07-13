@@ -20,7 +20,7 @@ export default function AgentSelectorSection({
   const secondaryTools = localTools.filter((tool) => !agents.includes(tool.id as AgentProvider));
   return (
     <div className="flex-shrink-0 border-b border-border px-3 py-2 md:px-4 md:py-3">
-      <PillBar className="w-full md:w-auto">
+      <PillBar className="scrollbar-hide w-full justify-start overflow-x-auto md:w-auto">
         {agents.map((agent) => {
           const dotColor =
             agent === 'claude' ? 'bg-blue-500' :
@@ -32,7 +32,7 @@ export default function AgentSelectorSection({
               key={agent}
               isActive={selectedAgent === agent}
               onClick={() => onSelectAgent(agent)}
-              className="min-w-0 flex-1 justify-center md:flex-initial"
+              className="flex-none justify-center"
             >
               <SessionProviderLogo provider={agent} className="h-4 w-4 flex-shrink-0" />
               <span className="truncate">{AGENT_NAMES[agent]}</span>
@@ -47,7 +47,7 @@ export default function AgentSelectorSection({
             key={tool.id}
             isActive={false}
             onClick={() => document.getElementById(`cli-tool-${tool.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
-            className="min-w-0 flex-1 justify-center md:flex-initial"
+            className="flex-none justify-center"
           >
             <SessionProviderLogo provider={tool.id} className="h-4 w-4 flex-shrink-0" />
             <span className="truncate">{tool.label}</span>

@@ -62,7 +62,16 @@ import {
 const router = express.Router();
 
 type StatusError = Error & { statusCode?: number };
-type BackupRecord = { path: string; relativePath: string; targetPath: string | null };
+type BackupRecord = {
+  path: string;
+  relativePath: string;
+  targetPath: string | null;
+  targetId: string | null;
+  targetLabel: string;
+  fileName: string;
+  createdAt: string;
+  size: number;
+};
 
 function toNodeError(error: unknown): NodeJS.ErrnoException {
   return error instanceof Error ? error as NodeJS.ErrnoException : new Error(String(error));
@@ -564,16 +573,27 @@ router.get('/switch/backups', async (_req, res, next) => {
         } else {
           const relativePath = path.relative(root, filePath);
           const targetPath = resolveBackupDestination(relativePath);
+          const targetEntry = targetPath
+            ? Object.entries(TARGETS).find(([targetId]) => (
+              targetConfigPaths(targetId).some((candidate) => path.resolve(candidate) === path.resolve(targetPath))
+            ))
+            : null;
+          const stats = await fs.stat(filePath);
           backups.push({
             path: filePath,
             relativePath,
             targetPath: targetPath ? displayConfigPath(targetPath) : null,
+            targetId: targetEntry?.[0] || null,
+            targetLabel: targetEntry?.[1].label || '未知智能体',
+            fileName: path.basename(targetPath || filePath),
+            createdAt: new Date(stats.birthtimeMs > 0 ? stats.birthtimeMs : stats.mtimeMs).toISOString(),
+            size: stats.size,
           });
         }
       }
     }
     await walk(root);
-    backups.sort((a, b) => b.relativePath.localeCompare(a.relativePath));
+    backups.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
     res.json({ success: true, backups });
   } catch (error) {
     next(error);

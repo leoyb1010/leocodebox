@@ -91,6 +91,9 @@ const DEFAULT_SETTINGS: BrowserUseSettings = {
 };
 const AGENT_OWNER_ID = 'agent';
 const PROFILE_ROOT = path.join(os.homedir(), '.leocodebox', 'browser-use', 'profiles');
+const BROWSER_RUNTIME_ROOT = process.env.LEOCODEBOX_BROWSER_RUNTIME_PATH
+  || path.join(os.homedir(), '.leocodebox', 'runtime', 'playwright-browsers');
+const MCP_TOKEN_FILE = path.join(os.homedir(), '.leocodebox', 'browser-use', 'mcp-token');
 const MCP_SERVER_NAME = 'leocodebox-browser';
 const LEGACY_MCP_SERVER_NAMES = ['cloudcli-browser', 'cloudcli-browser-use'];
 const RUNTIME_READINESS_CACHE_TTL_MS = 30_000;
@@ -128,11 +131,27 @@ function writeSettings(settings: BrowserUseSettings): BrowserUseSettings {
 function getOrCreateMcpToken(): string {
   const existing = appConfigDb.get(BROWSER_USE_MCP_TOKEN_KEY);
   if (existing) {
+    syncMcpTokenFile(existing);
     return existing;
   }
   const token = randomBytes(32).toString('hex');
   appConfigDb.set(BROWSER_USE_MCP_TOKEN_KEY, token);
+  syncMcpTokenFile(token);
   return token;
+}
+
+function syncMcpTokenFile(token: string): void {
+  fs.mkdirSync(path.dirname(MCP_TOKEN_FILE), { recursive: true, mode: 0o700 });
+  let current = '';
+  try {
+    current = fs.readFileSync(MCP_TOKEN_FILE, 'utf8').trim();
+  } catch {
+    // Missing or unreadable token files are replaced below.
+  }
+  if (current !== token) {
+    fs.writeFileSync(MCP_TOKEN_FILE, `${token}\n`, { encoding: 'utf8', mode: 0o600 });
+  }
+  fs.chmodSync(MCP_TOKEN_FILE, 0o600);
 }
 
 function getSetupMessage(settings: BrowserUseSettings, readiness: RuntimeReadiness): string {
@@ -159,6 +178,61 @@ function getPlaywright(): any | null {
   }
 }
 
+function findHeadlessChromium(root: string): string | null {
+  let versions: string[] = [];
+  try {
+    versions = fs.readdirSync(root)
+      .filter((entry) => entry.startsWith('chromium_headless_shell-'))
+      .sort()
+      .reverse();
+  } catch {
+    return null;
+  }
+
+  const executableName = process.platform === 'win32' ? 'chrome-headless-shell.exe' : 'chrome-headless-shell';
+  for (const version of versions) {
+    const pending = [path.join(root, version)];
+    while (pending.length > 0) {
+      const current = pending.pop();
+      if (!current) continue;
+      let entries: import('node:fs').Dirent[] = [];
+      try {
+        entries = fs.readdirSync(current, { withFileTypes: true });
+      } catch {
+        continue;
+      }
+      for (const entry of entries) {
+        const candidate = path.join(current, entry.name);
+        if (entry.isDirectory()) pending.push(candidate);
+        if (entry.isFile() && entry.name === executableName) return candidate;
+      }
+    }
+  }
+  return null;
+}
+
+function getBundledBrowserRoot(): string | null {
+  try {
+    return path.join(path.dirname(require.resolve('playwright-core/package.json')), '.local-browsers');
+  } catch {
+    return null;
+  }
+}
+
+function resolveChromiumExecutable(playwright: any | null): string | null {
+  const bundledRoot = getBundledBrowserRoot();
+  const managed = findHeadlessChromium(BROWSER_RUNTIME_ROOT);
+  const bundled = bundledRoot ? findHeadlessChromium(bundledRoot) : null;
+  if (bundled && fs.existsSync(bundled)) return bundled;
+  if (managed && fs.existsSync(managed)) return managed;
+  try {
+    const defaultExecutable = playwright?.chromium?.executablePath?.();
+    return defaultExecutable && fs.existsSync(defaultExecutable) ? defaultExecutable : null;
+  } catch {
+    return null;
+  }
+}
+
 export function getMcpRegistration(): { command: string; args: string[]; env: Record<string, string> } {
   const serverDir = path.resolve(__dirname, '..', '..');
   const mcpScriptPath = path.join(serverDir, 'browser-use-mcp.js');
@@ -168,14 +242,17 @@ export function getMcpRegistration(): { command: string; args: string[]; env: Re
       args: [mcpScriptPath],
       // The packaged server runs under Electron's executable. Without this
       // flag, an MCP reconnect launches the GUI instead of the stdio script.
-      env: { ELECTRON_RUN_AS_NODE: '1' },
+      env: {
+        ELECTRON_RUN_AS_NODE: '1',
+        LEOCODEBOX_BROWSER_USE_MCP_TOKEN_FILE: MCP_TOKEN_FILE,
+      },
     };
   }
 
   return {
     command: 'leocodebox',
     args: ['browser-use-mcp'],
-    env: {},
+    env: { LEOCODEBOX_BROWSER_USE_MCP_TOKEN_FILE: MCP_TOKEN_FILE },
   };
 }
 
@@ -212,24 +289,13 @@ function getProfilePath(profileName: string): string {
 
 function probeRuntime(): RuntimeProbe {
   const playwright = getPlaywright();
+  const chromiumExecutablePath = resolveChromiumExecutable(playwright);
   const readiness: RuntimeProbe = {
     playwright,
     playwrightInstalled: Boolean(playwright),
-    chromiumInstalled: false,
-    chromiumExecutablePath: null,
+    chromiumInstalled: Boolean(chromiumExecutablePath),
+    chromiumExecutablePath,
   };
-
-  if (!playwright) {
-    return readiness;
-  }
-
-  try {
-    const executablePath = playwright.chromium.executablePath();
-    readiness.chromiumExecutablePath = executablePath;
-    readiness.chromiumInstalled = Boolean(executablePath && fs.existsSync(executablePath));
-  } catch {
-    readiness.chromiumInstalled = false;
-  }
 
   return readiness;
 }
@@ -261,11 +327,11 @@ const INSTALL_COMMAND_TIMEOUT_MS = Number.parseInt(
   10,
 );
 
-function runCommand(command: string, args: string[]): Promise<void> {
+function runCommand(command: string, args: string[], options: { cwd?: string; env?: NodeJS.ProcessEnv } = {}): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn(command, args, {
-      cwd: process.cwd(),
-      env: process.env,
+      cwd: options.cwd || process.cwd(),
+      env: options.env || process.env,
       shell: false,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -317,20 +383,28 @@ async function installRuntime(): Promise<{ success: boolean; message: string }> 
     return installPromise;
   }
 
-  const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
   runtimeProbeCache = null;
   installPromise = (async () => {
     try {
-      lastInstallMessage = 'Installing Playwright package...';
-      await runCommand(npmCommand, ['install', '--no-save', '--no-package-lock', 'playwright']);
-
-      if (process.platform === 'linux') {
-        lastInstallMessage = 'Installing Chromium system dependencies...';
-        await runCommand(npmCommand, ['exec', '--', 'playwright', 'install-deps', 'chromium']);
+      const playwrightRoot = path.dirname(require.resolve('playwright/package.json'));
+      const playwrightCli = path.join(playwrightRoot, 'cli.js');
+      if (!fs.existsSync(playwrightCli)) {
+        throw new Error('The bundled Playwright package is missing. Reinstall leocodebox.');
       }
-
-      lastInstallMessage = 'Installing Chromium runtime...';
-      await runCommand(npmCommand, ['exec', '--', 'playwright', 'install', 'chromium']);
+      fs.mkdirSync(BROWSER_RUNTIME_ROOT, { recursive: true, mode: 0o700 });
+      lastInstallMessage = 'Installing Chromium runtime in the leocodebox user data directory...';
+      await runCommand(
+        process.execPath,
+        [playwrightCli, 'install', '--only-shell', 'chromium'],
+        {
+          cwd: BROWSER_RUNTIME_ROOT,
+          env: {
+            ...process.env,
+            ELECTRON_RUN_AS_NODE: '1',
+            PLAYWRIGHT_BROWSERS_PATH: BROWSER_RUNTIME_ROOT,
+          },
+        },
+      );
 
       lastInstallMessage = 'Browser runtime installed.';
       return { success: true, message: lastInstallMessage };
@@ -476,6 +550,7 @@ export const browserUseService = {
   },
 
   async registerAgentMcp() {
+    getOrCreateMcpToken();
     const { command, args, env: runtimeEnv } = getMcpRegistration();
     await Promise.all(LEGACY_MCP_SERVER_NAMES.map((name) => removeMcpServerFromAllProviders(name)));
     const results = await providerMcpService.addMcpServerToAllProviders({
@@ -486,7 +561,6 @@ export const browserUseService = {
       args,
       env: {
         ...runtimeEnv,
-        LEOCODEBOX_BROWSER_USE_MCP_TOKEN: getOrCreateMcpToken(),
         LEOCODEBOX_BROWSER_USE_API_URL: getMcpApiUrl(),
       },
     });
@@ -570,6 +644,7 @@ export const browserUseService = {
     let page: any;
     const launchOptions = {
       headless: true,
+      executablePath: readiness.chromiumExecutablePath || undefined,
       args: ['--disable-dev-shm-usage'],
     };
     const contextOptions = {

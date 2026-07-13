@@ -19,6 +19,10 @@ import { resolveApiErrorMessage } from '../utils';
 const AuthContext = createContext<AuthContextValue | null>(null);
 const IS_LOCAL_DESKTOP = typeof window !== 'undefined' && window.leocodeboxLocal?.enabled === true;
 const IS_LOCAL_AUTH_READY = !IS_LOCAL_DESKTOP || window.leocodeboxLocal?.authReady !== false;
+const LOCAL_BOOTSTRAP_PARAM = 'leocodebox_bootstrap';
+const LOCAL_BOOTSTRAP_CODE = typeof window === 'undefined'
+  ? null
+  : new URLSearchParams(window.location.search).get(LOCAL_BOOTSTRAP_PARAM);
 
 const readStoredToken = (): string | null => localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
 
@@ -28,6 +32,12 @@ const persistToken = (token: string) => {
 
 const clearStoredToken = () => {
   localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+};
+
+const clearLocalBootstrapFromUrl = () => {
+  const url = new URL(window.location.href);
+  url.searchParams.delete(LOCAL_BOOTSTRAP_PARAM);
+  window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
 };
 
 export function useAuth(): AuthContextValue {
@@ -45,7 +55,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     IS_LOCAL_DESKTOP && IS_LOCAL_AUTH_READY ? { username: 'local-user' } : null
   ));
   const [token, setToken] = useState<string | null>(() => readStoredToken());
-  const [isLoading, setIsLoading] = useState(!IS_LOCAL_DESKTOP || !IS_LOCAL_AUTH_READY);
+  const [isLoading, setIsLoading] = useState(Boolean(LOCAL_BOOTSTRAP_CODE) || !IS_LOCAL_DESKTOP || !IS_LOCAL_AUTH_READY);
   const [needsSetup, setNeedsSetup] = useState(false);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(true);
   const [error, setError] = useState<string | null>(() => (
@@ -122,6 +132,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [checkOnboardingStatus, clearSession, token]);
 
   useEffect(() => {
+    if (LOCAL_BOOTSTRAP_CODE) return;
     if (IS_LOCAL_DESKTOP) {
       if (!IS_LOCAL_AUTH_READY) {
         setUser(null);
@@ -147,6 +158,41 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     void checkAuthStatus();
   }, [checkAuthStatus, checkOnboardingStatus, t]);
+
+  useEffect(() => {
+    if (!LOCAL_BOOTSTRAP_CODE) return;
+    let cancelled = false;
+
+    void fetch('/api/auth/local-bootstrap/exchange', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ code: LOCAL_BOOTSTRAP_CODE }),
+    })
+      .then(async (response) => {
+        const payload = await response.json() as AuthSessionPayload;
+        if (!response.ok || !payload?.token || !payload.user) {
+          throw new Error('本机浏览器授权已失效，请从 leocodebox App 重新打开。');
+        }
+        if (cancelled) return;
+        clearLocalBootstrapFromUrl();
+        setSession(payload.user, payload.token);
+        setNeedsSetup(false);
+        await checkOnboardingStatus();
+      })
+      .catch((caughtError) => {
+        if (cancelled) return;
+        clearLocalBootstrapFromUrl();
+        clearSession();
+        setError(caughtError instanceof Error ? caughtError.message : AUTH_ERROR_MESSAGES.authStatusCheckFailed);
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [checkOnboardingStatus, clearSession, setSession]);
 
   const login = useCallback<AuthContextValue['login']>(
     async (username, password) => {

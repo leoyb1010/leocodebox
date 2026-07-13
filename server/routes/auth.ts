@@ -1,5 +1,7 @@
-import express from 'express';
+import { randomBytes } from 'node:crypto';
+
 import bcrypt from 'bcrypt';
+import express from 'express';
 
 import { userDb } from '../modules/database/index.js';
 import { getConnection } from '../modules/database/connection.js';
@@ -14,6 +16,19 @@ import {
 
 const router = express.Router();
 const db = getConnection();
+const LOCAL_BOOTSTRAP_TTL_MS = 2 * 60 * 1000;
+const localBootstrapCodes = new Map<string, { expiresAt: number; token: string }>();
+
+function pruneLocalBootstrapCodes(now = Date.now()) {
+  for (const [code, record] of localBootstrapCodes) {
+    if (record.expiresAt <= now) localBootstrapCodes.delete(code);
+  }
+  while (localBootstrapCodes.size > 20) {
+    const oldestCode = localBootstrapCodes.keys().next().value;
+    if (typeof oldestCode !== 'string') break;
+    localBootstrapCodes.delete(oldestCode);
+  }
+}
 
 function toNodeError(error: unknown): NodeJS.ErrnoException {
   return error instanceof Error ? error as NodeJS.ErrnoException : new Error(String(error));
@@ -42,6 +57,44 @@ router.get('/status', async (req, res) => {
     console.error('Auth status error:', error);
     res.status(500).json({ error: 'Internal server error' });
   }
+});
+
+// The desktop app uses its private local token to mint a short-lived code for
+// opening the UI in a normal browser. The browser exchanges it once, then
+// removes the code from the address bar before rendering the workspace.
+router.post('/local-bootstrap', (req, res) => {
+  if (!IS_LOCAL_ONLY_AUTH) return res.status(404).json({ error: 'Not found' });
+  const token = getRequestToken(req);
+  if (!isLocalOnlyAuthToken(token)) {
+    return res.status(403).json({ error: 'Invalid local desktop authorization.' });
+  }
+
+  pruneLocalBootstrapCodes();
+  const code = randomBytes(24).toString('base64url');
+  localBootstrapCodes.set(code, { token: token!, expiresAt: Date.now() + LOCAL_BOOTSTRAP_TTL_MS });
+  return res.json({ code, expiresInMs: LOCAL_BOOTSTRAP_TTL_MS });
+});
+
+router.post('/local-bootstrap/exchange', (req, res) => {
+  if (!IS_LOCAL_ONLY_AUTH) return res.status(404).json({ error: 'Not found' });
+  pruneLocalBootstrapCodes();
+  const code = typeof req.body?.code === 'string' ? req.body.code : '';
+  const record = localBootstrapCodes.get(code);
+  if (!record) {
+    return res.status(403).json({ error: 'Local browser authorization expired or was already used.' });
+  }
+
+  localBootstrapCodes.delete(code);
+  if (record.expiresAt <= Date.now()) {
+    return res.status(403).json({ error: 'Local browser authorization expired.' });
+  }
+  const user = getLocalOnlyUser();
+  return res.json({
+    success: true,
+    localOnly: true,
+    user: { id: user.id, username: user.username },
+    token: record.token,
+  });
 });
 
 // User registration (setup) - only allowed if no users exist

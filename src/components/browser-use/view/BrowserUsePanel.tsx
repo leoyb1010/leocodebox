@@ -247,7 +247,7 @@ export default function BrowserUsePanel({ isVisible, onShowSettings }: BrowserUs
   const renderEmptyState = () => (
     <div className="flex min-h-0 flex-1 items-center justify-center p-6">
       <div className="grid w-full max-w-5xl overflow-hidden rounded-md border border-border bg-card/40 shadow-sm md:grid-cols-[1.05fr_.95fr]">
-        <img src="/visuals/release/leoapi-overview.webp" alt="" className="hidden h-full min-h-64 w-full object-cover opacity-90 md:block" />
+        <img src="/visuals/release/local-security.webp" alt="" className="hidden h-full min-h-64 w-full object-cover opacity-90 md:block" />
         <div className="p-5">
         <div className="flex items-start gap-3">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-border bg-background">

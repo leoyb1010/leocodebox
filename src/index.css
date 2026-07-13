@@ -1198,6 +1198,26 @@
     animation: settings-fade-in 150ms ease-out;
   }
 
+  .leocodebox-app-shell::before {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background: url('/visuals/textures/cold-metal-light.webp') center / cover fixed;
+    content: '';
+    opacity: 0.035;
+  }
+
+  .dark .leocodebox-app-shell::before {
+    background-image: url('/visuals/textures/graphite-dark.webp');
+    opacity: 0.05;
+  }
+
+  .leocodebox-app-shell > * {
+    position: relative;
+    z-index: 1;
+  }
+
   @keyframes chat-activity-enter {
     0% {
       opacity: 0;
