@@ -82,6 +82,25 @@ export class DesktopWindowManager {
     this.mainWindow.focus();
   }
 
+  // Global-hotkey target: hide when focused, otherwise surface the window.
+  // Uses hide()/show() (not close, which is a real quit that frees the port).
+  toggleMainWindow() {
+    const win = this.mainWindow;
+    if (!win || win.isDestroyed()) return;
+    if (win.isVisible() && win.isFocused()) {
+      if (win.isFullScreen()) {
+        win.once('leave-full-screen', () => win.hide());
+        win.setFullScreen(false);
+      } else {
+        win.hide();
+      }
+      return;
+    }
+    if (win.isMinimized()) win.restore();
+    win.show();
+    win.focus();
+  }
+
   getTrayImage() {
     const image = nativeImage.createFromPath(this.getWindowIconPath());
     return image.resize({ width: 18, height: 18 });

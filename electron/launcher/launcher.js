@@ -4,7 +4,7 @@ window.__MOCK_STATE__ = {
   account: { connected: false, email: null, authState: 'local_only' },
   activeTarget: { kind: 'launcher', name: '启动台', url: null },
   cloudLoading: false,
-  desktopSettings: { keepLocalServerRunning: false, exposeLocalServerOnNetwork: false, themeMode: 'system' },
+  desktopSettings: { keepLocalServerRunning: false, exposeLocalServerOnNetwork: false, themeMode: 'system', globalHotkeyEnabled: false, globalHotkeyAccelerator: 'Alt+Space' },
   localWebUrl: 'http://localhost:38473',
   shareableWebUrl: 'http://localhost:38473',
   localServerRunning: false,
@@ -480,6 +480,21 @@ window.__MOCK_STATE__ = {
     );
   };
 
+  CC.buildGlobalHotkeySection = function (state) {
+    var settings = state.desktopSettings || {};
+    var enabled = settings.globalHotkeyEnabled === true;
+    var accelerator = settings.globalHotkeyAccelerator || 'Alt+Space';
+    var body = '<div class="cc-surface">' +
+      '<div class="cc-meta mono">' + esc(accelerator.replace('Alt', '⌥').replace('+', ' ')) + '</div>' +
+      '<p class="cc-note">开启后可在任意应用中按 ⌥Space 快速唤起或隐藏 leocodebox。若该组合键被占用，会提示更换。</p>' +
+      '</div>' +
+      '<div class="cc-surface cc-choice-group">' +
+      CC.renderRadioOption('global-hotkey-enabled', 'off', !enabled, '关闭', '不注册全局快捷键（默认）。') +
+      CC.renderRadioOption('global-hotkey-enabled', 'on', enabled, '开启 ⌥Space', '在任意位置按 ⌥Space 显隐主窗口。') +
+      '</div>';
+    return CC.renderSection('全局唤醒', '⌥Space 快捷唤起', body);
+  };
+
   CC.buildThemeSection = function (state) {
     var settings = state.desktopSettings || {};
     return CC.renderSection('外观', '桌面主题', '' +
@@ -495,6 +510,7 @@ window.__MOCK_STATE__ = {
     var state = CC.state || {};
     var sections = [
       CC.buildLocalServerSection(state, { includePreferences: false }),
+      CC.buildGlobalHotkeySection(state),
     ];
     CC.renderSheet('本地设置', '管理 leocodebox 在这台 Mac 上的运行方式。', sections);
   };
@@ -568,6 +584,11 @@ window.__MOCK_STATE__ = {
       var keepServer = event.target.closest('[name="keep-server-running"]');
       if (keepServer) {
         CC.act('set-setting', { key: 'keepLocalServerRunning', value: keepServer.value === 'on' });
+        return;
+      }
+      var globalHotkey = event.target.closest('[name="global-hotkey-enabled"]');
+      if (globalHotkey) {
+        CC.act('set-setting', { key: 'globalHotkeyEnabled', value: globalHotkey.value === 'on' });
         return;
       }
     });

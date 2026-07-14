@@ -306,7 +306,9 @@
     "agentIdle": "Agent idle",
     "localOnly": "Local only",
     "autoSave": "Auto-save",
-    "leoapiNodeHint": "Current API node: {{node}} (applies to new sessions)"
+    "leoapiNodeHint": "Current API node: {{node}} (applies to new sessions)",
+    "updateReady": "Update available v{{version}}",
+    "restartRequired": "Update installed — restart to apply"
   },
   "errorBoundary": {
     "regionTitle": "This area could not be loaded",
@@ -376,6 +378,7 @@
     "handoffHeading": "Handoff to…",
     "handoffTo": "Handoff to {{provider}} (edit before sending)",
     "handoffHint": "Recent messages become an editable preamble; nothing is auto-sent",
-    "handoffPreparing": "Collecting recent messages…"
+    "handoffPreparing": "Collecting recent messages…",
+    "handoffReturn": "Return to handoff source"
   }
 }

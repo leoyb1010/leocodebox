@@ -55,6 +55,13 @@
       --icon-filter: brightness(0) opacity(.58);
       --icon-filter-hover: brightness(0) opacity(.82);
       --shadow: rgba(38, 38, 42, .14);
+      /* Motion tokens — kept in lockstep with src/index.css (same values). */
+      --motion-fast: 120ms;
+      --motion-base: 200ms;
+      --motion-slow: 320ms;
+      --ease-out-quint: cubic-bezier(0.23, 1, 0.32, 1);
+      --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+      --elevation-2: 0 4px 12px var(--shadow);
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
     }
     html[data-theme="dark"] {
@@ -244,6 +251,9 @@
     .endpoint-bar { position: relative; grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
     .endpoint-bar i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: var(--blue); }
     .endpoint-bar.bad i { background: var(--red); }
+    .endpoint-spark { grid-column: 1 / -1; width: 100%; height: 22px; display: block; }
+    .endpoint-spark polyline { fill: none; stroke: var(--blue); stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+    .endpoint-spark.bad polyline { stroke: var(--red); }
     .endpoint-label-input { max-width: 128px; }
     .dialog-head { min-height: 70px; display: flex; align-items: center; gap: 12px; padding: 0 20px; border-bottom: 1px solid var(--line); }
     .dialog-head h2 { margin: 0; font-size: 18px; font-weight: 650; }
@@ -1026,6 +1036,25 @@
         : provider?.baseUrl ? [provider.baseUrl] : [""];
       const liveByUrl = Object.fromEntries(liveResults.map((result) => [result.url, result]));
       const statFor = (url) => liveByUrl[url] || provider?.endpointStats?.[url];
+      // 历史趋势：只读持久化的 history（liveResults 无 history），最近在右。
+      const historyFor = (url) => provider?.endpointStats?.[url]?.history;
+      const endpointSparkline = (history, usable) => {
+        const points = Array.isArray(history)
+          ? history.map((sample) => Number(sample?.latencyMs)).filter((value) => Number.isFinite(value))
+          : [];
+        if (points.length < 2) return "";
+        const W = 100, H = 22, pad = 3;
+        const min = Math.min(...points), max = Math.max(...points);
+        const span = max - min || 1;
+        const stepX = (W - pad * 2) / (points.length - 1);
+        const coords = points.map((value, index) => {
+          const x = pad + index * stepX;
+          // 延迟越低越好 → 点越高（y 越小）。
+          const y = pad + ((value - min) / span) * (H - pad * 2);
+          return `${x.toFixed(1)},${y.toFixed(1)}`;
+        }).join(" ");
+        return `<svg class="endpoint-spark${usable ? "" : " bad"}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true"><polyline points="${coords}"></polyline></svg>`;
+      };
       // 条带基准：本组端点里最慢的一个作为 100%。
       const maxLatency = Math.max(1, ...endpoints
         .map((url) => Number(statFor(url)?.latencyMs))
@@ -1041,12 +1070,14 @@
         const bar = Number.isFinite(latency)
           ? `<span class="endpoint-bar${usable ? "" : " bad"}" aria-hidden="true"><i style="width:${Math.max(4, Math.round((latency / maxLatency) * 100))}%"></i></span>`
           : "";
+        const spark = endpointSparkline(historyFor(url), usable);
         return `<div class="endpoint-row">
           <input type="url" data-endpoint-url value="${escapeHtml(url)}" placeholder="https://api.example.com/v1" aria-label="请求地址 ${index + 1}">
           <input type="text" class="endpoint-label-input" data-endpoint-label value="${escapeHtml(label)}" placeholder="昵称（如：家里光猫）" maxlength="60" aria-label="地址昵称 ${index + 1}">
           <span class="endpoint-result${stat ? usable ? " good" : " bad" : ""}">${escapeHtml(status)}</span>
           <button class="icon-button danger" type="button" data-remove-endpoint="${index}" aria-label="删除此地址" title="删除"><img src="${icon("trash-2")}" alt=""></button>
           ${bar}
+          ${spark}
         </div>`;
       }).join("");
     }

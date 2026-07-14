@@ -293,6 +293,8 @@ export class LocalServerController {
       keepLocalServerRunning: false,
       exposeLocalServerOnNetwork: false,
       themeMode: 'system',
+      globalHotkeyEnabled: false,
+      globalHotkeyAccelerator: 'Alt+Space',
     };
   }
 
@@ -379,12 +381,18 @@ export class LocalServerController {
         keepLocalServerRunning: stored.keepLocalServerRunning === true,
         exposeLocalServerOnNetwork: false,
         themeMode: stored.themeMode === 'light' || stored.themeMode === 'dark' ? stored.themeMode : 'system',
+        globalHotkeyEnabled: stored.globalHotkeyEnabled === true,
+        globalHotkeyAccelerator: typeof stored.globalHotkeyAccelerator === 'string' && stored.globalHotkeyAccelerator
+          ? stored.globalHotkeyAccelerator
+          : 'Alt+Space',
       };
     } catch {
       this.desktopSettings = {
         keepLocalServerRunning: false,
         exposeLocalServerOnNetwork: false,
         themeMode: 'system',
+        globalHotkeyEnabled: false,
+        globalHotkeyAccelerator: 'Alt+Space',
       };
     }
   }
@@ -394,6 +402,10 @@ export class LocalServerController {
       keepLocalServerRunning: nextSettings.keepLocalServerRunning === true,
       exposeLocalServerOnNetwork: false,
       themeMode: nextSettings.themeMode === 'light' || nextSettings.themeMode === 'dark' ? nextSettings.themeMode : 'system',
+      globalHotkeyEnabled: nextSettings.globalHotkeyEnabled === true,
+      globalHotkeyAccelerator: typeof nextSettings.globalHotkeyAccelerator === 'string' && nextSettings.globalHotkeyAccelerator
+        ? nextSettings.globalHotkeyAccelerator
+        : 'Alt+Space',
     };
     await fs.mkdir(path.dirname(this.settingsPath), { recursive: true });
     await fs.writeFile(this.settingsPath, JSON.stringify(this.desktopSettings, null, 2), 'utf8');
@@ -408,6 +420,8 @@ export class LocalServerController {
     let nextValue = false;
     if (key === 'themeMode') nextValue = value;
     if (key === 'keepLocalServerRunning') nextValue = value === true || value === 'true';
+    if (key === 'globalHotkeyEnabled') nextValue = value === true || value === 'true';
+    if (key === 'globalHotkeyAccelerator') nextValue = typeof value === 'string' && value ? value : 'Alt+Space';
     await this.saveDesktopSettings({ ...this.desktopSettings, [key]: nextValue });
 
     return {

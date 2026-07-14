@@ -30,6 +30,7 @@ import {
   validateProviderBaseUrl,
 } from './provider-discovery.service.js';
 import {
+  appendEndpointSamples,
   normalizeEndpointUrls,
   normalizeModelMapping,
   normalizeProvider,
@@ -532,13 +533,7 @@ router.post('/switch/providers/:id/endpoints/test', async (req, res, next) => {
         .sort((left, right) => left.latencyMs - right.latencyMs)[0] || null;
       provider.endpoints = endpoints;
       provider.autoSelectEndpoint = autoSelectEndpoint;
-      provider.endpointStats = Object.fromEntries(results.map((result) => [result.url, {
-        latencyMs: result.latencyMs,
-        httpStatus: result.httpStatus,
-        authStatus: result.authStatus,
-        usable: result.usable,
-        testedAt: nowIso(),
-      }]));
+      provider.endpointStats = appendEndpointSamples(provider.endpointStats, results);
       if (autoSelectEndpoint && fastest) provider.baseUrl = fastest.url;
       provider.updatedAt = nowIso();
       await writeStore(store);

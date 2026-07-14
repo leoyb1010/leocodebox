@@ -5,6 +5,7 @@ import type {
   McpProvider,
   McpScope,
   McpTransport,
+  ProviderMcpServer,
   UpsertProviderMcpServerPayload,
 } from '../types';
 
@@ -181,4 +182,46 @@ export const createMcpPayloadFromForm = (
     bearerTokenEnvVar: includeProviderSpecificFields ? formData.bearerTokenEnvVar.trim() || undefined : undefined,
     envHttpHeaders: includeProviderSpecificFields ? formData.envHttpHeaders : undefined,
   };
+};
+
+/** One deduplicated MCP server, aggregated across every CLI it is installed in. */
+export type McpOverviewRow = {
+  name: string;
+  providers: McpProvider[];
+  transports: McpTransport[];
+  /** Written automatically by leocodebox (cloudcli- prefix), not by the user. */
+  managed: boolean;
+};
+
+/**
+ * Fold per-provider MCP server lists into one deduplicated, name-sorted view:
+ * the same server name installed in several CLIs collapses to a single row that
+ * records which CLIs carry it and which transports appear. Read-only — never mutates.
+ */
+export const aggregateInstalledMcp = (
+  perProvider: Partial<Record<McpProvider, ProviderMcpServer[]>>,
+): McpOverviewRow[] => {
+  type Bucket = { name: string; providers: Set<McpProvider>; transports: Set<McpTransport>; managed: boolean };
+  const byName = new Map<string, Bucket>();
+  for (const [provider, servers] of Object.entries(perProvider) as Array<[McpProvider, ProviderMcpServer[] | undefined]>) {
+    for (const server of servers ?? []) {
+      const name = server.name?.trim();
+      if (!name) continue;
+      let bucket = byName.get(name);
+      if (!bucket) {
+        bucket = { name, providers: new Set(), transports: new Set(), managed: name.startsWith('cloudcli-') };
+        byName.set(name, bucket);
+      }
+      bucket.providers.add(provider);
+      if (server.transport) bucket.transports.add(server.transport);
+    }
+  }
+  return Array.from(byName.values())
+    .map((bucket) => ({
+      name: bucket.name,
+      providers: Array.from(bucket.providers),
+      transports: Array.from(bucket.transports),
+      managed: bucket.managed,
+    }))
+    .sort((left, right) => left.name.localeCompare(right.name));
 };

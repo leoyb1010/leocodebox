@@ -3,6 +3,9 @@ import { useTranslation } from 'react-i18next';
 
 import type { Project } from '../../types/app';
 import { useLeoapiStatus } from '../../hooks/useLeoapiStatus';
+import { useVersionCheck } from '../../hooks/useVersionCheck';
+
+import { resolveUpdateBadge } from './updateBadge';
 
 type WorkspaceStatusBarProps = {
   selectedProject: Project | null;
@@ -14,6 +17,8 @@ type WorkspaceStatusBarProps = {
 export default function WorkspaceStatusBar({ selectedProject, runningCount, activeProvider }: WorkspaceStatusBarProps) {
   const { t } = useTranslation();
   const leoapiNodes = useLeoapiStatus();
+  const { updateAvailable, restartRequired, latestVersion } = useVersionCheck();
+  const updateBadge = resolveUpdateBadge(updateAvailable, restartRequired);
   // cursor-agent sessions map onto the `cursor` config target; the rest match by id.
   const targetId = activeProvider === 'cursor-agent' ? 'cursor' : activeProvider;
   const activeNode = targetId ? leoapiNodes[targetId] : null;
@@ -31,6 +36,23 @@ export default function WorkspaceStatusBar({ selectedProject, runningCount, acti
         )}
       </div>
       <div className="flex items-center gap-3">
+        {updateBadge.show && (
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('leocodebox:open-version-modal'))}
+            className="inline-flex items-center gap-1 text-muted-foreground transition-colors hover:text-foreground"
+            title={updateBadge.tone === 'update'
+              ? t('workspaceShell.updateReady', { version: latestVersion ?? '' })
+              : t('workspaceShell.restartRequired')}
+          >
+            <span
+              className={`h-1.5 w-1.5 animate-pulse rounded-full ${updateBadge.tone === 'update' ? 'bg-blue-500' : 'bg-amber-500'}`}
+            />
+            {updateBadge.tone === 'update'
+              ? t('workspaceShell.updateReady', { version: latestVersion ?? '' })
+              : t('workspaceShell.restartRequired')}
+          </button>
+        )}
         {activeNode && (
           <span
             className="inline-flex items-center gap-1 text-primary"

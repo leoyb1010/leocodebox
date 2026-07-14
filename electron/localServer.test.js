@@ -70,6 +70,42 @@ test('keepLocalServerRunning persists through save and load', async () => {
   assert.equal(reloaded.getSettings().keepLocalServerRunning, true);
 });
 
+test('globalHotkeyEnabled persists through save and load', async () => {
+  const scratch = await makeScratchDir();
+  const settingsPath = path.join(scratch, 'desktop-settings.json');
+
+  const controller = new LocalServerController({ appRoot: process.cwd(), settingsPath, appVersion: 'test' });
+  // Default off; string "true" from the IPC bridge should coerce to boolean true.
+  assert.equal(controller.getSettings().globalHotkeyEnabled, false);
+  const result = await controller.updateDesktopSetting('globalHotkeyEnabled', 'true');
+  assert.equal(result.desktopSettings.globalHotkeyEnabled, true);
+  assert.equal(result.requiresRestartNotice, false);
+
+  const reloaded = new LocalServerController({ appRoot: process.cwd(), settingsPath, appVersion: 'test' });
+  await reloaded.loadDesktopSettings();
+  assert.equal(reloaded.getSettings().globalHotkeyEnabled, true);
+});
+
+test('globalHotkeyAccelerator defaults to Alt+Space and persists a custom value', async () => {
+  const scratch = await makeScratchDir();
+  const settingsPath = path.join(scratch, 'desktop-settings.json');
+
+  const controller = new LocalServerController({ appRoot: process.cwd(), settingsPath, appVersion: 'test' });
+  assert.equal(controller.getSettings().globalHotkeyAccelerator, 'Alt+Space');
+  await controller.updateDesktopSetting('globalHotkeyAccelerator', 'Control+Alt+Space');
+
+  const reloaded = new LocalServerController({ appRoot: process.cwd(), settingsPath, appVersion: 'test' });
+  await reloaded.loadDesktopSettings();
+  assert.equal(reloaded.getSettings().globalHotkeyAccelerator, 'Control+Alt+Space');
+});
+
+test('unknown desktop settings are still rejected', async () => {
+  const scratch = await makeScratchDir();
+  const settingsPath = path.join(scratch, 'desktop-settings.json');
+  const controller = new LocalServerController({ appRoot: process.cwd(), settingsPath, appVersion: 'test' });
+  await assert.rejects(() => controller.updateDesktopSetting('nonexistentSetting', true));
+});
+
 test('adoptExistingServer reuses a healthy version-matched server and its marker token', async (t) => {
   const scratch = await makeScratchDir();
   const markerPath = path.join(scratch, 'local-server.json');

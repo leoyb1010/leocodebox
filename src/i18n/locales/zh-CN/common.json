@@ -306,7 +306,9 @@
     "agentIdle": "Agent 空闲",
     "localOnly": "仅本机",
     "autoSave": "自动保存",
-    "leoapiNodeHint": "当前接口节点：{{node}}（对新会话生效）"
+    "leoapiNodeHint": "当前接口节点：{{node}}（对新会话生效）",
+    "updateReady": "有可用更新 v{{version}}",
+    "restartRequired": "更新已安装，重启后生效"
   },
   "errorBoundary": {
     "regionTitle": "此区域暂时无法加载",
@@ -376,6 +378,7 @@
     "handoffHeading": "交接给…",
     "handoffTo": "交接给 {{provider}}（可编辑后再发送）",
     "handoffHint": "会把最近对话拼成可编辑的接力前言,不会自动发送",
-    "handoffPreparing": "正在整理最近对话…"
+    "handoffPreparing": "正在整理最近对话…",
+    "handoffReturn": "回到交接来源"
   }
 }

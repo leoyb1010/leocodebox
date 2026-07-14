@@ -6,6 +6,7 @@ import {
   ArrowUpFromLine,
   Check,
   ChevronRight,
+  CornerUpLeft,
   FileText,
   Gauge,
   GitCommit,
@@ -34,6 +35,7 @@ import { useTheme } from '../../contexts/ThemeContext';
 import { usePaletteOps } from '../../contexts/PaletteOpsContext';
 import { SETTINGS_MAIN_TABS } from '../settings/constants/constants';
 import type { AppTab, Project } from '../../types/app';
+import { readHandoffSource } from '../../hooks/projectStateUtils';
 
 import { useSessionsSource } from './sources/useSessionsSource';
 import { useFilesSource } from './sources/useFilesSource';
@@ -121,6 +123,11 @@ export default function CommandPalette({
   const handoff = useHandoffSource();
   const showHandoff = page === 'handoff';
   const currentSessionProvider = selectedSession?.__provider || null;
+  // Recomputed each time the palette opens so a fresh return ticket is picked up.
+  const handoffSource = React.useMemo(
+    () => (open && selectedSession ? readHandoffSource(selectedSession.id) : null),
+    [open, selectedSession],
+  );
 
   const runHandoff = React.useCallback(async (targetProvider: string) => {
     if (!selectedSession || !selectedProject) return;
@@ -132,7 +139,9 @@ export default function CommandPalette({
       detail: { defaultProvider: targetProvider },
     }));
     onStartNewChat(selectedProject);
-    window.dispatchEvent(new CustomEvent('leocodebox:handoff-draft', { detail: { text } }));
+    window.dispatchEvent(new CustomEvent('leocodebox:handoff-draft', {
+      detail: { text, sourceSessionId: selectedSession.id },
+    }));
   }, [selectedSession, selectedProject, currentSessionProvider, handoff, onStartNewChat]);
 
   const sessionRows = React.useMemo(() => {
@@ -255,6 +264,15 @@ export default function CommandPalette({
                   >
                     <ArrowUpFromLine className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
                     <span className="flex-1">{t('commandPalette.handoff')}</span>
+                  </CommandItem>
+                )}
+                {handoffSource && (
+                  <CommandItem
+                    value="Return to handoff source 回到交接来源 回程 来源"
+                    onSelect={() => run(() => navigate(`/session/${handoffSource}`))}
+                  >
+                    <CornerUpLeft className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                    <span className="flex-1">{t('commandPalette.handoffReturn')}</span>
                   </CommandItem>
                 )}
               </CommandGroup>

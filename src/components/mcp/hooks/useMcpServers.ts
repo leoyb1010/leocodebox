@@ -138,7 +138,7 @@ const createProjectTargets = (projects: McpProject[]): ProjectTarget[] => {
   }, []);
 };
 
-const fetchProviderScopeServers = async (
+export const fetchProviderScopeServers = async (
   provider: McpProvider,
   scope: McpScope,
   project?: ProjectTarget,

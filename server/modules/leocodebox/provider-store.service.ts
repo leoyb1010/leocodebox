@@ -148,6 +148,77 @@ export function normalizeProvider(input: SwitchProviderInput, existing: SwitchPr
   };
 }
 
+export const ENDPOINT_HISTORY_LIMIT = 20;
+
+/** One persisted latency sample kept in an endpoint's rolling history. */
+export type EndpointStatSample = {
+  latencyMs: number;
+  usable: boolean;
+  httpStatus: number | null;
+  testedAt: string;
+};
+
+/**
+ * Per-endpoint speed-test record. Top-level fields mirror the latest sample so
+ * existing readers (switch.html statFor, useLeoapiStatus, useLeoapiSwitchSource)
+ * keep working unchanged; `history` is the new rolling buffer for sparklines.
+ */
+export type EndpointStatEntry = {
+  schemaVersion: 1;
+  latencyMs: number;
+  httpStatus: number | null;
+  authStatus: string;
+  usable: boolean;
+  testedAt: string;
+  history: EndpointStatSample[];
+};
+
+type EndpointTestResult = {
+  url: string;
+  latencyMs: number;
+  httpStatus: number | null;
+  authStatus: string;
+  usable: boolean;
+};
+
+/**
+ * Fold a fresh round of endpoint test results into the stored stats, appending
+ * each to a rolling history capped at ENDPOINT_HISTORY_LIMIT. Tolerates legacy
+ * flat records (no schemaVersion/history) by treating their history as empty.
+ */
+export function appendEndpointSamples(
+  prevStats: Record<string, unknown> | null | undefined,
+  results: EndpointTestResult[],
+): Record<string, EndpointStatEntry> {
+  const testedAt = nowIso();
+  const prev = prevStats && typeof prevStats === 'object' ? prevStats as Record<string, unknown> : {};
+  const next: Record<string, EndpointStatEntry> = {};
+  for (const result of results) {
+    const prevEntry = prev[result.url] && typeof prev[result.url] === 'object'
+      ? prev[result.url] as Partial<EndpointStatEntry>
+      : undefined;
+    const prevHistory = prevEntry?.schemaVersion === 1 && Array.isArray(prevEntry.history)
+      ? prevEntry.history
+      : [];
+    const sample: EndpointStatSample = {
+      latencyMs: result.latencyMs,
+      usable: result.usable,
+      httpStatus: result.httpStatus,
+      testedAt,
+    };
+    next[result.url] = {
+      schemaVersion: 1,
+      latencyMs: result.latencyMs,
+      httpStatus: result.httpStatus,
+      authStatus: result.authStatus,
+      usable: result.usable,
+      testedAt,
+      history: [...prevHistory, sample].slice(-ENDPOINT_HISTORY_LIMIT),
+    };
+  }
+  return next;
+}
+
 export function withSwitchMutation<T>(operation: () => Promise<T> | T): Promise<T> {
   const result = switchMutationQueue.then(operation, operation);
   switchMutationQueue = result.then(() => undefined, () => undefined);

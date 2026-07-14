@@ -6,10 +6,26 @@ import type { Project } from '../types/app';
 import {
   mergeExpandedSessionPages,
   mergeProjectSessionPage,
+  persistHandoffSource,
+  readHandoffSource,
   removeSessionFromProject,
   upsertSessionIntoProject,
   type SessionUpsertedEvent,
 } from './projectStateUtils';
+
+// Minimal in-memory localStorage for the handoff-map helpers (Node has none).
+class MemoryStorage {
+  private store = new Map<string, string>();
+  getItem(key: string): string | null { return this.store.has(key) ? this.store.get(key)! : null; }
+  setItem(key: string, value: string): void { this.store.set(key, String(value)); }
+  removeItem(key: string): void { this.store.delete(key); }
+  clear(): void { this.store.clear(); }
+}
+const installLocalStorage = () => {
+  const storage = new MemoryStorage();
+  (globalThis as unknown as { localStorage: MemoryStorage }).localStorage = storage;
+  return storage;
+};
 
 const project = (overrides: Partial<Project> = {}): Project => ({
   projectId: 'project-1',
@@ -90,4 +106,42 @@ test('removing a session updates pagination metadata without changing misses', (
   const next = removeSessionFromProject(original, 's1');
   assert.deepEqual(next.sessions?.map((session) => session.id), ['s2']);
   assert.deepEqual(next.sessionMeta, { total: 2, hasMore: true });
+});
+
+test('persistHandoffSource round-trips and readHandoffSource retrieves the source', () => {
+  installLocalStorage();
+  persistHandoffSource('new-session', 'source-session');
+  assert.equal(readHandoffSource('new-session'), 'source-session');
+  assert.equal(readHandoffSource('unknown-session'), null);
+});
+
+test('multiple handoff mappings coexist without overwriting each other', () => {
+  installLocalStorage();
+  persistHandoffSource('new-a', 'src-a');
+  persistHandoffSource('new-b', 'src-b');
+  assert.equal(readHandoffSource('new-a'), 'src-a');
+  assert.equal(readHandoffSource('new-b'), 'src-b');
+});
+
+test('persistHandoffSource with null clears just that mapping', () => {
+  installLocalStorage();
+  persistHandoffSource('new-a', 'src-a');
+  persistHandoffSource('new-b', 'src-b');
+  persistHandoffSource('new-a', null);
+  assert.equal(readHandoffSource('new-a'), null);
+  assert.equal(readHandoffSource('new-b'), 'src-b');
+});
+
+test('readHandoffSource returns null on corrupt JSON without throwing', () => {
+  const storage = installLocalStorage();
+  storage.setItem('handoff-source-map', '{not json');
+  assert.equal(readHandoffSource('anything'), null);
+});
+
+test('handoff map does not collide with the last-session key', () => {
+  const storage = installLocalStorage();
+  storage.setItem('last-session-id', 'ls-1');
+  persistHandoffSource('new-a', 'src-a');
+  assert.equal(storage.getItem('last-session-id'), 'ls-1');
+  assert.equal(readHandoffSource('new-a'), 'src-a');
 });

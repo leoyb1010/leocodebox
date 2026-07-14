@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, safeStorage, session, shell, webContents } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, safeStorage, session, shell, webContents } from 'electron';
 import updaterPackage from 'electron-updater';
 import { mkdirSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
@@ -367,6 +367,29 @@ async function openLocalWebUi() {
   return getDesktopState();
 }
 
+let registeredHotkeyAccelerator = null;
+
+// (Re)register the global show/hide hotkey from current settings. Returns false
+// when the accelerator can't be claimed (already taken by the OS/another app).
+function applyGlobalHotkey() {
+  const { globalHotkeyEnabled, globalHotkeyAccelerator } = localServer.getSettings();
+  if (registeredHotkeyAccelerator) {
+    globalShortcut.unregister(registeredHotkeyAccelerator);
+    registeredHotkeyAccelerator = null;
+  }
+  if (!globalHotkeyEnabled) return true;
+  try {
+    const ok = globalShortcut.register(globalHotkeyAccelerator, () => desktopWindow?.toggleMainWindow());
+    if (ok) {
+      registeredHotkeyAccelerator = globalHotkeyAccelerator;
+      return true;
+    }
+  } catch {
+    // fall through to the occupied-key path
+  }
+  return false;
+}
+
 async function updateDesktopSetting(key, value) {
   const result = await localServer.updateDesktopSetting(key, value);
   syncDesktopState();
@@ -378,6 +401,21 @@ async function updateDesktopSetting(key, value) {
       message: 'Local server changes apply the next time the local server starts.',
       detail: 'Quit leocodebox and stop the local server, then open Local leocodebox again.',
     });
+  }
+
+  if (key === 'globalHotkeyEnabled' || key === 'globalHotkeyAccelerator') {
+    const ok = applyGlobalHotkey();
+    if (!ok) {
+      // Roll back the enable so the stored state matches reality, then tell the user.
+      await localServer.updateDesktopSetting('globalHotkeyEnabled', false);
+      syncDesktopState();
+      await dialog.showMessageBox(desktopWindow?.getMainWindow() || undefined, {
+        type: 'warning',
+        title: '快捷键被占用',
+        message: '无法注册全局快捷键',
+        detail: '该组合键可能已被系统或其他应用占用，请更换后再试。',
+      });
+    }
   }
 
   return getDesktopState();
@@ -575,6 +613,11 @@ function registerAppEvents() {
     // keeping the local server warm. Quit stays on ⌘Q / tray "退出".
     if (isQuitting) app.quit();
   });
+
+  app.on('will-quit', () => {
+    // Electron clears these on exit anyway; unregister explicitly for safety.
+    globalShortcut.unregisterAll();
+  });
 }
 
 async function createDesktopWindow() {
@@ -707,6 +750,8 @@ async function bootstrap() {
   registerIpcHandlers();
   registerAppEvents();
   await createDesktopWindow();
+  // Settings are already loaded and the window exists; arm the global hotkey.
+  applyGlobalHotkey();
   await openLocalInDesktop();
   // The local server URL only exists now, so (re)connect the notification
   // stream after the workspace is up.

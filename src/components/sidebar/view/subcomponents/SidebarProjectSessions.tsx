@@ -44,10 +44,10 @@ function SessionListSkeleton() {
       {Array.from({ length: 3 }).map((_, index) => (
         <div key={index} className="rounded-md p-2">
           <div className="flex items-start gap-2">
-            <div className="mt-0.5 h-3 w-3 animate-pulse rounded-full bg-muted" />
+            <div className="skeleton mt-0.5 h-3 w-3 rounded-full" />
             <div className="flex-1 space-y-1">
-              <div className="h-3 animate-pulse rounded bg-muted" style={{ width: `${60 + index * 15}%` }} />
-              <div className="h-2 w-1/2 animate-pulse rounded bg-muted" />
+              <div className="skeleton h-3 rounded" style={{ width: `${60 + index * 15}%` }} />
+              <div className="skeleton h-2 w-1/2 rounded" />
             </div>
           </div>
         </div>

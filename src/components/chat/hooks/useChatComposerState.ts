@@ -12,6 +12,7 @@ import type {
 
 import { apiClient } from '../../../utils/apiClient';
 import type { MarkSessionProcessing } from '../../../hooks/useSessionProtection';
+import { persistHandoffSource } from '../../../hooks/projectStateUtils';
 import { grantClaudeToolPermission } from '../utils/chatPermissions';
 import {
   safeLocalStorage,
@@ -45,6 +46,8 @@ interface UseChatComposerStateArgs {
   selectedProject: Project | null;
   selectedSession: ProjectSession | null;
   currentSessionId: string | null;
+  /** Bumped by the parent each time a brand-new session is started. */
+  newSessionTrigger?: number;
   provider: LLMProvider;
   permissionMode: PermissionMode | string;
   cyclePermissionMode: () => void;
@@ -93,6 +96,7 @@ export function useChatComposerState({
   selectedProject,
   selectedSession,
   currentSessionId,
+  newSessionTrigger,
   provider,
   permissionMode,
   cyclePermissionMode,
@@ -152,6 +156,13 @@ export function useChatComposerState({
     ((event: FormEvent<HTMLFormElement> | MouseEvent | TouchEvent | KeyboardEvent<HTMLTextAreaElement>) => Promise<void>) | null
   >(null);
   const inputValueRef = useRef(input);
+  // Holds the source session id from a ⌘K handoff until the new session's id is
+  // assigned (on first send), so the return ticket can be persisted then.
+  const pendingHandoffSourceRef = useRef<string | null>(null);
+  // One-shot grace flag: the handoff itself bumps newSessionTrigger, so the
+  // first trigger change after arming must keep the ref; any later change means
+  // the handoff was abandoned for another new session, so the ref is dropped.
+  const handoffArmedRef = useRef(false);
   const selectedProjectId = selectedProject?.projectId;
   // Prefer the stable backend-allocated id (selectedSession.id) but fall back
   // to currentSessionId for a just-established session that hasn't been
@@ -362,6 +373,13 @@ export function useChatComposerState({
           project: selectedProject,
           summary: sessionSummary,
         });
+
+        // Only the handoff-created new session records a return ticket; continuing
+        // an existing session never writes one.
+        if (pendingHandoffSourceRef.current) {
+          persistHandoffSource(targetSessionId, pendingHandoffSourceRef.current);
+          pendingHandoffSourceRef.current = null;
+        }
       }
 
       const userMessage: ChatMessage = {
@@ -462,7 +480,12 @@ export function useChatComposerState({
   // after switching provider; nothing is sent until the user confirms.
   useEffect(() => {
     const onHandoffDraft = (event: Event) => {
-      const text = (event as CustomEvent<{ text?: string }>).detail?.text;
+      const detail = (event as CustomEvent<{ text?: string; sourceSessionId?: string }>).detail;
+      if (detail?.sourceSessionId) {
+        pendingHandoffSourceRef.current = detail.sourceSessionId;
+        handoffArmedRef.current = true;
+      }
+      const text = detail?.text;
       if (typeof text === 'string' && text) {
         inputValueRef.current = text;
         setInput(text);
@@ -471,6 +494,25 @@ export function useChatComposerState({
     window.addEventListener('leocodebox:handoff-draft', onHandoffDraft);
     return () => window.removeEventListener('leocodebox:handoff-draft', onHandoffDraft);
   }, []);
+
+  // Bound the pending handoff source to exactly the session the handoff created.
+  // The handoff's own onStartNewChat bumps newSessionTrigger first, so consume a
+  // one-shot grace on that change; any subsequent new session drops the ref.
+  useEffect(() => {
+    if (handoffArmedRef.current) {
+      handoffArmedRef.current = false;
+      return;
+    }
+    pendingHandoffSourceRef.current = null;
+  }, [newSessionTrigger]);
+
+  // Navigating to an existing session also abandons a pending handoff.
+  useEffect(() => {
+    if (selectedSession?.id) {
+      pendingHandoffSourceRef.current = null;
+      handoffArmedRef.current = false;
+    }
+  }, [selectedSession?.id]);
 
   useEffect(() => {
     if (!selectedProjectId) {

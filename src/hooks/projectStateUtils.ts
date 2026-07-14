@@ -347,3 +347,40 @@ export const persistLastSessionId = (sessionId: string | null): void => {
     // localStorage unavailable
   }
 };
+
+const HANDOFF_SOURCE_KEY = 'handoff-source-map';
+
+const readHandoffSourceMap = (): Record<string, string> => {
+  try {
+    const raw = localStorage.getItem(HANDOFF_SOURCE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw) as unknown;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, string>)
+      : {};
+  } catch {
+    return {};
+  }
+};
+
+/** The session a handed-off session was created from, for the ⌘K return ticket. */
+export const readHandoffSource = (sessionId: string): string | null => {
+  if (!sessionId) return null;
+  const source = readHandoffSourceMap()[sessionId];
+  return typeof source === 'string' && source ? source : null;
+};
+
+export const persistHandoffSource = (newSessionId: string, sourceSessionId: string | null): void => {
+  if (!newSessionId) return;
+  try {
+    const map = readHandoffSourceMap();
+    if (sourceSessionId) {
+      map[newSessionId] = sourceSessionId;
+    } else {
+      delete map[newSessionId];
+    }
+    localStorage.setItem(HANDOFF_SOURCE_KEY, JSON.stringify(map));
+  } catch {
+    // localStorage unavailable
+  }
+};

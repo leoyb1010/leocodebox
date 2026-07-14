@@ -225,10 +225,26 @@
     --motion-slow: 320ms;
     --motion-ease-out: cubic-bezier(0.2, 0, 0, 1);
     --motion-spring: cubic-bezier(0.16, 1, 0.3, 1);
+    /* Entrance / positional easings shared with public/leocodebox-switch.html */
+    --ease-out-quint: cubic-bezier(0.23, 1, 0.32, 1);
+    --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+    /* Elevation scale (HSL+alpha so a single value self-adapts light/dark). */
+    --elevation-1: 0 1px 2px hsl(220 20% 2% / 0.05);
+    --elevation-2: 0 4px 12px hsl(220 20% 2% / 0.08);
+    --elevation-3: 0 12px 30px hsl(220 20% 2% / 0.12);
     --z-popover: 40;
     --z-sheet: 50;
     --z-dialog: 60;
     --z-toast: 70;
+  }
+
+  /* Dark elevation needs heavier shadows to read against the near-black surface.
+     `:root.dark` (specificity 0,2,0) beats the `:root` light defaults above
+     regardless of source order — a plain `.dark` block would lose the tie. */
+  :root.dark {
+    --elevation-1: 0 1px 2px hsl(0 0% 0% / 0.30);
+    --elevation-2: 0 4px 12px hsl(0 0% 0% / 0.40);
+    --elevation-3: 0 12px 30px hsl(0 0% 0% / 0.52);
   }
 
   /* Global transition defaults */
@@ -1069,7 +1085,36 @@
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
   }
-  
+
+  /* Block-level skeleton placeholder: a muted block with a light sweep.
+     Distinct from Shimmer.tsx (bg-clip-text text shimmer). Both reduced-motion
+     channels above pin the sweep to a near-instant static block automatically. */
+  @keyframes skeleton-sweep {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(100%); }
+  }
+
+  .skeleton {
+    position: relative;
+    overflow: hidden;
+    background: hsl(var(--muted));
+    border-radius: var(--radius);
+  }
+
+  .skeleton::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    transform: translateX(-100%);
+    background: linear-gradient(
+      90deg,
+      transparent,
+      hsl(var(--foreground) / 0.06),
+      transparent
+    );
+    animation: skeleton-sweep 1.6s var(--ease-in-out) infinite;
+  }
+
   /* Improved textarea styling */
   .chat-input-placeholder {
     display: block !important;
