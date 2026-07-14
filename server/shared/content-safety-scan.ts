@@ -38,7 +38,7 @@ const RULES: Rule[] = [
   { id: 'exfil-secret-to-url', category: 'exfiltration', severity: 'medium', regex: /\b(curl|wget|fetch|Invoke-WebRequest)\b[^\n]*\b(token|secret|password|api[_-]?key|credential|\$env|process\.env)\b/i },
 
   // --- Destructive commands ---
-  { id: 'rm-rf-root-home', category: 'destructive', severity: 'high', regex: /\brm\s+-[rf]{1,2}\b[^\n]*\s(\/|~|\$HOME)(\s|\/|$)/i },
+  { id: 'rm-rf-root-home', category: 'destructive', severity: 'high', regex: /\brm\s+-[rf]{1,2}\b[^\n]*\s(\/|~|\$HOME)/i },
   { id: 'fork-bomb', category: 'destructive', severity: 'high', regex: /:\s*\(\s*\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;\s*:/ },
   { id: 'chmod-777', category: 'destructive', severity: 'low', regex: /\bchmod\s+(-R\s+)?0?777\b/i },
 

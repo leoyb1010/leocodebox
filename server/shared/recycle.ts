@@ -51,8 +51,6 @@ export const recyclePath = async (
 
   const id = `${Date.now()}-${sanitize(path.basename(sourcePath))}-${randomUUID().slice(0, 8)}`;
   const trashPath = path.join(root, id);
-  await move(path.resolve(sourcePath), trashPath);
-
   const entry: RecycledEntry = {
     id,
     trashPath,
@@ -60,7 +58,13 @@ export const recyclePath = async (
     recycledAt: new Date().toISOString(),
     meta,
   };
+
+  // Persist the manifest BEFORE moving the content. If the move then fails
+  // (e.g. a cross-filesystem cp+rm that partially fails), the worst case is a
+  // dangling manifest — still listed and pruned normally — never an invisible,
+  // unrecoverable, never-pruned orphan in the trash.
   await writeFile(manifestPathFor(trashPath), `${JSON.stringify(entry, null, 2)}\n`, { encoding: 'utf8', mode: 0o600 });
+  await move(path.resolve(sourcePath), trashPath);
   return entry;
 };
 

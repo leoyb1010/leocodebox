@@ -826,50 +826,32 @@ export const readJsonConfig = async (filePath: string): Promise<Record<string, u
  * ends with a trailing newline to keep the file diff-friendly.
  */
 export const writeJsonConfig = async (filePath: string, data: Record<string, unknown>): Promise<void> => {
-  await writeConfigTransactional(filePath, `${JSON.stringify(data, null, 2)}\n`);
+  // writeTextConfigAtomic (temp + rename) already guarantees the target is never
+  // left partial/corrupt. The only thing it lacks is a recovery point, so keep a
+  // best-effort backup of the prior contents before overwriting.
+  await backupExistingConfig(filePath);
+  await writeTextConfigAtomic(filePath, `${JSON.stringify(data, null, 2)}\n`);
 };
 
-/**
- * Transactional config write: snapshot the current file, write atomically, read
- * the bytes back and verify them, and restore the snapshot on any failure. This
- * guarantees a failed or corrupted write can never leave a user's config file
- * (e.g. ~/.claude.json, which holds their whole config) in a broken state.
- *
- * @param verify receives the bytes read back from disk; return false to trigger
- *   a rollback. Defaults to a byte-exact match against what we intended to write.
- */
-export const writeConfigTransactional = async (
-  filePath: string,
-  content: string,
-  verify: (readBack: string) => boolean = (readBack) => readBack === content,
-): Promise<void> => {
-  let snapshot: string | null = null;
-  try {
-    snapshot = await readFile(filePath, 'utf8');
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-      throw error;
-    }
-  }
+const configBackupDir = (): string =>
+  process.env.LEOCODEBOX_CONFIG_BACKUP_DIR || path.join(os.homedir(), '.leocodebox', 'config-backups');
 
+/**
+ * Best-effort recovery snapshot: before overwriting a config, copy its current
+ * contents to a single rolling backup in a leocodebox-owned dir. Non-destructive
+ * and race-free (an independent copy, never a read-back/rollback), so a bad edit
+ * to a shared config such as ~/.claude.json can be recovered. Never blocks or
+ * fails the primary write — a missing file or unwritable backup dir is ignored.
+ */
+export const backupExistingConfig = async (filePath: string): Promise<void> => {
   try {
-    await writeTextConfigAtomic(filePath, content);
-    const readBack = await readFile(filePath, 'utf8');
-    if (!verify(readBack)) {
-      throw new AppError(`Config write verification failed for ${filePath}.`, {
-        code: 'CONFIG_WRITE_VERIFY_FAILED',
-        statusCode: 500,
-      });
-    }
-  } catch (error) {
-    // Roll back to the pre-write state: restore the snapshot, or remove the file
-    // if it did not exist before. Best-effort so the original error surfaces.
-    if (snapshot !== null) {
-      await writeTextConfigAtomic(filePath, snapshot).catch(() => {});
-    } else {
-      await rm(filePath, { force: true }).catch(() => {});
-    }
-    throw error;
+    const current = await readFile(filePath, 'utf8');
+    const dir = configBackupDir();
+    await mkdir(dir, { recursive: true, mode: 0o700 });
+    const safeName = path.resolve(filePath).replace(/[^A-Za-z0-9._-]+/g, '_').slice(-180);
+    await writeTextConfigAtomic(path.join(dir, `${safeName}.bak`), current);
+  } catch {
+    // No existing file yet, or the backup dir is unavailable — proceed with the write.
   }
 };
 

@@ -16,10 +16,15 @@ test('flags reverse shells and fork bombs', () => {
   assert.ok(rules(':(){ :|:& };:').has('fork-bomb'));
 });
 
-test('flags destructive rm of home/root but not an ordinary rm', () => {
+test('flags destructive rm of home/root — including the /* and absolute-path forms', () => {
   assert.ok(rules('rm -rf ~/Documents/old').has('rm-rf-root-home'));
   assert.ok(rules('rm -rf /').has('rm-rf-root-home'));
+  assert.ok(rules('rm -rf /*').has('rm-rf-root-home'), 'the shell-glob form must be caught');
+  assert.ok(rules('sudo rm -rf /etc').has('rm-rf-root-home'));
+  assert.ok(rules('rm -rf /usr/lib').has('rm-rf-root-home'));
+  // Relative paths are normal cleanup and must not be flagged.
   assert.equal(rules('rm -rf ./build').has('rm-rf-root-home'), false);
+  assert.equal(rules('rm -rf node_modules dist').has('rm-rf-root-home'), false);
 });
 
 test('flags hardcoded secrets', () => {
