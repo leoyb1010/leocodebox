@@ -826,7 +826,51 @@ export const readJsonConfig = async (filePath: string): Promise<Record<string, u
  * ends with a trailing newline to keep the file diff-friendly.
  */
 export const writeJsonConfig = async (filePath: string, data: Record<string, unknown>): Promise<void> => {
-  await writeTextConfigAtomic(filePath, `${JSON.stringify(data, null, 2)}\n`);
+  await writeConfigTransactional(filePath, `${JSON.stringify(data, null, 2)}\n`);
+};
+
+/**
+ * Transactional config write: snapshot the current file, write atomically, read
+ * the bytes back and verify them, and restore the snapshot on any failure. This
+ * guarantees a failed or corrupted write can never leave a user's config file
+ * (e.g. ~/.claude.json, which holds their whole config) in a broken state.
+ *
+ * @param verify receives the bytes read back from disk; return false to trigger
+ *   a rollback. Defaults to a byte-exact match against what we intended to write.
+ */
+export const writeConfigTransactional = async (
+  filePath: string,
+  content: string,
+  verify: (readBack: string) => boolean = (readBack) => readBack === content,
+): Promise<void> => {
+  let snapshot: string | null = null;
+  try {
+    snapshot = await readFile(filePath, 'utf8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+      throw error;
+    }
+  }
+
+  try {
+    await writeTextConfigAtomic(filePath, content);
+    const readBack = await readFile(filePath, 'utf8');
+    if (!verify(readBack)) {
+      throw new AppError(`Config write verification failed for ${filePath}.`, {
+        code: 'CONFIG_WRITE_VERIFY_FAILED',
+        statusCode: 500,
+      });
+    }
+  } catch (error) {
+    // Roll back to the pre-write state: restore the snapshot, or remove the file
+    // if it did not exist before. Best-effort so the original error surfaces.
+    if (snapshot !== null) {
+      await writeTextConfigAtomic(filePath, snapshot).catch(() => {});
+    } else {
+      await rm(filePath, { force: true }).catch(() => {});
+    }
+    throw error;
+  }
 };
 
 export const writeTextConfigAtomic = async (filePath: string, content: string): Promise<void> => {
