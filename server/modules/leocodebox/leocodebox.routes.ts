@@ -8,6 +8,7 @@ import { findAppRoot } from '@/utils/runtime-paths.js';
 
 import cliToolsRoutes, { CLI_TOOLS, getCliToolStatus } from './cli-tools.routes.js';
 import { collectDiagnostics } from './diagnostics.service.js';
+import { collectDoctorReport } from './doctor.service.js';
 import feedbackUpdateRoutes from './feedback-update.routes.js';
 import providerSwitchRoutes from './provider-switch.routes.js';
 
@@ -26,6 +27,18 @@ router.get('/diagnostics', async (_req, res, next) => {
     );
     const appRoot = findAppRoot(path.dirname(fileURLToPath(import.meta.url)));
     res.json({ success: true, report: await collectDiagnostics(appRoot, tools) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Read-only readiness assessment: per-check ok/warn/fail for CLIs + Leoapi nodes.
+router.get('/doctor', async (_req, res, next) => {
+  try {
+    const tools = await Promise.all(
+      Object.values(CLI_TOOLS).map((tool) => getCliToolStatus(tool, { checkLatest: false })),
+    );
+    res.json({ success: true, report: await collectDoctorReport(tools) });
   } catch (error) {
     next(error);
   }
