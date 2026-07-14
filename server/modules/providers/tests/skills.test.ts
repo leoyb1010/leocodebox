@@ -683,3 +683,53 @@ test('providerSkillsService manages OpenCode user skills', { concurrency: false 
     await fs.rm(tempRoot, { recursive: true, force: true });
   }
 });
+
+test('addSkillsToAllProviders distributes one skill across every managed provider, removeSkillFromAllProviders recycles it', { concurrency: false }, async () => {
+  const tempRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'llm-skills-global-'));
+  const restoreHomeDir = patchHomeDir(tempRoot);
+  const prevTrash = process.env.LEOCODEBOX_TRASH_DIR;
+  process.env.LEOCODEBOX_TRASH_DIR = path.join(tempRoot, 'trash');
+
+  try {
+    const results = await providerSkillsService.addSkillsToAllProviders({
+      entries: [
+        {
+          directoryName: 'shared-skill',
+          content: '---\nname: shared\ndescription: A skill for every CLI\n---\n\nShared body.\n',
+        },
+      ],
+    });
+
+    // Every registered provider appears in the result set (soft, per-provider).
+    const providers = new Set(results.map((entry) => entry.provider));
+    for (const expected of ['claude', 'codex', 'cursor', 'opencode']) {
+      assert.ok(providers.has(expected as never), `${expected} should be in the distribution result`);
+    }
+
+    const created = results.filter((entry) => entry.created);
+    assert.ok(created.length >= 3, 'at least claude/codex/cursor receive the skill');
+    // A provider without managed-skill support fails softly (error), never throws.
+    for (const failure of results.filter((entry) => !entry.created)) {
+      assert.ok(failure.error, 'unsupported providers are captured as soft errors');
+    }
+
+    // Each provider that got it actually lists the skill on disk.
+    for (const entry of created) {
+      const skills = await providerSkillsService.listProviderSkills(entry.provider);
+      assert.ok(skills.some((skill) => skill.name === 'shared'), `${entry.provider} lists the distributed skill`);
+    }
+
+    // Remove-from-all recycles it away from every provider.
+    const removals = await providerSkillsService.removeSkillFromAllProviders({ directoryName: 'shared-skill' });
+    assert.ok(removals.some((entry) => entry.removed), 'at least one provider had the skill removed');
+    for (const entry of created) {
+      const skills = await providerSkillsService.listProviderSkills(entry.provider);
+      assert.ok(!skills.some((skill) => skill.name === 'shared'), `${entry.provider} no longer lists it`);
+    }
+  } finally {
+    if (prevTrash === undefined) delete process.env.LEOCODEBOX_TRASH_DIR;
+    else process.env.LEOCODEBOX_TRASH_DIR = prevTrash;
+    restoreHomeDir();
+    await fs.rm(tempRoot, { recursive: true, force: true });
+  }
+});

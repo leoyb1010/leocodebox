@@ -440,6 +440,26 @@ router.delete(
   }),
 );
 
+// Distribute one skill to every provider that supports managed skills.
+router.post(
+  '/skills/global',
+  asyncHandler(async (req: Request, res: Response) => {
+    const input = parseProviderSkillCreatePayload(req.body);
+    const results = await providerSkillsService.addSkillsToAllProviders(input);
+    res.status(201).json(createApiSuccessResponse({ results }));
+  }),
+);
+
+router.delete(
+  '/skills/global/:directoryName',
+  asyncHandler(async (req: Request, res: Response) => {
+    const results = await providerSkillsService.removeSkillFromAllProviders({
+      directoryName: readPathParam(req.params.directoryName, 'directoryName'),
+    });
+    res.json(createApiSuccessResponse({ results }));
+  }),
+);
+
 // ----------------- MCP routes -----------------
 router.get(
   '/:provider/mcp/servers',

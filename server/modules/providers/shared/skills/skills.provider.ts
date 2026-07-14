@@ -1,6 +1,7 @@
 import path from 'node:path';
-import { mkdir, rm, stat, writeFile } from 'node:fs/promises';
+import { mkdir, stat, writeFile } from 'node:fs/promises';
 
+import { recyclePath } from '@/shared/recycle.js';
 import type { IProviderSkills } from '@/shared/interfaces.js';
 import type {
   LLMProvider,
@@ -224,8 +225,16 @@ export abstract class SkillsProvider implements IProviderSkills {
     }
 
     for (const install of pendingInstalls) {
-      // Replace the complete skill directory so removed scripts or assets do not remain stale.
-      await rm(install.skillDirectoryPath, { recursive: true, force: true });
+      // Recycle (not hard-delete) any existing skill directory before rewriting it,
+      // so an overwrite that removes scripts/assets stays recoverable.
+      const alreadyExists = await stat(install.skillDirectoryPath).then(() => true).catch(() => false);
+      if (alreadyExists) {
+        await recyclePath(install.skillDirectoryPath, {
+          provider: this.provider,
+          reason: 'skill-overwrite',
+          directoryName: path.basename(install.skillDirectoryPath),
+        });
+      }
       await mkdir(install.skillDirectoryPath, { recursive: true });
       await writeFile(install.skillPath, `${install.content}\n`, 'utf8');
       for (const file of install.supportingFiles) {
@@ -273,7 +282,12 @@ export abstract class SkillsProvider implements IProviderSkills {
       .then((stats) => stats.isDirectory())
       .catch(() => false);
     if (removed) {
-      await rm(resolvedSkillDirectoryPath, { recursive: true, force: true });
+      // Recoverable delete: move to the leocodebox trash instead of rm -rf.
+      await recyclePath(resolvedSkillDirectoryPath, {
+        provider: this.provider,
+        reason: 'skill-remove',
+        directoryName,
+      });
     }
 
     return { removed, provider: this.provider, directoryName };
