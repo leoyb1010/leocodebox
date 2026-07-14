@@ -5,7 +5,6 @@ import type { IProviderModels } from '@/shared/interfaces.js';
 import type {
   ProviderChangeActiveModelInput,
   ProviderCurrentActiveModel,
-  ProviderModelOption,
   ProviderModelsDefinition,
   ProviderSessionActiveModelChange,
 } from '@/shared/types.js';
@@ -112,14 +111,6 @@ export const CLAUDE_FALLBACK_MODELS: ProviderModelsDefinition = {
   DEFAULT: 'default',
 };
 
-export const findClaudeModelOption = (model: string | undefined | null): ProviderModelOption | null => {
-  const normalizedModel = typeof model === 'string' ? model.trim() : '';
-  if (!normalizedModel) {
-    return null;
-  }
-
-  return CLAUDE_FALLBACK_MODELS.OPTIONS.find((option) => option.value === normalizedModel) ?? null;
-};
 type ClaudeInitEvent = {
   sessionId?: string;
   session_id?: string;
@@ -231,17 +222,8 @@ const readClaudeSessionModelFromJsonl = async (
 
 export class ClaudeProviderModels implements IProviderModels {
   async getSupportedModels(): Promise<ProviderModelsDefinition> {
-    // claude creates a new jsonl file as a separate session for this request.
-    // As a result, it lists the workspace where this is invoked when it shouldn't.
-    //
-    // Disabled for now:
-    // const queryInstance = query({
-    //   prompt: 'Get supported models',
-    //   options: buildClaudeQueryOptions(),
-    // });
-    // const supportedModels = await queryInstance.supportedModels();
-    // queryInstance.close();
-    // return buildClaudeModelsDefinition(supportedModels);
+    // Deliberately returns a static list: querying the SDK for supported models
+    // spins up a separate jsonl session that pollutes the workspace listing.
     return CLAUDE_FALLBACK_MODELS;
   }
 
