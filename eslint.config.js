@@ -168,6 +168,7 @@ export default tseslint.config(
             "server/shared/network-hosts.{js,ts}",
             "server/shared/local-only.{js,ts}",
             "server/shared/recycle.{js,ts}",
+            "server/shared/content-safety-scan.{js,ts}",
             "server/services/notification-orchestrator.{js,ts}",
           ], // classify shared utility files so modules can depend on them explicitly
           mode: "file",

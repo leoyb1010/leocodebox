@@ -17,6 +17,7 @@ import type {
   UpsertProviderMcpServerInput,
 } from '@/shared/types.js';
 import { AppError, asyncHandler, createApiSuccessResponse } from '@/shared/utils.js';
+import { scanContentSafety } from '@/shared/content-safety-scan.js';
 
 const router = express.Router();
 
@@ -457,6 +458,19 @@ router.delete(
       directoryName: readPathParam(req.params.directoryName, 'directoryName'),
     });
     res.json(createApiSuccessResponse({ results }));
+  }),
+);
+
+// Advisory static safety scan for content about to be enabled (skill/MCP/agent md).
+router.post(
+  '/content-safety/scan',
+  asyncHandler(async (req: Request, res: Response) => {
+    const content = typeof req.body?.content === 'string' ? req.body.content : '';
+    const ignoreRules = Array.isArray(req.body?.ignoreRules)
+      ? req.body.ignoreRules.filter((rule: unknown): rule is string => typeof rule === 'string')
+      : undefined;
+    const report = scanContentSafety(content, { ignoreRules });
+    res.json(createApiSuccessResponse({ report }));
   }),
 );
 
