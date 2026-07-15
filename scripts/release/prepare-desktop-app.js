@@ -171,6 +171,23 @@ await copyRequired('electron');
 await copyRequired('dist');
 await copyRequired('dist-server');
 await copyRequired('public');
+
+// public/visuals is a byte-for-byte duplicate of dist/visuals (Vite copies
+// public/* into dist/ at build, and the server serves both). Only brand/ is
+// read from disk by file path (the launch splash in electron/placeholder.html);
+// every other subfolder is HTTP-served and resolves from dist/visuals. Drop the
+// redundant subfolders from the shipped app — webp is incompressible, so this is
+// the single largest DMG saving. Deleting from the stage is deterministic;
+// electron-builder `files` negations of an already-included dir are not.
+const stagedVisualsRoot = path.join(stageDir, 'public', 'visuals');
+if (await pathExists(stagedVisualsRoot)) {
+  for (const entry of await fs.readdir(stagedVisualsRoot)) {
+    if (entry !== 'brand') {
+      await fs.rm(path.join(stagedVisualsRoot, entry), { recursive: true, force: true });
+    }
+  }
+}
+
 await copyRequired('node_modules');
 
 // Finder/iCloud conflict copies occasionally appear inside installed packages.

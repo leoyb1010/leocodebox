@@ -91,13 +91,7 @@
       "NOTICE",
       "!**/node_modules/@anthropic-ai/claude-agent-sdk-{darwin,linux,win32}-*/**",
       "!**/node_modules/@openai/codex-{darwin,linux,win32}-*/**",
-      "!**/node_modules/playwright-core/.local-browsers/chromium-*/**",
-      "!public/visuals/agents/**",
-      "!public/visuals/empty-states/**",
-      "!public/visuals/errors/**",
-      "!public/visuals/onboarding/**",
-      "!public/visuals/release/**",
-      "!public/visuals/textures/**"
+      "!**/node_modules/playwright-core/.local-browsers/chromium-*/**"
     ],
     "mac": {
       "category": "public.app-category.developer-tools",
