@@ -2,6 +2,7 @@ import type { ComponentType } from 'react';
 import {
   Bell,
   Bot,
+  Boxes,
   GitBranch,
   Info,
   KeyRound,
@@ -29,6 +30,7 @@ export type SettingsMainTabMeta = {
 
 export const SETTINGS_MAIN_TABS: SettingsMainTabMeta[] = [
   { id: 'agents', label: 'Agents', keywords: 'agents subagents claude code', icon: Bot },
+  { id: 'agentHub', label: 'Agent Hub', keywords: 'agent hub profiles presets 智能体 档案 launch', icon: Boxes },
   { id: 'mcp', label: 'MCP', keywords: 'mcp servers model context protocol tools', icon: Server },
   { id: 'skills', label: 'Skills', keywords: 'skills abilities SKILL.md', icon: Sparkles },
   { id: 'appearance', label: 'Appearance', keywords: 'appearance theme dark light language', icon: Palette },

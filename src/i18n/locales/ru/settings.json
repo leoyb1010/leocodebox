@@ -87,6 +87,7 @@
   "mainTabs": {
     "label": "Настройки",
     "agents": "Агенты",
+    "agentHub": "Хаб агентов",
     "mcp": "MCP",
     "skills": "Навыки",
     "appearance": "Внешний вид",
@@ -357,7 +358,13 @@
       "alreadyLatest": "{{tool}} is already current ({{version}}).",
       "latestVersion": "latest version",
       "actionFailed": "{{tool}} {{action}} failed: {{error}}",
-      "unknownError": "unknown error", "unavailable": "Unable to check", "checkAndUpdate": "Check and update", "manualUpdate": "Copy update command", "desktopOnly": "Install and update are available only in local desktop mode.", "updateAll": "Update all ({{count}})", "loading": "Checking local agents"
+      "unknownError": "unknown error",
+      "unavailable": "Unable to check",
+      "checkAndUpdate": "Check and update",
+      "manualUpdate": "Copy update command",
+      "desktopOnly": "Install and update are available only in local desktop mode.",
+      "updateAll": "Update all ({{count}})",
+      "loading": "Checking local agents"
     },
     "authStatus": {
       "checking": "Проверка...",

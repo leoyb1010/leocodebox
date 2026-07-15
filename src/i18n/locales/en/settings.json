@@ -104,6 +104,7 @@
   "mainTabs": {
     "label": "Settings",
     "agents": "Agents",
+    "agentHub": "Agent Hub",
     "mcp": "MCP",
     "skills": "Skills",
     "appearance": "Appearance",

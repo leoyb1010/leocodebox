@@ -135,6 +135,20 @@ CREATE TABLE IF NOT EXISTS app_config (
 );
 `;
 
+// Agent profiles (智能体档案): named launch presets — provider/model/effort/
+// permission + opening prompt — stored as a JSON blob per row so the shape can
+// evolve without migrations (the repo normalizes on read).
+export const AGENT_PROFILES_TABLE_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS agent_profiles (
+    profile_id TEXT PRIMARY KEY NOT NULL,
+    user_id INTEGER NOT NULL,
+    profile_json TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+`;
+
 export const INIT_SCHEMA_SQL = `
 -- Initialize authentication database
 PRAGMA foreign_keys = ON;
@@ -178,4 +192,7 @@ CREATE INDEX IF NOT EXISTS idx_session_ids_lookup ON sessions(session_id);
 ${LAST_SCANNED_AT_SQL}
 
 ${APP_CONFIG_TABLE_SCHEMA_SQL}
+
+${AGENT_PROFILES_TABLE_SCHEMA_SQL}
+CREATE INDEX IF NOT EXISTS idx_agent_profiles_user_id ON agent_profiles(user_id);
 `;

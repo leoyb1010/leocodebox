@@ -160,24 +160,6 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
     localStorage.setItem('opencode-model', model);
   }, []);
 
-  useEffect(() => {
-    const handlePreferencesChanged = (event: Event) => {
-      const detail = (event as CustomEvent<{
-        defaultProvider?: LLMProvider;
-        defaultModel?: string;
-        permissionMode?: PermissionMode;
-      }>).detail;
-      if (!detail) return;
-      if (detail.defaultProvider && PROVIDERS.includes(detail.defaultProvider)) {
-        setProvider(detail.defaultProvider);
-        if (detail.defaultModel) setStoredProviderModel(detail.defaultProvider, detail.defaultModel);
-      }
-      if (detail.permissionMode) setPermissionMode(detail.permissionMode);
-    };
-    window.addEventListener('leocodebox-preferences:changed', handlePreferencesChanged);
-    return () => window.removeEventListener('leocodebox-preferences:changed', handlePreferencesChanged);
-  }, [setStoredProviderModel]);
-
   const setStoredProviderEffort = useCallback((targetProvider: LLMProvider, effort: string) => {
     setProviderEfforts((previous) => (
       previous[targetProvider] === effort
@@ -186,6 +168,27 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
     ));
     localStorage.setItem(`${targetProvider}-effort`, effort);
   }, []);
+
+  useEffect(() => {
+    const handlePreferencesChanged = (event: Event) => {
+      const detail = (event as CustomEvent<{
+        defaultProvider?: LLMProvider;
+        defaultModel?: string;
+        permissionMode?: PermissionMode;
+        effort?: string;
+      }>).detail;
+      if (!detail) return;
+      if (detail.defaultProvider && PROVIDERS.includes(detail.defaultProvider)) {
+        setProvider(detail.defaultProvider);
+        if (detail.defaultModel) setStoredProviderModel(detail.defaultProvider, detail.defaultModel);
+        // Effort is per-provider; seed it for the provider the profile targets.
+        if (detail.effort) setStoredProviderEffort(detail.defaultProvider, detail.effort);
+      }
+      if (detail.permissionMode) setPermissionMode(detail.permissionMode);
+    };
+    window.addEventListener('leocodebox-preferences:changed', handlePreferencesChanged);
+    return () => window.removeEventListener('leocodebox-preferences:changed', handlePreferencesChanged);
+  }, [setStoredProviderModel, setStoredProviderEffort]);
 
   const loadProviderModels = useCallback(async (options: { bypassCache?: boolean } = {}) => {
     const requestId = providerModelsRequestIdRef.current + 1;

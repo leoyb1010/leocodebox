@@ -88,6 +88,7 @@
   "mainTabs": {
     "label": "设置",
     "agents": "智能体",
+    "agentHub": "智能体档案",
     "mcp": "MCP",
     "skills": "技能",
     "appearance": "外观",

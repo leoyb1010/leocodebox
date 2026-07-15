@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { Database } from 'better-sqlite3';
 
 import {
+  AGENT_PROFILES_TABLE_SCHEMA_SQL,
   APP_CONFIG_TABLE_SCHEMA_SQL,
   LAST_SCANNED_AT_SQL,
   NOTIFICATION_CHANNEL_ENDPOINTS_TABLE_SCHEMA_SQL,
@@ -499,6 +500,11 @@ export const runMigrations = (db: Database) => {
     }
 
     db.exec(LAST_SCANNED_AT_SQL);
+
+    // Agent profiles table (idempotent — safe to run on every startup).
+    db.exec(AGENT_PROFILES_TABLE_SCHEMA_SQL);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_agent_profiles_user_id ON agent_profiles(user_id)');
+
     console.log('Database migrations completed successfully');
   } catch (error: any) {
     console.error('Error running migrations:', error.message);

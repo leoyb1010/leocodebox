@@ -6,6 +6,7 @@ import ProviderLoginModal from '../../provider-auth/view/ProviderLoginModal';
 import { Button } from '../../../shared/view/ui';
 import SettingsSidebar from '../view/SettingsSidebar';
 import AgentsSettingsTab from '../view/tabs/agents-settings/AgentsSettingsTab';
+import AgentHubTab from '../view/tabs/AgentHubTab';
 import McpSettingsTab from '../view/tabs/McpSettingsTab';
 import SkillsSettingsTab from '../view/tabs/SkillsSettingsTab';
 import AppearanceSettingsTab from '../view/tabs/AppearanceSettingsTab';
@@ -247,6 +248,8 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
                   projects={projects}
                 />
               )}
+
+              {activeTab === 'agentHub' && <AgentHubTab onClose={onClose} />}
 
               {activeTab === 'mcp' && <McpSettingsTab projects={projects} />}
 

@@ -1,4 +1,4 @@
-import { Bell, Bot, GitBranch, Info, Key, ListChecks, Mic, MonitorPlay, Palette, Puzzle, Server, Sparkles } from 'lucide-react';
+import { Bell, Bot, Boxes, GitBranch, Info, Key, ListChecks, Mic, MonitorPlay, Palette, Puzzle, Server, Sparkles } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { cn } from '../../../lib/utils';
@@ -18,6 +18,7 @@ type NavItem = {
 
 const NAV_ITEMS: NavItem[] = [
   { id: 'agents', labelKey: 'mainTabs.agents', icon: Bot },
+  { id: 'agentHub', labelKey: 'mainTabs.agentHub', icon: Boxes },
   { id: 'mcp', labelKey: 'mainTabs.mcp', icon: Server },
   { id: 'skills', labelKey: 'mainTabs.skills', icon: Sparkles },
   { id: 'appearance', labelKey: 'mainTabs.appearance', icon: Palette },

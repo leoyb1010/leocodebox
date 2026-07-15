@@ -223,6 +223,17 @@ function AppContentInner() {
     window.dispatchEvent(new CustomEvent('leocodebox:open-local-tool', { detail: tool }));
   }, []);
 
+  // Launching an agent profile (from Settings) fires this event; the profile's
+  // provider/model/effort/permission were already applied via the preferences
+  // event, so here we just open a fresh conversation in the current project.
+  useEffect(() => {
+    const onLaunchNewChat = () => {
+      if (selectedProject) handleNewSession(selectedProject);
+    };
+    window.addEventListener('leocodebox:launch-new-chat', onLaunchNewChat);
+    return () => window.removeEventListener('leocodebox:launch-new-chat', onLaunchNewChat);
+  }, [handleNewSession, selectedProject]);
+
   // Stable identities so MainContent's React.memo isn't defeated by fresh inline
   // closures on every AppContent re-render.
   const handleOpenSidebar = useCallback(() => setSidebarOpen(true), [setSidebarOpen]);
