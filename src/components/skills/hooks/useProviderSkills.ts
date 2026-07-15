@@ -315,11 +315,16 @@ export function useProviderSkills({ selectedProvider, currentProjects }: UseProv
   // (~/.leocodebox/trash), so it stays recoverable from the recycle page.
   const removeSkill = useCallback(async (directoryName: string) => {
     try {
-      const data = await apiClient.delete<ApiResponse<unknown>>(
+      const data = await apiClient.delete<ApiResponse<{ removed?: boolean }>>(
         `/api/providers/${selectedProvider}/skills/${encodeURIComponent(directoryName)}`,
       );
       if (!data.success) {
         throw new Error(getApiErrorMessage(data, 'Failed to remove skill'));
+      }
+      // A truthful no-op (folder not found) still returns success:true — treat it
+      // as a failure so the UI never promises a recycle-bin entry that isn't there.
+      if (data.data?.removed === false) {
+        throw new Error(getApiErrorMessage(data, 'Skill was not found; nothing was removed'));
       }
       clearProviderSkillCache(selectedProvider);
       await refreshSkills({ force: true });

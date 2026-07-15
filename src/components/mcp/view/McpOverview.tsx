@@ -6,7 +6,7 @@ import { Badge } from '../../../shared/view/ui';
 import SettingsCard from '../../settings/view/SettingsCard';
 import SettingsRow from '../../settings/view/SettingsRow';
 import SettingsSection from '../../settings/view/SettingsSection';
-import { MCP_PROVIDER_NAMES } from '../constants';
+import { MCP_PROVIDER_NAMES, MCP_SUPPORTED_TRANSPORTS } from '../constants';
 import { mcpChipKey, useMcpOverview } from '../hooks/useMcpOverview';
 import type { McpProvider } from '../types';
 
@@ -74,21 +74,31 @@ export default function McpOverview() {
                   PROVIDERS.map((provider) => {
                     const installed = row.providers.includes(provider);
                     const busy = pending === mcpChipKey(row.name, provider);
+                    // A CLI that doesn't support the row's transport(s) can never
+                    // accept the install — don't offer a doomed affordance.
+                    const blocked = !installed
+                      && row.transports.some((tr) => !MCP_SUPPORTED_TRANSPORTS[provider].includes(tr));
                     return (
                       <button
                         key={provider}
                         type="button"
-                        disabled={pending !== null}
-                        onClick={() => void (installed ? removeFrom(row, provider) : installTo(row, provider))}
-                        title={installed
-                          ? t('mcpOverview.removeFrom', { cli: MCP_PROVIDER_NAMES[provider], defaultValue: `从 ${MCP_PROVIDER_NAMES[provider]} 移除` })
-                          : t('mcpOverview.installTo', { cli: MCP_PROVIDER_NAMES[provider], defaultValue: `安装到 ${MCP_PROVIDER_NAMES[provider]}` })}
+                        disabled={pending !== null || blocked}
+                        onClick={() => {
+                          if (blocked) return;
+                          void (installed ? removeFrom(row, provider) : installTo(row, provider));
+                        }}
+                        title={blocked
+                          ? t('mcpOverview.transportUnsupported', { cli: MCP_PROVIDER_NAMES[provider], transport: row.transports.join(' · '), defaultValue: `${MCP_PROVIDER_NAMES[provider]} 不支持 ${row.transports.join(' · ')} 传输` })
+                          : installed
+                            ? t('mcpOverview.removeFrom', { cli: MCP_PROVIDER_NAMES[provider], defaultValue: `从 ${MCP_PROVIDER_NAMES[provider]} 移除` })
+                            : t('mcpOverview.installTo', { cli: MCP_PROVIDER_NAMES[provider], defaultValue: `安装到 ${MCP_PROVIDER_NAMES[provider]}` })}
                         className={cn(
                           'group inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors',
                           installed
                             ? 'border-primary/40 bg-primary/10 text-primary hover:border-red-400/50 hover:bg-red-500/10 hover:text-red-600'
                             : 'border-dashed border-border text-muted-foreground hover:border-primary/50 hover:text-foreground',
-                          pending !== null && 'opacity-60',
+                          blocked && 'cursor-not-allowed opacity-40 hover:border-border hover:text-muted-foreground',
+                          pending !== null && !blocked && 'opacity-60',
                         )}
                       >
                         {busy

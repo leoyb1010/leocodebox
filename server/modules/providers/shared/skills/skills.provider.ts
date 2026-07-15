@@ -257,7 +257,11 @@ export abstract class SkillsProvider implements IProviderSkills {
       });
     }
 
-    const directoryName = normalizeSkillDirectoryName(input.directoryName);
+    // Match the exact on-disk folder name — re-normalizing here would miss
+    // folders whose name isn't already normalized (spaces, dots, double-dashes),
+    // resolving to a non-existent path and falsely reporting removed:false.
+    // The containment guard below still blocks '..'/absolute escapes.
+    const directoryName = input.directoryName.trim();
     if (!directoryName) {
       throw new AppError('Skill directoryName is required.', {
         code: 'PROVIDER_SKILL_DIRECTORY_REQUIRED',
