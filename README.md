@@ -30,6 +30,9 @@
 
 - **本地优先，无 leocodebox 云端依赖**：打开 App 自动在 `127.0.0.1:38473` 启动本地服务，退出即停止并释放端口。项目索引、会话索引和工作台配置保存在本机。
 - **多智能体统一管理**：在一个界面里管理 Claude Code / Codex / Cursor / OpenCode 的认证、模型、权限模式、会话、技能和 MCP，并集中检查 Gemini CLI、Hermes 与 Grok Build。
+- **智能体档案 Hub**：把常用的「CLI + 模型 + 努力度 + 权限模式 + 开场提示词」存成命名档案,一键启动预配置好的新对话;支持编辑/复制/删除与 JSON 导入导出,让工作台成为你的个人智能体集合。
+- **MCP / 技能一等管理与安全网**：MCP 与技能升为设置顶层 Tab;MCP 全景板可按 CLI 一键装/卸(传输不兼容自动置灰),技能一键软删除并可在回收站找回;安装技能前静态扫描 prompt 注入 / 硬编码密钥 / 数据外泄 / 危险命令,高危阻断需二次确认。
+- **环境体检 Doctor**：状态栏健康灯一眼看出各 CLI 装没装 / 能不能跑、Leoapi 节点配没配 / 最近测速通不通(全绿 / 琥珀 / 红),⌘K 亦可直达逐项检查单。
 - **跨设备发现本机 CLI**：从登录 Shell 和 npm、Homebrew、Volta、nvm、mise、asdf、fnm、bun、pnpm、yarn 等常见安装位置合并运行路径；支持 `CLAUDE_CONFIG_DIR`、`CODEX_HOME`、`OPENCODE_CONFIG_DIR`、`OPENCODE_DATA_DIR` 与 XDG 自定义目录。
 - **实时 CLI 版本与安全更新**：识别 npm、Homebrew、pnpm、Volta、Bun 和官方独立安装器；支持逐个或批量更新，无法自动更新时提供可复制的安全命令，不会误装第二份 CLI。
 - **模型列表自动跟随 CLI**：模型目录随本机 CLI 更新自动刷新（例如 Codex 升级后自动出现新一代模型），带源文件指纹失效机制。
