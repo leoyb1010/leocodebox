@@ -743,14 +743,35 @@ const resolveCursorSessionStorePath = async (sessionId: string): Promise<string 
   return null;
 };
 
+/**
+ * "Grok Build" (grok-build-*) is Cursor's IDE build-agent model. cursor-agent's
+ * headless print mode (`-p --model grok-build-0.1`) rejects it, so a new
+ * conversation started with it just fails. It leaks into the model picker via the
+ * hardcoded fallback list (used when `cursor-agent --list-models` can't run), so
+ * drop it from what we offer — on both the live and fallback paths.
+ */
+export const withoutUnsupportedCursorModels = (
+  definition: ProviderModelsDefinition,
+): ProviderModelsDefinition => {
+  const options = definition.OPTIONS.filter((option) => !/^grok-build/i.test(option.value));
+  if (options.length === definition.OPTIONS.length) {
+    return definition;
+  }
+  const defaultStillPresent = options.some((option) => option.value === definition.DEFAULT);
+  return {
+    OPTIONS: options,
+    DEFAULT: defaultStillPresent ? definition.DEFAULT : (options[0]?.value ?? definition.DEFAULT),
+  };
+};
+
 export class CursorProviderModels implements IProviderModels {
   async getSupportedModels(): Promise<ProviderModelsDefinition> {
     try {
       const stdout = await runCursorListModels();
       const models = parseModelsOutput(stdout);
-      return buildCursorModelsDefinition(models);
+      return withoutUnsupportedCursorModels(buildCursorModelsDefinition(models));
     } catch {
-      return CURSOR_FALLBACK_MODELS;
+      return withoutUnsupportedCursorModels(CURSOR_FALLBACK_MODELS);
     }
   }
 

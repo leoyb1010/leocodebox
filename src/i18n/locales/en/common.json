@@ -308,7 +308,12 @@
     "autoSave": "Auto-save",
     "leoapiNodeHint": "Current API node: {{node}} (applies to new sessions)",
     "updateReady": "Update available v{{version}}",
-    "restartRequired": "Update installed — restart to apply"
+    "restartRequired": "Update installed — restart to apply",
+    "healthTitle": "Environment check",
+    "healthOk": "Environment ready",
+    "healthWarn": "{{count}} to review",
+    "healthFail": "{{count}} not working",
+    "healthChecking": "Checking…"
   },
   "errorBoundary": {
     "regionTitle": "This area could not be loaded",

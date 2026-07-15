@@ -16,6 +16,7 @@ import {
   RefreshCw,
   Route,
   Settings,
+  Stethoscope,
   SunMoon,
   X,
 } from 'lucide-react';
@@ -256,6 +257,16 @@ export default function CommandPalette({
                 >
                   <Route className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
                   <span className="flex-1">{t('commandPalette.switchLeoapi')}</span>
+                </CommandItem>
+                <CommandItem
+                  value="Doctor environment health check 环境体检 诊断 健康"
+                  onSelect={() => run(() => {
+                    window.dispatchEvent(new CustomEvent('leocodebox:doctor-refresh'));
+                    window.dispatchEvent(new CustomEvent('leocodebox:open-doctor'));
+                  })}
+                >
+                  <Stethoscope className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
+                  <span className="flex-1">{t('commandPalette.doctor', { defaultValue: '环境体检' })}</span>
                 </CommandItem>
                 {selectedSession && selectedProject && (
                   <CommandItem

@@ -308,7 +308,12 @@
     "autoSave": "自动保存",
     "leoapiNodeHint": "当前接口节点：{{node}}（对新会话生效）",
     "updateReady": "有可用更新 v{{version}}",
-    "restartRequired": "更新已安装，重启后生效"
+    "restartRequired": "更新已安装，重启后生效",
+    "healthTitle": "环境体检",
+    "healthOk": "环境就绪",
+    "healthWarn": "{{count}} 项注意",
+    "healthFail": "{{count}} 项异常",
+    "healthChecking": "体检中…"
   },
   "errorBoundary": {
     "regionTitle": "此区域暂时无法加载",

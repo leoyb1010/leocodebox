@@ -6,6 +6,7 @@ import { useLeoapiStatus } from '../../hooks/useLeoapiStatus';
 import { useVersionCheck } from '../../hooks/useVersionCheck';
 
 import { resolveUpdateBadge } from './updateBadge';
+import DoctorHealthLight from './DoctorHealthLight';
 
 type WorkspaceStatusBarProps = {
   selectedProject: Project | null;
@@ -63,6 +64,7 @@ export default function WorkspaceStatusBar({ selectedProject, runningCount, acti
             {activeNode.latencyMs !== null && ` · ${activeNode.latencyMs}ms`}
           </span>
         )}
+        <DoctorHealthLight />
         <span className="inline-flex items-center gap-1"><Cpu className="h-3 w-3" />{runningCount > 0 ? t('workspaceShell.tasksRunning', { count: runningCount }) : t('workspaceShell.agentIdle')}</span>
         <span className="inline-flex items-center gap-1"><ShieldCheck className="h-3 w-3" />{t('workspaceShell.localOnly')}</span>
         <span className="inline-flex items-center gap-1"><HardDrive className="h-3 w-3" />{t('workspaceShell.autoSave')}</span>
