@@ -20,11 +20,17 @@ async function rawRequest(path: string, options: RequestInit = {}): Promise<Resp
   const payload = contentType.includes('application/json')
     ? await response.json().catch(() => ({}))
     : await response.text().catch(() => '');
-  const serverMessage = payload && typeof payload === 'object'
-    ? (payload as { error?: string; message?: string; details?: string }).error
-      || (payload as { message?: string }).message
-      || (payload as { details?: string }).details
-    : payload;
+  // Unwrap object-shaped `error` ({code,message,details}) to its message string;
+  // plain-string error fields pass through unchanged (avoids "[object Object]").
+  const errField = payload && typeof payload === 'object'
+    ? (payload as { error?: unknown }).error
+    : null;
+  const serverMessage = (errField && typeof errField === 'object'
+    ? (errField as { message?: string }).message
+    : errField)
+    || (payload && typeof payload === 'object'
+      ? (payload as { message?: string; details?: string }).message || (payload as { details?: string }).details
+      : payload);
   throw new ApiError(serverMessage || `Request failed (${response.status}).`, {
     status: response.status,
     payload,

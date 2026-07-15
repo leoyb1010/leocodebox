@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { apiClient } from '../../../utils/apiClient';
+import { PROVIDER_DEFAULT_MODEL } from '../constants';
 import type { AgentProfile, AgentProfileDraft, ApiResponse } from '../types';
 
 const BASE = '/api/agent-profiles';
@@ -100,8 +101,9 @@ export function useAgentProfiles(active: boolean, onAfterLaunch?: () => void): P
     window.dispatchEvent(new CustomEvent('leocodebox-preferences:changed', {
       detail: {
         defaultProvider: profile.provider,
-        // Only override the model when the profile pins one; blank means "provider default".
-        ...(profile.model.trim() ? { defaultModel: profile.model.trim() } : {}),
+        // Always send a model: a pinned one, else the provider default — so launch
+        // resets to the promised default instead of inheriting the last-active model.
+        defaultModel: profile.model.trim() || PROVIDER_DEFAULT_MODEL[profile.provider],
         permissionMode: profile.permissionMode,
         effort: profile.effort,
       },

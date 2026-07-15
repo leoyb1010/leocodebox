@@ -46,9 +46,12 @@ export async function apiRequest(url, options = {}) {
     ? await response.json().catch(() => ({}))
     : await response.text().catch(() => '');
   if (!response.ok) {
-    const serverMessage = payload && typeof payload === 'object'
-      ? payload.error || payload.message || payload.details
-      : payload;
+    // globalErrorHandler sends `error` as an object ({code,message,details}) for
+    // AppError paths; unwrap it to its string message so callers never surface
+    // "[object Object]". Plain-string error fields still pass through unchanged.
+    const errField = payload && typeof payload === 'object' ? payload.error : null;
+    const serverMessage = (errField && typeof errField === 'object' ? errField.message : errField)
+      || (payload && typeof payload === 'object' ? payload.message || payload.details : payload);
     throw new ApiError(serverMessage || `Request failed (${response.status}).`, {
       status: response.status,
       payload,

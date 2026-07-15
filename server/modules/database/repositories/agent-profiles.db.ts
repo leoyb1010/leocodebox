@@ -41,7 +41,9 @@ const MAX_LONG = 8000;
 const clampString = (value: unknown, max: number, fallback = ''): string => {
   if (typeof value !== 'string') return fallback;
   const trimmed = value.trim();
-  return trimmed.length > max ? trimmed.slice(0, max) : trimmed;
+  if ([...trimmed].length <= max) return trimmed;
+  // Slice by code points so truncation never splits an astral pair into a lone surrogate.
+  return [...trimmed].slice(0, max).join('');
 };
 
 /**
