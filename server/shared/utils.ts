@@ -870,7 +870,10 @@ export const listConfigBackups = async (): Promise<Array<{ name: string; size: n
     if (!name.endsWith('.bak')) continue;
     try {
       const stats = await stat(path.join(dir, name));
-      backups.push({ name, size: stats.size, modifiedAt: stats.mtime.toISOString() });
+      // The on-disk name encodes the source's absolute path (separators → "_");
+      // expose only the config's basename so no username/home structure leaks.
+      const displayName = name.split('_').pop() || name;
+      backups.push({ name: displayName, size: stats.size, modifiedAt: stats.mtime.toISOString() });
     } catch {
       // Skip unreadable entries.
     }

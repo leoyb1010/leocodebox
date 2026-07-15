@@ -70,6 +70,8 @@ test('listConfigBackups returns [] when no backups exist and lists .bak entries 
     const backups = await listConfigBackups();
     assert.equal(backups.length, 1);
     assert.ok(backups[0].name.endsWith('.bak'));
+    // Name is a basename only — no encoded absolute path / username leakage.
+    assert.equal(backups[0].name, 'config.json.bak');
     assert.equal(typeof backups[0].size, 'number');
     assert.ok(backups[0].size > 0);
     assert.ok(!Number.isNaN(Date.parse(backups[0].modifiedAt)));

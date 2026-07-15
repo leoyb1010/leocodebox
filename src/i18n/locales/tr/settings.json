@@ -87,6 +87,8 @@
   "mainTabs": {
     "label": "Ayarlar",
     "agents": "Ajanlar",
+    "mcp": "MCP",
+    "skills": "Beceriler",
     "appearance": "Görünüm",
     "git": "Git",
     "apiTokens": "API ve Token'lar",

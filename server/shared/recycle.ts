@@ -97,7 +97,18 @@ export const restoreRecycled = async (
 ): Promise<{ restored: boolean; originalPath: string }> => {
   const trashPath = path.join(trashRoot(), id);
   const manifestPath = manifestPathFor(trashPath);
-  const entry = JSON.parse(await readFile(manifestPath, 'utf8')) as RecycledEntry;
+  let entry: RecycledEntry;
+  try {
+    entry = JSON.parse(await readFile(manifestPath, 'utf8')) as RecycledEntry;
+  } catch (error) {
+    // Already restored/pruned, or an unknown id: a clean 404, never a raw fs path.
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      const notFound = new Error('Recycle entry not found or already restored.') as Error & { statusCode?: number };
+      notFound.statusCode = 404;
+      throw notFound;
+    }
+    throw error;
+  }
 
   const exists = await stat(entry.originalPath).then(() => true).catch(() => false);
   if (exists) {

@@ -368,7 +368,22 @@ export default function ProviderSkills({ selectedProvider, currentProjects }: Pr
       // exfil / dangerous commands before enabling untrusted skill content. High
       // severity blocks until the user explicitly confirms.
       if (!bypassSafety) {
-        const report = await scanContent(entries.map((entry) => entry.content).join('\n\n'));
+        // Scan SKILL.md AND folder-bundled supporting files (decoded from base64),
+        // so a benign SKILL.md can't smuggle a malicious scripts/*.sh past the gate.
+        const scanTarget = entries
+          .flatMap((entry) => [
+            entry.content,
+            ...(entry.files ?? []).map((file) => {
+              if (file.encoding !== 'base64') return file.content;
+              try {
+                return atob(file.content);
+              } catch {
+                return '';
+              }
+            }),
+          ])
+          .join('\n\n');
+        const report = await scanContent(scanTarget);
         const gate = resolveSafetyGate(report);
         setSafetyReport(gate.count > 0 ? report : null);
         if (gate.blocking) {

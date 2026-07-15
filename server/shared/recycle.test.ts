@@ -53,6 +53,19 @@ test('restoreRecycled puts the directory back at its original path', async () =>
   });
 });
 
+test('restoreRecycled throws a clean 404 (no raw fs path) for an unknown/already-restored id', async () => {
+  await withTrash(async () => {
+    await assert.rejects(
+      () => restoreRecycled('1784000000000-gone-deadbeef'),
+      (error: Error & { statusCode?: number }) => {
+        assert.equal(error.statusCode, 404);
+        assert.doesNotMatch(error.message, /\//, 'must not leak an absolute path');
+        return true;
+      },
+    );
+  });
+});
+
 test('restoreRecycled refuses to clobber an existing path', async () => {
   await withTrash(async ({ dir }) => {
     const skill = await makeSkillDir(dir, 'conflict');
