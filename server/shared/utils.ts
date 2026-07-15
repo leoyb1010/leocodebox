@@ -855,6 +855,29 @@ export const backupExistingConfig = async (filePath: string): Promise<void> => {
   }
 };
 
+/** List config recovery backups (newest first). Read-only; never exposes absolute paths. */
+export const listConfigBackups = async (): Promise<Array<{ name: string; size: number; modifiedAt: string }>> => {
+  const dir = configBackupDir();
+  let names: string[];
+  try {
+    names = await readdir(dir);
+  } catch {
+    return [];
+  }
+
+  const backups: Array<{ name: string; size: number; modifiedAt: string }> = [];
+  for (const name of names) {
+    if (!name.endsWith('.bak')) continue;
+    try {
+      const stats = await stat(path.join(dir, name));
+      backups.push({ name, size: stats.size, modifiedAt: stats.mtime.toISOString() });
+    } catch {
+      // Skip unreadable entries.
+    }
+  }
+  return backups.sort((a, b) => b.modifiedAt.localeCompare(a.modifiedAt));
+};
+
 export const writeTextConfigAtomic = async (filePath: string, content: string): Promise<void> => {
   await mkdir(path.dirname(filePath), { recursive: true, mode: 0o700 });
   const tempPath = `${filePath}.${process.pid}.${randomUUID()}.tmp`;

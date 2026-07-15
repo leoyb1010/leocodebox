@@ -5,6 +5,8 @@ import express from 'express';
 import type { ErrorRequestHandler } from 'express';
 
 import { findAppRoot } from '@/utils/runtime-paths.js';
+import { listRecycled, restoreRecycled } from '@/shared/recycle.js';
+import { listConfigBackups } from '@/shared/utils.js';
 
 import cliToolsRoutes, { CLI_TOOLS, getCliToolStatus } from './cli-tools.routes.js';
 import { collectDiagnostics } from './diagnostics.service.js';
@@ -39,6 +41,39 @@ router.get('/doctor', async (_req, res, next) => {
       Object.values(CLI_TOOLS).map((tool) => getCliToolStatus(tool, { checkLatest: false })),
     );
     res.json({ success: true, report: await collectDoctorReport(tools) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Recoverable-delete trash: list soft-deleted skills and restore them.
+router.get('/recycle', async (_req, res, next) => {
+  try {
+    res.json({ success: true, entries: await listRecycled() });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/recycle/:id/restore', async (req, res, next) => {
+  try {
+    const id = req.params.id;
+    if (!/^[A-Za-z0-9._-]+$/.test(id)) {
+      res.status(400).json({ success: false, error: 'Invalid recycle id.' });
+      return;
+    }
+    // restored:false means the original path is occupied — surfaced honestly, not as success.
+    const result = await restoreRecycled(id);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Read-only list of config recovery backups (~/.leocodebox/config-backups); no absolute paths.
+router.get('/config-backups', async (_req, res, next) => {
+  try {
+    res.json({ success: true, backups: await listConfigBackups() });
   } catch (error) {
     next(error);
   }

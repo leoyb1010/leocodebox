@@ -2,6 +2,8 @@
 import './load-env.js';
 import fs from 'node:fs';
 
+import { armParentWatchdog } from './browser-use-mcp-watchdog.js';
+
 type JsonRpcRequest = {
   jsonrpc: '2.0';
   id?: string | number | null;
@@ -404,3 +406,9 @@ process.stdin.on('data', (chunk) => {
     })();
   }
 });
+
+// Exit cleanly when the parent agent CLI closes our stdio pipe...
+process.stdin.on('end', () => process.exit(0));
+process.stdin.on('close', () => process.exit(0));
+// ...and as a backstop for a hard-killed parent (no 'end' emitted), poll its pid.
+armParentWatchdog();

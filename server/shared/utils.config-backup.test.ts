@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
-import { backupExistingConfig, writeJsonConfig } from './utils.js';
+import { backupExistingConfig, listConfigBackups, writeJsonConfig } from './utils.js';
 
 const withBackupDir = async (fn: (ctx: { dir: string; backups: string }) => Promise<void>) => {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'leocodebox-cfgbak-'));
@@ -58,5 +58,20 @@ test('first write of a brand-new config creates no backup but succeeds', async (
 test('backupExistingConfig never throws when the source file is absent', async () => {
   await withBackupDir(async ({ dir }) => {
     await assert.doesNotReject(() => backupExistingConfig(path.join(dir, 'does-not-exist.json')));
+  });
+});
+
+test('listConfigBackups returns [] when no backups exist and lists .bak entries otherwise', async () => {
+  await withBackupDir(async ({ dir }) => {
+    assert.deepEqual(await listConfigBackups(), []);
+    const file = path.join(dir, 'config.json');
+    await writeJsonConfig(file, { v: 1 });
+    await writeJsonConfig(file, { v: 2 }); // overwrite → backs up the prior {v:1}
+    const backups = await listConfigBackups();
+    assert.equal(backups.length, 1);
+    assert.ok(backups[0].name.endsWith('.bak'));
+    assert.equal(typeof backups[0].size, 'number');
+    assert.ok(backups[0].size > 0);
+    assert.ok(!Number.isNaN(Date.parse(backups[0].modifiedAt)));
   });
 });
