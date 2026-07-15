@@ -191,6 +191,8 @@ export type McpOverviewRow = {
   transports: McpTransport[];
   /** Written automatically by leocodebox (cloudcli- prefix), not by the user. */
   managed: boolean;
+  /** Full server config per CLI that has it — used to replicate to another CLI. */
+  configs: Partial<Record<McpProvider, ProviderMcpServer>>;
 };
 
 /**
@@ -201,7 +203,13 @@ export type McpOverviewRow = {
 export const aggregateInstalledMcp = (
   perProvider: Partial<Record<McpProvider, ProviderMcpServer[]>>,
 ): McpOverviewRow[] => {
-  type Bucket = { name: string; providers: Set<McpProvider>; transports: Set<McpTransport>; managed: boolean };
+  type Bucket = {
+    name: string;
+    providers: Set<McpProvider>;
+    transports: Set<McpTransport>;
+    managed: boolean;
+    configs: Partial<Record<McpProvider, ProviderMcpServer>>;
+  };
   const byName = new Map<string, Bucket>();
   for (const [provider, servers] of Object.entries(perProvider) as Array<[McpProvider, ProviderMcpServer[] | undefined]>) {
     for (const server of servers ?? []) {
@@ -209,11 +217,12 @@ export const aggregateInstalledMcp = (
       if (!name) continue;
       let bucket = byName.get(name);
       if (!bucket) {
-        bucket = { name, providers: new Set(), transports: new Set(), managed: name.startsWith('cloudcli-') };
+        bucket = { name, providers: new Set(), transports: new Set(), managed: name.startsWith('cloudcli-'), configs: {} };
         byName.set(name, bucket);
       }
       bucket.providers.add(provider);
       if (server.transport) bucket.transports.add(server.transport);
+      if (!bucket.configs[provider]) bucket.configs[provider] = server;
     }
   }
   return Array.from(byName.values())
@@ -222,6 +231,7 @@ export const aggregateInstalledMcp = (
       providers: Array.from(bucket.providers),
       transports: Array.from(bucket.transports),
       managed: bucket.managed,
+      configs: bucket.configs,
     }))
     .sort((left, right) => left.name.localeCompare(right.name));
 };

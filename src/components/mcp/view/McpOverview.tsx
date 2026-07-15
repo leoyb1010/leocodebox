@@ -1,33 +1,38 @@
-import { Lock } from 'lucide-react';
+import { Check, Loader2, Lock, Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { cn } from '../../../lib/utils';
 import { Badge } from '../../../shared/view/ui';
 import SettingsCard from '../../settings/view/SettingsCard';
 import SettingsRow from '../../settings/view/SettingsRow';
 import SettingsSection from '../../settings/view/SettingsSection';
 import { MCP_PROVIDER_NAMES } from '../constants';
-import { useMcpOverview } from '../hooks/useMcpOverview';
+import { mcpChipKey, useMcpOverview } from '../hooks/useMcpOverview';
+import type { McpProvider } from '../types';
+
+const PROVIDERS = Object.keys(MCP_PROVIDER_NAMES) as McpProvider[];
 
 /**
- * Read-only, cross-CLI roll-up of installed MCP servers. Shows the user what
- * they already have and where, before any 1.42 write flow. Never mutates config.
+ * Cross-CLI roll-up of installed MCP servers. Each row's per-CLI chip is clickable:
+ * filled = installed (click removes), dashed = absent (click copies the config in).
+ * Writes go through the server's transactional backup. Managed (cloudcli-) rows
+ * stay read-only since leocodebox owns them.
  */
 export default function McpOverview() {
   const { t } = useTranslation();
-  const { rows, loading, errors } = useMcpOverview(true);
+  const { rows, loading, errors, pending, writeError, installTo, removeFrom } = useMcpOverview(true);
 
   return (
     <SettingsSection
       className="mb-6"
-      title={t('mcpOverview.title', { defaultValue: 'MCP 全景（跨 CLI 只读）' })}
+      title={t('mcpOverview.title', { defaultValue: 'MCP 全景（跨 CLI）' })}
       description={t('mcpOverview.description', {
-        defaultValue: '汇总各 Agent CLI 账户级已安装的 MCP 服务器，按名称去重。仅查看，不做修改。',
+        defaultValue: '汇总各 Agent CLI 已装的 MCP 服务器,按名去重。点 CLI 标签即可在该 CLI 上安装/移除(实心=已装,虚线=可装)。',
       })}
     >
-      {errors.length > 0 && (
+      {(errors.length > 0 || writeError) && (
         <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
-          {t('mcpOverview.partialError', { defaultValue: '部分 CLI 配置未能读取：' })}
-          {errors.join('；')}
+          {writeError || `${t('mcpOverview.partialError', { defaultValue: '部分 CLI 配置未能读取：' })}${errors.join('；')}`}
         </div>
       )}
 
@@ -55,17 +60,47 @@ export default function McpOverview() {
               description={row.transports.length > 0 ? row.transports.join(' · ') : undefined}
             >
               <div className="flex flex-wrap items-center justify-end gap-1.5">
-                {row.managed && (
-                  <Badge variant="outline" className="gap-1 text-muted-foreground">
-                    <Lock className="h-3 w-3" />
-                    {t('mcpOverview.managed', { defaultValue: '托管' })}
-                  </Badge>
+                {row.managed ? (
+                  <>
+                    <Badge variant="outline" className="gap-1 text-muted-foreground">
+                      <Lock className="h-3 w-3" />
+                      {t('mcpOverview.managed', { defaultValue: '托管' })}
+                    </Badge>
+                    {row.providers.map((provider) => (
+                      <Badge key={provider} variant="secondary">{MCP_PROVIDER_NAMES[provider]}</Badge>
+                    ))}
+                  </>
+                ) : (
+                  PROVIDERS.map((provider) => {
+                    const installed = row.providers.includes(provider);
+                    const busy = pending === mcpChipKey(row.name, provider);
+                    return (
+                      <button
+                        key={provider}
+                        type="button"
+                        disabled={pending !== null}
+                        onClick={() => void (installed ? removeFrom(row, provider) : installTo(row, provider))}
+                        title={installed
+                          ? t('mcpOverview.removeFrom', { cli: MCP_PROVIDER_NAMES[provider], defaultValue: `从 ${MCP_PROVIDER_NAMES[provider]} 移除` })
+                          : t('mcpOverview.installTo', { cli: MCP_PROVIDER_NAMES[provider], defaultValue: `安装到 ${MCP_PROVIDER_NAMES[provider]}` })}
+                        className={cn(
+                          'group inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors',
+                          installed
+                            ? 'border-primary/40 bg-primary/10 text-primary hover:border-red-400/50 hover:bg-red-500/10 hover:text-red-600'
+                            : 'border-dashed border-border text-muted-foreground hover:border-primary/50 hover:text-foreground',
+                          pending !== null && 'opacity-60',
+                        )}
+                      >
+                        {busy
+                          ? <Loader2 className="h-3 w-3 animate-spin" />
+                          : installed
+                            ? <Check className="h-3 w-3" />
+                            : <Plus className="h-3 w-3" />}
+                        {MCP_PROVIDER_NAMES[provider]}
+                      </button>
+                    );
+                  })
                 )}
-                {row.providers.map((provider) => (
-                  <Badge key={provider} variant="secondary">
-                    {MCP_PROVIDER_NAMES[provider]}
-                  </Badge>
-                ))}
               </div>
             </SettingsRow>
           ))}

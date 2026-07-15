@@ -20,6 +20,9 @@ test('same server name across CLIs collapses to one row listing every provider',
   assert.equal(rows.length, 1);
   assert.equal(rows[0].name, 'context7');
   assert.deepEqual([...rows[0].providers].sort(), ['claude', 'codex']);
+  // Carries each CLI's full config so a chip can replicate/remove it.
+  assert.equal(rows[0].configs.claude?.provider, 'claude');
+  assert.equal(rows[0].configs.codex?.provider, 'codex');
 });
 
 test('different server names stay as separate rows, sorted by name', () => {

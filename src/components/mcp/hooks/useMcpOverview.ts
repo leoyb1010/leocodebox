@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import { apiClient } from '../../../utils/apiClient';
 import { MCP_PROVIDER_NAMES } from '../constants';
-import type { McpProvider, ProviderMcpServer } from '../types';
+import type { ApiResponse, McpProvider, ProviderMcpServer, UpsertProviderMcpServerPayload } from '../types';
 import { aggregateInstalledMcp, type McpOverviewRow } from '../utils/mcpFormatting';
 
 import { fetchProviderScopeServers } from './useMcpServers';
@@ -12,11 +13,32 @@ const PROVIDERS = Object.keys(MCP_PROVIDER_NAMES) as McpProvider[];
 type OverviewCache = { rows: McpOverviewRow[]; errors: string[]; updatedAt: number };
 let overviewCache: OverviewCache | null = null;
 
+export const mcpChipKey = (name: string, provider: McpProvider): string => `${name}::${provider}`;
+
+const toUpsertPayload = (server: ProviderMcpServer): UpsertProviderMcpServerPayload => ({
+  name: server.name,
+  scope: 'user',
+  transport: server.transport,
+  command: server.command,
+  args: server.args,
+  env: server.env,
+  cwd: server.cwd,
+  url: server.url,
+  headers: server.headers,
+  envVars: server.envVars,
+  bearerTokenEnvVar: server.bearerTokenEnvVar,
+  envHttpHeaders: server.envHttpHeaders,
+});
+
 type McpOverviewState = {
   rows: McpOverviewRow[];
   loading: boolean;
   errors: string[];
   reload: () => void;
+  pending: string | null;
+  writeError: string | null;
+  installTo: (row: McpOverviewRow, provider: McpProvider) => Promise<void>;
+  removeFrom: (row: McpOverviewRow, provider: McpProvider) => Promise<void>;
 };
 
 /**
@@ -30,6 +52,8 @@ export function useMcpOverview(active: boolean): McpOverviewState {
   const [errors, setErrors] = useState<string[]>(() => overviewCache?.errors ?? []);
   const [loading, setLoading] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [pending, setPending] = useState<string | null>(null);
+  const [writeError, setWriteError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!active) return undefined;
@@ -72,5 +96,43 @@ export function useMcpOverview(active: boolean): McpOverviewState {
     setReloadKey((key) => key + 1);
   }, []);
 
-  return { rows, loading, errors, reload };
+  // Copy an installed server's config into another CLI (writes go through the
+  // server's transactional backup, so a bad write can't corrupt the config).
+  const installTo = useCallback(async (row: McpOverviewRow, provider: McpProvider) => {
+    const source = row.configs[provider] ?? Object.values(row.configs).find(Boolean);
+    if (!source) return;
+    setPending(mcpChipKey(row.name, provider));
+    setWriteError(null);
+    try {
+      const res = await apiClient.post<ApiResponse<unknown>>(
+        `/api/providers/${provider}/mcp/servers`,
+        toUpsertPayload(source),
+      );
+      if (!res.success) throw new Error('Install failed');
+      reload();
+    } catch (error) {
+      setWriteError(error instanceof Error ? error.message : 'Install failed');
+    } finally {
+      setPending(null);
+    }
+  }, [reload]);
+
+  const removeFrom = useCallback(async (row: McpOverviewRow, provider: McpProvider) => {
+    setPending(mcpChipKey(row.name, provider));
+    setWriteError(null);
+    try {
+      const res = await apiClient.deleteQuery<ApiResponse<unknown>>(
+        `/api/providers/${provider}/mcp/servers/${encodeURIComponent(row.name)}`,
+        { scope: 'user' },
+      );
+      if (!res.success) throw new Error('Remove failed');
+      reload();
+    } catch (error) {
+      setWriteError(error instanceof Error ? error.message : 'Remove failed');
+    } finally {
+      setPending(null);
+    }
+  }, [reload]);
+
+  return { rows, loading, errors, reload, pending, writeError, installTo, removeFrom };
 }
