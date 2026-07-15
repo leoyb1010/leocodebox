@@ -88,6 +88,8 @@
   "mainTabs": {
     "label": "设置",
     "agents": "智能体",
+    "mcp": "MCP",
+    "skills": "技能",
     "appearance": "外观",
     "git": "代码仓库",
     "apiTokens": "接口与凭据",

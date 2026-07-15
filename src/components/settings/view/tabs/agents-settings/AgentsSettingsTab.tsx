@@ -26,10 +26,11 @@ export default function AgentsSettingsTab({
   const [selectedCategory, setSelectedCategory] = useState<AgentCategory>('account');
   const [localTools, setLocalTools] = useState<CliToolStatus[]>([]);
   const handleToolsChange = useCallback((tools: CliToolStatus[]) => setLocalTools(tools), []);
+  // MCP and Skills moved to their own top-level tabs; Agents keeps account/permissions.
   const visibleCategories = useMemo<AgentCategory[]>(() => (
     selectedAgent === 'opencode'
-      ? ['account', 'mcp']
-      : ['account', 'permissions', 'mcp', 'skills']
+      ? ['account']
+      : ['account', 'permissions']
   ), [selectedAgent]);
 
   const visibleAgents = useMemo<AgentProvider[]>(() => {

@@ -104,6 +104,8 @@
   "mainTabs": {
     "label": "Settings",
     "agents": "Agents",
+    "mcp": "MCP",
+    "skills": "Skills",
     "appearance": "Appearance",
     "git": "Git",
     "apiTokens": "API & Tokens",
