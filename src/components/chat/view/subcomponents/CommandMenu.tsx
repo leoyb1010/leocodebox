@@ -12,6 +12,8 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
+import { scrollBehavior } from '../../../../utils/motion';
+
 type CommandMenuCommand = {
   name: string;
   description?: string;
@@ -159,7 +161,7 @@ export default function CommandMenu({
     const menuRect = menuRef.current.getBoundingClientRect();
     const itemRect = selectedItemRef.current.getBoundingClientRect();
     if (itemRect.bottom > menuRect.bottom || itemRect.top < menuRect.top) {
-      selectedItemRef.current.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      selectedItemRef.current.scrollIntoView({ block: 'nearest', behavior: scrollBehavior() });
     }
   }, [selectedIndex]);
 

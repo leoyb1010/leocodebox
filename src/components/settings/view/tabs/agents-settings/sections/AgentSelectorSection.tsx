@@ -1,3 +1,4 @@
+import { scrollBehavior } from '../../../../../../utils/motion';
 import { PillBar, Pill } from '../../../../../../shared/view/ui';
 import SessionProviderLogo from '../../../../../llm-logo-provider/SessionProviderLogo';
 import type { AgentProvider } from '../../../../types/types';
@@ -46,7 +47,7 @@ export default function AgentSelectorSection({
           <Pill
             key={tool.id}
             isActive={false}
-            onClick={() => document.getElementById(`cli-tool-${tool.id}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+            onClick={() => document.getElementById(`cli-tool-${tool.id}`)?.scrollIntoView({ behavior: scrollBehavior(), block: 'center' })}
             className="flex-none justify-center"
           >
             <SessionProviderLogo provider={tool.id} className="h-4 w-4 flex-shrink-0" />

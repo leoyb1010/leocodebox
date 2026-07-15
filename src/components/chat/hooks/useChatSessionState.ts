@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { MutableRefObject } from 'react';
 
 import { apiClient } from '../../../utils/apiClient';
+import { scrollBehavior } from '../../../utils/motion';
 import type { MarkSessionIdle, SessionActivityMap } from '../../../hooks/useSessionProtection';
 import type { Project, ProjectSession, LLMProvider } from '../../../types/app';
 import type { SessionStore, NormalizedMessage } from '../../../stores/useSessionStore';
@@ -700,7 +701,7 @@ export function useChatSessionState({
         }
 
         if (targetElement) {
-          targetElement.scrollIntoView({ block: 'center', behavior: 'smooth' });
+          targetElement.scrollIntoView({ block: 'center', behavior: scrollBehavior() });
           targetElement.classList.add('search-highlight-flash');
           setTimeout(() => targetElement?.classList.remove('search-highlight-flash'), 4000);
           searchScrollActiveRef.current = false;
