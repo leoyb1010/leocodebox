@@ -22,7 +22,8 @@
 
 - ESLint 0 警告,客户端与服务端 TypeScript 检查通过,生产构建通过。
 - 自动测试:desktop 27、client 65、server 241,共 333 项通过。
-- 真机验证:重新签名/公证/装机,打包后的 App 正常启动、`/health` 正常、核心界面(代码高亮/终端/编辑器/图标/启动闪屏)完好——证明依赖剪枝与资源去重未伤及运行时。
+- 真机验证:重新签名/公证/装机。打包后核对——被剪枝的 29 个前端库确实从随包 node_modules 移除,服务端库(express/better-sqlite3/react/playwright-core 等)完整保留;`public/visuals` 仅剩启动闪屏所需的 `brand/`,`dist/visuals` 全量在位。启动后 `/health` 正常返回 1.47.0,客户端 `index.html` 与主 JS 包(含被剪枝库的编译产物)HTTP 200 正常加载,去重后的视觉资源仍从 `dist/` 正常 serve——证明依赖剪枝与资源去重未伤及运行时。
+- DMG 314MB → 268MB(−46MB / −15%);热更新 zip 339MB → 284MB。
 
 ## 下载校验
 
