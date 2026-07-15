@@ -10,12 +10,14 @@ import {
   Plus,
   RefreshCw,
   Search,
+  ShieldAlert,
   Upload,
   X,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { cn } from '../../../lib/utils';
+import { resolveSafetyGate, scanContent, type SafetyReport } from '../../../utils/contentSafety';
 import {
   Badge,
   Button,
@@ -212,6 +214,7 @@ export default function ProviderSkills({ selectedProvider, currentProjects }: Pr
   const [queuedFiles, setQueuedFiles] = useState<QueuedSkillFile[]>([]);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [safetyReport, setSafetyReport] = useState<SafetyReport | null>(null);
   const [justInstalled, setJustInstalled] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
@@ -334,7 +337,7 @@ export default function ProviderSkills({ selectedProvider, currentProjects }: Pr
     onDrop: handleDrop,
   });
 
-  const handleUploadInstall = useCallback(async () => {
+  const handleUploadInstall = useCallback(async (bypassSafety = false) => {
     if (queuedFiles.length === 0) {
       setSubmitError('Add one or more markdown files first.');
       return;
@@ -360,7 +363,22 @@ export default function ProviderSkills({ selectedProvider, currentProjects }: Pr
           )
           : undefined,
       })));
+
+      // Advisory pre-flight scan (QwenPaw-style): flag prompt-injection / secrets /
+      // exfil / dangerous commands before enabling untrusted skill content. High
+      // severity blocks until the user explicitly confirms.
+      if (!bypassSafety) {
+        const report = await scanContent(entries.map((entry) => entry.content).join('\n\n'));
+        const gate = resolveSafetyGate(report);
+        setSafetyReport(gate.count > 0 ? report : null);
+        if (gate.blocking) {
+          setIsSubmitting(false);
+          return;
+        }
+      }
+
       await addSkills({ entries });
+      setSafetyReport(null);
       setQueuedFiles([]);
       setJustInstalled(true);
       setIsAddDialogOpen(false);
@@ -382,10 +400,16 @@ export default function ProviderSkills({ selectedProvider, currentProjects }: Pr
 
     setQueuedFiles([]);
     setSubmitError(null);
+    setSafetyReport(null);
     setShowInstallPath(false);
     setJustInstalled(false);
     setIsAddDialogOpen(false);
   }, []);
+
+  // A changed queue invalidates any prior scan result (avoids a stale "install anyway").
+  useEffect(() => {
+    setSafetyReport(null);
+  }, [queuedFiles]);
 
   const uploadPanel = (
     <div className="space-y-4">
@@ -612,6 +636,29 @@ export default function ProviderSkills({ selectedProvider, currentProjects }: Pr
             {uploadPanel}
           </div>
 
+          {safetyReport && safetyReport.findings.length > 0 && (
+            <div className={cn(
+              'flex-shrink-0 border-t px-4 py-2 text-xs',
+              resolveSafetyGate(safetyReport).blocking
+                ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-800/60 dark:bg-red-900/20 dark:text-red-200'
+                : 'border-amber-300/60 bg-amber-50 text-amber-800 dark:border-amber-700/50 dark:bg-amber-900/20 dark:text-amber-200',
+            )}>
+              <div className="mb-1 flex items-center gap-1.5 font-medium">
+                <ShieldAlert className="h-3.5 w-3.5 flex-shrink-0" />
+                {resolveSafetyGate(safetyReport).blocking
+                  ? t('providerSkills.safetyHigh', { defaultValue: '检测到高危内容,确认无误再安装' })
+                  : t('providerSkills.safetyWarn', { defaultValue: '检测到可疑内容,请核对后再安装' })}
+              </div>
+              <ul className="space-y-0.5 pl-5">
+                {safetyReport.findings.slice(0, 5).map((finding, index) => (
+                  <li key={`${finding.rule}-${index}`} className="list-disc">
+                    <span className="font-mono">L{finding.line} · {finding.category}</span>: {finding.snippet}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <div className="flex flex-shrink-0 flex-col gap-3 border-t border-border/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0 flex-1">
               {(submitError || loadError || (justInstalled && saveStatus === 'success')) ? (
@@ -640,16 +687,24 @@ export default function ProviderSkills({ selectedProvider, currentProjects }: Pr
               >
                 Cancel
               </Button>
-              <Button
-                type="button"
-                size="sm"
-                className="w-full sm:w-auto"
-                onClick={() => void handleUploadInstall()}
-                disabled={isSubmitting || queuedFiles.length === 0}
-              >
-                {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                Install {queuedFiles.length > 0 ? `${queuedFiles.length} Skill${queuedFiles.length === 1 ? '' : 's'}` : 'Skill'}
-              </Button>
+              {(() => {
+                const blockingConfirm = resolveSafetyGate(safetyReport).blocking;
+                return (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={blockingConfirm ? 'destructive' : 'default'}
+                    className="w-full sm:w-auto"
+                    onClick={() => void handleUploadInstall(blockingConfirm)}
+                    disabled={isSubmitting || queuedFiles.length === 0}
+                  >
+                    {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                    {blockingConfirm
+                      ? t('providerSkills.installAnyway', { defaultValue: '仍要安装' })
+                      : `Install ${queuedFiles.length > 0 ? `${queuedFiles.length} Skill${queuedFiles.length === 1 ? '' : 's'}` : 'Skill'}`}
+                  </Button>
+                );
+              })()}
             </div>
           </div>
         </DialogContent>
