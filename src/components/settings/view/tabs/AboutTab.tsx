@@ -14,6 +14,8 @@ import {
 import { LEOCODEBOX_WORDMARK_FONT_FAMILY } from '../../../../constants/branding';
 import { useVersionCheck } from '../../../../hooks/useVersionCheck';
 
+import RecoverySection from './RecoverySection';
+
 const OWNER_URL = 'https://github.com/leoyb1010';
 
 function updateStatusText(state: DesktopUpdateState | null, t: (key: string, options?: Record<string, unknown>) => string) {
@@ -229,6 +231,8 @@ export default function AboutTab() {
           </div>
         )}
       </section>
+
+      <RecoverySection />
 
       <div className="text-sm text-muted-foreground">
         <p>{t('about.localData')}</p>

@@ -11,6 +11,7 @@ import {
   RefreshCw,
   Search,
   ShieldAlert,
+  Trash2,
   Upload,
   X,
 } from 'lucide-react';
@@ -209,8 +210,31 @@ export default function ProviderSkills({ selectedProvider, currentProjects }: Pr
     loadError,
     saveStatus,
     addSkills,
+    removeSkill,
     refreshSkills,
   } = useProviderSkills({ selectedProvider, currentProjects });
+  const [deletingDir, setDeletingDir] = useState<string | null>(null);
+
+  const handleRemoveSkill = useCallback(async (skill: ProviderSkill) => {
+    // The directory name is the SKILL.md's parent folder.
+    const parts = skill.sourcePath.replace(/\\/g, '/').split('/');
+    const directoryName = parts.length >= 2 ? parts[parts.length - 2] : '';
+    if (!directoryName) return;
+    if (!window.confirm(
+      t('providerSkills.deleteConfirm', {
+        name: skill.name,
+        defaultValue: `删除技能「${skill.name}」?已删除的技能会进回收站,可在 设置 → 关于 → 回收站 还原。`,
+      }),
+    )) return;
+    setDeletingDir(directoryName);
+    try {
+      await removeSkill(directoryName);
+    } catch (error) {
+      setSubmitError(error instanceof Error ? error.message : 'Failed to remove skill');
+    } finally {
+      setDeletingDir(null);
+    }
+  }, [removeSkill, t]);
   const [queuedFiles, setQueuedFiles] = useState<QueuedSkillFile[]>([]);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -784,9 +808,27 @@ export default function ProviderSkills({ selectedProvider, currentProjects }: Pr
                   key={`${skill.command}:${skill.sourcePath}:${skill.projectPath || 'global'}`}
                   className="min-w-0 rounded-lg border border-border bg-card/50 p-4"
                 >
-                  <div className="min-w-0 space-y-1">
-                    <div className="break-all font-mono text-sm font-semibold text-foreground">{skill.command}</div>
-                    <div className="text-sm text-muted-foreground">{skill.name}</div>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 space-y-1">
+                      <div className="break-all font-mono text-sm font-semibold text-foreground">{skill.command}</div>
+                      <div className="text-sm text-muted-foreground">{skill.name}</div>
+                    </div>
+                    {skill.scope === 'user' && !skill.pluginName && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 w-8 flex-shrink-0 p-0 text-muted-foreground hover:text-red-600"
+                        disabled={deletingDir !== null}
+                        aria-label={`Remove ${skill.name}`}
+                        title={t('providerSkills.deleteSkill', { defaultValue: '删除(可从回收站还原)' })}
+                        onClick={() => void handleRemoveSkill(skill)}
+                      >
+                        {deletingDir && deletingDir === skill.sourcePath.replace(/\\/g, '/').split('/').slice(-2, -1)[0]
+                          ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          : <Trash2 className="h-3.5 w-3.5" />}
+                      </Button>
+                    )}
                   </div>
 
                   <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
