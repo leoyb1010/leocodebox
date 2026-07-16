@@ -19,6 +19,7 @@ export const PROVIDER_AUTH_STATUS_ENDPOINTS: Record<LLMProvider, string> = {
   cursor: '/api/providers/cursor/auth/status',
   codex: '/api/providers/codex/auth/status',
   opencode: '/api/providers/opencode/auth/status',
+  grok: '/api/providers/grok/auth/status',
 };
 
 export const createInitialProviderAuthStatusMap = (loading = true): ProviderAuthStatusMap => ({
@@ -26,4 +27,5 @@ export const createInitialProviderAuthStatusMap = (loading = true): ProviderAuth
   cursor: { installed: null, version: null, authenticated: false, email: null, method: null, error: null, loading },
   codex: { installed: null, version: null, authenticated: false, email: null, method: null, error: null, loading },
   opencode: { installed: null, version: null, authenticated: false, email: null, method: null, error: null, loading },
+  grok: { installed: null, version: null, authenticated: false, email: null, method: null, error: null, loading },
 });

@@ -60,6 +60,7 @@ type UseChatCommandsArgs = {
   claudeModel: string;
   codexModel: string;
   opencodeModel: string;
+  grokModel: string;
   tokenBudget: Record<string, unknown> | null;
   input: string;
   setInput: Dispatch<SetStateAction<string>>;
@@ -81,6 +82,7 @@ export function useChatCommands({
   claudeModel,
   codexModel,
   opencodeModel,
+  grokModel,
   tokenBudget,
   input,
   setInput,
@@ -147,7 +149,8 @@ export function useChatCommands({
         provider,
         model: provider === 'cursor' ? cursorModel
           : provider === 'codex' ? codexModel
-            : provider === 'opencode' ? opencodeModel : claudeModel,
+            : provider === 'opencode' ? opencodeModel
+              : provider === 'grok' ? grokModel : claudeModel,
         tokenUsage: tokenBudget,
       };
       const result = await apiClient.post<CommandExecutionResult>('/api/commands/execute', {
@@ -181,6 +184,7 @@ export function useChatCommands({
     input,
     inputValueRef,
     opencodeModel,
+    grokModel,
     provider,
     selectedProject,
     setInput,

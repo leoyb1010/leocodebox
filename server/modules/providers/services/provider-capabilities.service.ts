@@ -76,6 +76,19 @@ const RUNTIME_UI_CAPABILITIES: Record<LLMProvider, ProviderCapabilities> = {
     supportsTokenUsage: true,
     supportsEffort: true,
   },
+  grok: {
+    provider: 'grok',
+    // grok --permission-mode accepts these values directly (auto/dontAsk exist
+    // too but map onto bypassPermissions). No interactive approval round-trip;
+    // usage is surfaced from the terminal `end` event; grok-4.5 takes --effort.
+    permissionModes: ['default', 'acceptEdits', 'bypassPermissions', 'plan'],
+    defaultPermissionMode: 'default',
+    supportsImages: true,
+    supportsAbort: true,
+    supportsPermissionRequests: false,
+    supportsTokenUsage: true,
+    supportsEffort: true,
+  },
 };
 
 const runtimeManifests = providerRegistry

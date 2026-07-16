@@ -15,6 +15,7 @@ interface UseChatSendOptionsArgs {
   claudeModel: string;
   codexModel: string;
   opencodeModel: string;
+  grokModel: string;
   currentProviderEffort: string;
   selectedSession: ProjectSession | null;
 }
@@ -44,7 +45,9 @@ function readToolsSettings(provider: LLMProvider) {
         ? 'codex-settings'
         : provider === 'opencode'
           ? 'opencode-settings'
-          : 'claude-settings';
+          : provider === 'grok'
+            ? 'grok-settings'
+            : 'claude-settings';
     const savedSettings = safeLocalStorage.getItem(settingsKey);
     if (savedSettings) return JSON.parse(savedSettings);
   } catch (error) {
@@ -66,6 +69,7 @@ export function useChatSendOptions({
   claudeModel,
   codexModel,
   opencodeModel,
+  grokModel,
   currentProviderEffort,
   selectedSession,
 }: UseChatSendOptionsArgs) {
@@ -77,7 +81,9 @@ export function useChatSendOptions({
         ? codexModel
         : provider === 'opencode'
           ? opencodeModel
-          : claudeModel;
+          : provider === 'grok'
+            ? grokModel
+            : claudeModel;
 
     return {
       model,
@@ -93,6 +99,7 @@ export function useChatSendOptions({
     currentProviderEffort,
     cursorModel,
     opencodeModel,
+    grokModel,
     permissionMode,
     provider,
     resolvePermissionModeForProvider,

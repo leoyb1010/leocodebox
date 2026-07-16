@@ -64,7 +64,11 @@ export const providerMcpService = {
 
     const scope = input.scope ?? 'project';
     const results: Array<{ provider: LLMProvider; created: boolean; error?: string }> = [];
-    const providers = providerRegistry.listProviders();
+    // Only touch providers that actually manage MCP; a provider whose manifest
+    // marks mcp `unsupported` (e.g. grok, which owns its own ~/.grok config)
+    // must not appear as a failed row here.
+    const providers = providerRegistry.listProviders()
+      .filter((provider) => providerRegistry.resolveManifest(provider.id).capabilities.mcp === 'supported');
     for (const provider of providers) {
       try {
         await provider.mcp.upsertServer({ ...input, scope });
@@ -90,7 +94,8 @@ export const providerMcpService = {
     input: { name: string; scope?: McpScope; workspacePath?: string },
   ): Promise<Array<{ provider: LLMProvider; removed: boolean; error?: string }>> {
     const results: Array<{ provider: LLMProvider; removed: boolean; error?: string }> = [];
-    const providers = providerRegistry.listProviders();
+    const providers = providerRegistry.listProviders()
+      .filter((provider) => providerRegistry.resolveManifest(provider.id).capabilities.mcp === 'supported');
     for (const provider of providers) {
       try {
         const result = await provider.mcp.removeServer(input);

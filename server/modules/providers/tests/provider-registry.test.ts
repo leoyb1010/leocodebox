@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { AppError } from '../../../shared/utils.js';
 import { providerRegistry } from '../provider.registry.js';
 
-const expectedChatProviders = ['claude', 'codex', 'cursor', 'opencode'];
+const expectedChatProviders = ['claude', 'codex', 'cursor', 'opencode', 'grok'];
 
 test('provider manifests expose supported and capability-only integrations', () => {
   const manifests = providerRegistry.listManifests();
@@ -13,7 +13,8 @@ test('provider manifests expose supported and capability-only integrations', () 
     expectedChatProviders,
   );
   assert.equal(providerRegistry.resolveManifest('grok').capabilities.configSwitch, 'supported');
-  assert.equal(providerRegistry.resolveManifest('grok').runtimeProvider, undefined);
+  assert.equal(providerRegistry.resolveManifest('grok').runtimeProvider, 'grok');
+  assert.equal(providerRegistry.resolveManifest('grok').cliTool, 'grok');
   assert.equal(providerRegistry.resolveManifest('claude').runtimeProvider, 'claude');
   assert.equal(providerRegistry.resolveManifest('claude').configTarget, 'claude');
   assert.equal(providerRegistry.resolveManifest('claude').cliTool, 'claude');
@@ -32,7 +33,7 @@ test('provider templates are separate from runtime providers', () => {
 });
 
 test('capability-only integrations cannot resolve a chat provider', () => {
-  for (const id of ['gemini', 'grok', 'antigravity', 'openclaw']) {
+  for (const id of ['gemini', 'antigravity', 'openclaw']) {
     assert.throws(
       () => providerRegistry.resolveProvider(id),
       (error) => error instanceof Error && /usable chat capability/.test(error.message),

@@ -65,7 +65,7 @@ export type AuthenticatedWebSocketRequest = IncomingMessage & {
  * Use this as the source of truth whenever a function or payload needs to identify
  * a specific LLM integration.
  */
-export type LLMProvider = 'claude' | 'codex' | 'cursor' | 'opencode';
+export type LLMProvider = 'claude' | 'codex' | 'cursor' | 'opencode' | 'grok';
 
 /** Provider identifiers known to the product, including capability-only integrations. */
 export type ProviderId =
@@ -79,7 +79,7 @@ export type ProviderId =
 export type ConfigTargetId = 'claude' | 'codex' | 'opencode' | 'cursor' | 'gemini' | 'hermes';
 
 /** Locally detectable command-line tools. A CLI tool is not necessarily a chat runtime. */
-export type CliToolId = ConfigTargetId;
+export type CliToolId = ConfigTargetId | 'grok';
 
 export type ProviderTemplateId =
   | 'anthropic'

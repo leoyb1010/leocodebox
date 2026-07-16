@@ -160,9 +160,18 @@
       "cursor": "Ready to use Cursor with {{model}}. Start typing your message below.",
       "codex": "Ready to use Codex with {{model}}. Start typing your message below.",
       "opencode": "Ready to use OpenCode with {{model}}. Start typing your message below.",
-      "default": "Select a provider above to begin"
+      "default": "Select a provider above to begin",
+      "grok": "Ready to use Grok with {{model}}. Start typing your message below."
     },
-    "pressToSearch": "Press <kbd>{{shortcut}}</kbd> to search sessions, files, and commits"
+    "pressToSearch": "Press <kbd>{{shortcut}}</kbd> to search sessions, files, and commits",
+    "chooseCli": "Choose a CLI",
+    "chooseCliHint": "Pick a coding agent, then its model",
+    "chooseModelFor": "Choose a {{provider}} model",
+    "back": "Back",
+    "searchModels": "Search models...",
+    "noModelsFound": "No models found.",
+    "loadingModels": "Loading models…",
+    "clickToChange": "Click to change model"
   },
   "session": {
     "continue": {

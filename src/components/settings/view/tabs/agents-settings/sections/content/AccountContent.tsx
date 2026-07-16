@@ -55,6 +55,15 @@ const agentConfig: Record<AgentProvider, AgentVisualConfig> = {
     subtextClass: 'text-zinc-700 dark:text-zinc-300',
     buttonClass: 'bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-950 dark:bg-zinc-700 dark:hover:bg-zinc-600',
   },
+  grok: {
+    name: 'Grok',
+    description: 'xAI Grok agent',
+    bgClass: 'bg-slate-50 dark:bg-slate-900/30',
+    borderClass: 'border-slate-300 dark:border-slate-700',
+    textClass: 'text-slate-900 dark:text-slate-100',
+    subtextClass: 'text-slate-700 dark:text-slate-300',
+    buttonClass: 'bg-slate-900 hover:bg-slate-800 active:bg-slate-950 dark:bg-slate-800 dark:hover:bg-slate-700',
+  },
 };
 
 function authErrorKey(error: string): string {

@@ -57,6 +57,7 @@ interface UseChatComposerStateArgs {
   codexModel: string;
   currentProviderEffort: string;
   opencodeModel: string;
+  grokModel: string;
   isLoading: boolean;
   canAbortSession: boolean;
   tokenBudget: Record<string, unknown> | null;
@@ -106,6 +107,7 @@ export function useChatComposerState({
   codexModel,
   currentProviderEffort,
   opencodeModel,
+  grokModel,
   isLoading,
   canAbortSession,
   tokenBudget,
@@ -202,6 +204,7 @@ export function useChatComposerState({
     claudeModel,
     codexModel,
     opencodeModel,
+    grokModel,
     tokenBudget,
     input,
     setInput,
@@ -241,6 +244,7 @@ export function useChatComposerState({
     claudeModel,
     codexModel,
     opencodeModel,
+    grokModel,
     currentProviderEffort,
     selectedSession,
   });

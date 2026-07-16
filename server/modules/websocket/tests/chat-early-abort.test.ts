@@ -34,11 +34,11 @@ test('chat.abort uses the app session id before a provider session id exists', a
     abortedIds.push(id);
     return true;
   };
-  const abortFns = { claude: abort, cursor: abort, codex: abort, opencode: abort };
+  const abortFns = { claude: abort, cursor: abort, codex: abort, opencode: abort, grok: abort };
   const spawn = async () => undefined;
 
   handleChatConnection(socket as never, { user: { id: 1 } } as never, {
-    spawnFns: { claude: spawn, cursor: spawn, codex: spawn, opencode: spawn },
+    spawnFns: { claude: spawn, cursor: spawn, codex: spawn, opencode: spawn, grok: spawn },
     abortFns,
     resolveToolApproval: () => undefined,
     getPendingApprovalsForSession: () => [],

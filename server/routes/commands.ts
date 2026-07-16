@@ -25,13 +25,14 @@ type CommandEntry = { name: string; path?: string; relativePath?: string; descri
 function toNodeError(error: unknown): NodeJS.ErrnoException { return error instanceof Error ? error as NodeJS.ErrnoException : new Error(String(error)); }
 
 
-const MODEL_PROVIDERS: LLMProvider[] = ["claude", "cursor", "codex", "opencode"];
+const MODEL_PROVIDERS: LLMProvider[] = ["claude", "cursor", "codex", "opencode", "grok"];
 
 const MODEL_PROVIDER_LABELS: Record<LLMProvider, string> = {
   claude: "Claude",
   cursor: "Cursor",
   codex: "Codex",
   opencode: "OpenCode",
+  grok: "Grok",
 };
 
 const readModelProvider = (value: unknown): LLMProvider => {

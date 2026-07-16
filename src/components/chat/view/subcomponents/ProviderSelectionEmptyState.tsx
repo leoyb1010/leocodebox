@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from "react";
-import { Check, ChevronDown } from "lucide-react";
+import { Check, ChevronDown, ChevronLeft, ChevronRight } from "lucide-react";
 import { Trans, useTranslation } from "react-i18next";
 
 import type {
@@ -28,6 +28,7 @@ const PROVIDER_META: { id: LLMProvider; name: string }[] = [
   { id: "codex", name: "OpenAI" },
   { id: "cursor", name: "Cursor" },
   { id: "opencode", name: "OpenCode" },
+  { id: "grok", name: "xAI" },
 ];
 
 const MOD_KEY =
@@ -58,18 +59,14 @@ type ProviderSelectionEmptyStateProps = {
   setCodexModel: (model: string) => void;
   opencodeModel: string;
   setOpenCodeModel: (model: string) => void;
+  grokModel: string;
+  setGrokModel: (model: string) => void;
   providerModelCatalog: Partial<Record<LLMProvider, ProviderModelsDefinition>>;
   providerModelsLoading: boolean;
   tasksEnabled: boolean;
   isTaskMasterInstalled: boolean | null;
   onShowAllTasks?: (() => void) | null;
   setInput: React.Dispatch<React.SetStateAction<string>>;
-};
-
-type ProviderGroup = {
-  id: LLMProvider;
-  name: string;
-  models: { value: string; label: string; description?: string }[];
 };
 
 function getModelConfig(
@@ -86,10 +83,12 @@ function getCurrentModel(
   cu: string,
   co: string,
   o: string,
+  g: string,
 ) {
   if (p === "claude") return c;
   if (p === "codex") return co;
   if (p === "opencode") return o;
+  if (p === "grok") return g;
   return cu;
 }
 
@@ -98,6 +97,7 @@ function getProviderDisplayName(p: LLMProvider) {
   if (p === "cursor") return "Cursor";
   if (p === "codex") return "Codex";
   if (p === "opencode") return "OpenCode";
+  if (p === "grok") return "Grok";
   return "Claude";
 }
 
@@ -115,6 +115,8 @@ export default function ProviderSelectionEmptyState({
   setCodexModel,
   opencodeModel,
   setOpenCodeModel,
+  grokModel,
+  setGrokModel,
   providerModelCatalog,
   providerModelsLoading,
   tasksEnabled,
@@ -124,14 +126,38 @@ export default function ProviderSelectionEmptyState({
 }: ProviderSelectionEmptyStateProps) {
   const { t } = useTranslation("chat");
   const [dialogOpen, setDialogOpen] = useState(false);
+  // Two-step selector: pick the CLI first, then that CLI's model. `step`
+  // toggles which pane the dialog shows; `pendingProvider` remembers the CLI
+  // chosen in step 1 so step 2 only lists its models.
+  const [step, setStep] = useState<"provider" | "model">("provider");
+  const [pendingProvider, setPendingProvider] = useState<LLMProvider>(provider);
 
-  const visibleProviderGroups = useMemo<ProviderGroup[]>(() => {
-    return PROVIDER_META.map((p) => ({
-      id: p.id,
-      name: p.name,
-      models: providerModelCatalog[p.id]?.OPTIONS ?? [],
-    }));
-  }, [providerModelCatalog]);
+  const modelForProvider = useCallback(
+    (id: LLMProvider) =>
+      getCurrentModel(id, claudeModel, cursorModel, codexModel, opencodeModel, grokModel),
+    [claudeModel, cursorModel, codexModel, opencodeModel, grokModel],
+  );
+
+  const labelForProviderModel = useCallback(
+    (id: LLMProvider) => {
+      const value = modelForProvider(id);
+      const found = providerModelCatalog[id]?.OPTIONS.find((o) => o.value === value);
+      return found?.label || value;
+    },
+    [modelForProvider, providerModelCatalog],
+  );
+
+  const openDialog = useCallback(
+    (open: boolean) => {
+      setDialogOpen(open);
+      if (open) {
+        // Always start on the CLI list, pre-focused on the active provider.
+        setStep("provider");
+        setPendingProvider(provider);
+      }
+    },
+    [provider],
+  );
 
   const nextTaskPrompt = t("tasks.nextTaskPrompt", {
     defaultValue: "Start the next task",
@@ -143,6 +169,7 @@ export default function ProviderSelectionEmptyState({
     cursorModel,
     codexModel,
     opencodeModel,
+    grokModel,
   );
 
   const currentModelLabel = useMemo(() => {
@@ -164,13 +191,22 @@ export default function ProviderSelectionEmptyState({
       } else if (providerId === "opencode") {
         setOpenCodeModel(modelValue);
         localStorage.setItem("opencode-model", modelValue);
+      } else if (providerId === "grok") {
+        setGrokModel(modelValue);
+        localStorage.setItem("grok-model", modelValue);
       } else {
         setCursorModel(modelValue);
         localStorage.setItem("cursor-model", modelValue);
       }
     },
-    [setClaudeModel, setCursorModel, setCodexModel, setOpenCodeModel],
+    [setClaudeModel, setCursorModel, setCodexModel, setOpenCodeModel, setGrokModel],
   );
+
+  // Step 1 → step 2: remember the CLI and reveal its model list.
+  const handleProviderPick = useCallback((id: LLMProvider) => {
+    setPendingProvider(id);
+    setStep("model");
+  }, []);
 
   const handleModelSelect = useCallback(
     (providerId: LLMProvider, modelValue: string) => {
@@ -181,6 +217,11 @@ export default function ProviderSelectionEmptyState({
       setTimeout(() => textareaRef.current?.focus(), 100);
     },
     [setProvider, setModelForProvider, textareaRef],
+  );
+
+  const pendingModels = useMemo(
+    () => providerModelCatalog[pendingProvider]?.OPTIONS ?? [],
+    [providerModelCatalog, pendingProvider],
   );
 
   if (!selectedSession && !currentSessionId) {
@@ -201,7 +242,7 @@ export default function ProviderSelectionEmptyState({
             </p>
           </div>
 
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <Dialog open={dialogOpen} onOpenChange={openDialog}>
             <DialogTrigger asChild>
               <Card
                 className="group max-w-sm cursor-pointer border-border/60 transition-all duration-150 hover:border-border hover:shadow-md active:scale-[0.99]"
@@ -233,73 +274,114 @@ export default function ProviderSelectionEmptyState({
             </DialogTrigger>
 
             <DialogContent className="max-w-md overflow-hidden p-0">
-              <DialogTitle>Model Selector</DialogTitle>
-              <div className="border-b border-border/60 bg-muted/20 px-4 py-3">
-                <p className="text-sm font-semibold text-foreground">Choose a model</p>
-              </div>
-              <Command filter={modelSearchFilter}>
-                <CommandInput
-                  placeholder={t("providerSelection.searchModels", {
-                    defaultValue: "Search models...",
-                  })}
-                />
-                <CommandList className="max-h-[350px]">
-                  <CommandEmpty>
-                    {t("providerSelection.noModelsFound", {
-                      defaultValue: "No models found.",
+              <DialogTitle className="sr-only">
+                {step === "provider"
+                  ? t("providerSelection.chooseCli", { defaultValue: "Choose a CLI" })
+                  : t("providerSelection.chooseModelFor", {
+                      provider: getProviderDisplayName(pendingProvider),
+                      defaultValue: "Choose a {{provider}} model",
                     })}
-                  </CommandEmpty>
-                  {visibleProviderGroups.map((group, idx) => (
-                    <CommandGroup
-                      key={group.id}
-                      className={
-                        idx > 0
-                          ? "border-t border-border/40 [&_[cmdk-group-heading]]:mt-1 [&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider"
-                          : "[&_[cmdk-group-heading]]:uppercase [&_[cmdk-group-heading]]:tracking-wider"
-                      }
-                      heading={
-                        <span className="flex items-center gap-1.5">
-                          <SessionProviderLogo provider={group.id} className="h-3.5 w-3.5 shrink-0" />
-                          {group.name}
-                        </span>
-                      }
-                    >
-                      {group.models.length === 0 && providerModelsLoading ? (
-                        <CommandItem disabled className="ml-4 border-l border-border/40 pl-4 text-muted-foreground">
-                          {t("providerSelection.loadingModels", { defaultValue: "Loading models…" })}
-                        </CommandItem>
-                      ) : null}
-                      {group.models.map((model) => {
-                        const isSelected = provider === group.id && currentModel === model.value;
-                        return (
-                          <CommandItem
-                            key={`${group.id}-${model.value}`}
-                            value={`${group.name} ${model.label} ${model.description || ''}`}
-                            onSelect={() => handleModelSelect(group.id, model.value)}
-                            className="ml-4 border-l border-border/40 pl-4"
-                          >
-                            <div className="min-w-0 flex-1">
-                              <div className="truncate">{model.label}</div>
-                              {/* 
-                              // * Temporarly commented out because the description of models from claude 
-                              // * was a bit inconsistent.  Will return it back when it becomes more consistent.
-                              */}
-                              {/* {model.description && (
-                                <div className="truncate text-xs text-muted-foreground">
-                                  {model.description}
-                                </div>
-                              )} */}
-                            </div>
-                            {isSelected && (
-                              <Check className="ml-auto h-4 w-4 shrink-0 text-primary" />
-                            )}
-                          </CommandItem>
-                        );
+              </DialogTitle>
+
+              {step === "provider" ? (
+                <>
+                  <div className="border-b border-border/60 bg-muted/20 px-4 py-3">
+                    <p className="text-sm font-semibold text-foreground">
+                      {t("providerSelection.chooseCli", { defaultValue: "Choose a CLI" })}
+                    </p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      {t("providerSelection.chooseCliHint", {
+                        defaultValue: "Pick a coding agent, then its model",
                       })}
-                    </CommandGroup>
-                  ))}
-                </CommandList>
-              </Command>
+                    </p>
+                  </div>
+                  <Command>
+                    <CommandList className="max-h-[350px]">
+                      <CommandGroup className="[&_[cmdk-group-heading]]:hidden">
+                        {PROVIDER_META.map((p) => {
+                          const isActive = provider === p.id;
+                          return (
+                            <CommandItem
+                              key={p.id}
+                              value={`${getProviderDisplayName(p.id)} ${p.name}`}
+                              onSelect={() => handleProviderPick(p.id)}
+                              className="gap-2.5 py-2.5"
+                            >
+                              <SessionProviderLogo provider={p.id} className="h-5 w-5 shrink-0" />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-1.5">
+                                  <span className="text-sm font-medium text-foreground">
+                                    {getProviderDisplayName(p.id)}
+                                  </span>
+                                  <span className="text-[11px] text-muted-foreground">{p.name}</span>
+                                </div>
+                                <div className="truncate text-[11px] text-muted-foreground">
+                                  {labelForProviderModel(p.id)}
+                                </div>
+                              </div>
+                              {isActive && (
+                                <Check className="h-4 w-4 shrink-0 text-primary" />
+                              )}
+                              <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setStep("provider")}
+                    className="flex w-full items-center gap-2 border-b border-border/60 bg-muted/20 px-4 py-3 text-left transition-colors hover:bg-muted/40"
+                  >
+                    <ChevronLeft className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <SessionProviderLogo provider={pendingProvider} className="h-4 w-4 shrink-0" />
+                    <span className="text-sm font-semibold text-foreground">
+                      {getProviderDisplayName(pendingProvider)}
+                    </span>
+                    <span className="ml-auto text-[11px] text-muted-foreground">
+                      {t("providerSelection.back", { defaultValue: "Back" })}
+                    </span>
+                  </button>
+                  <Command filter={modelSearchFilter}>
+                    <CommandInput
+                      placeholder={t("providerSelection.searchModels", {
+                        defaultValue: "Search models...",
+                      })}
+                    />
+                    <CommandList className="max-h-[350px]">
+                      <CommandEmpty>
+                        {providerModelsLoading
+                          ? t("providerSelection.loadingModels", { defaultValue: "Loading models…" })
+                          : t("providerSelection.noModelsFound", { defaultValue: "No models found." })}
+                      </CommandEmpty>
+                      <CommandGroup className="[&_[cmdk-group-heading]]:hidden">
+                        {pendingModels.map((model) => {
+                          const isSelected =
+                            provider === pendingProvider && currentModel === model.value;
+                          return (
+                            <CommandItem
+                              key={`${pendingProvider}-${model.value}`}
+                              value={`${model.label} ${model.description || ""}`}
+                              onSelect={() => handleModelSelect(pendingProvider, model.value)}
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate">{model.label}</div>
+                              </div>
+                              {isSelected && (
+                                <Check className="ml-auto h-4 w-4 shrink-0 text-primary" />
+                              )}
+                            </CommandItem>
+                          );
+                        })}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </>
+              )}
             </DialogContent>
           </Dialog>
 
@@ -318,6 +400,10 @@ export default function ProviderSelectionEmptyState({
                 opencode: t("providerSelection.readyPrompt.opencode", {
                   model: opencodeModel,
                   defaultValue: "Ready with OpenCode {{model}}",
+                }),
+                grok: t("providerSelection.readyPrompt.grok", {
+                  model: grokModel,
+                  defaultValue: "Ready with Grok {{model}}",
                 }),
               }[provider]
             }

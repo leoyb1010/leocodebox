@@ -10,6 +10,7 @@ import {
 } from '@/modules/providers/list/claude/claude-runtime.js';
 import { abortCodexSession, queryCodex } from '@/modules/providers/list/codex/codex-runtime.js';
 import { abortCursorSession, spawnCursor } from '@/modules/providers/list/cursor/cursor-runtime.js';
+import { abortGrokSession, spawnGrok } from '@/modules/providers/list/grok/grok-runtime.js';
 import { abortOpenCodeSession, spawnOpenCode } from '@/modules/providers/list/opencode/opencode-runtime.js';
 import { createWebSocketServer } from '@/modules/websocket/index.js';
 import { sessionsDb } from '@/modules/database/index.js';
@@ -37,12 +38,14 @@ export function attachWebSocketRuntime(server: HttpServer, app: Express) {
         cursor: spawnCursor,
         codex: queryCodex,
         opencode: spawnOpenCode,
+        grok: spawnGrok,
       },
       abortFns: {
         claude: abortClaudeSDKSession,
         cursor: abortCursorSession,
         codex: abortCodexSession,
         opencode: abortOpenCodeSession,
+        grok: abortGrokSession,
       },
       resolveToolApproval,
       getPendingApprovalsForSession,

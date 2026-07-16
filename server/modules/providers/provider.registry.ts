@@ -1,6 +1,7 @@
 import { ClaudeProvider } from '@/modules/providers/list/claude/claude.provider.js';
 import { CodexProvider } from '@/modules/providers/list/codex/codex.provider.js';
 import { CursorProvider } from '@/modules/providers/list/cursor/cursor.provider.js';
+import { GrokProvider } from '@/modules/providers/list/grok/grok.provider.js';
 import { OpenCodeProvider } from '@/modules/providers/list/opencode/opencode.provider.js';
 import { CHAT_PROVIDER_IDS, PROVIDER_MANIFESTS, PROVIDER_TEMPLATES } from '@/modules/providers/provider.manifests.js';
 import type { IProvider } from '@/shared/interfaces.js';
@@ -19,6 +20,7 @@ const providers = new Map<LLMProvider, IProvider>([
   ['codex', new CodexProvider()],
   ['cursor', new CursorProvider()],
   ['opencode', new OpenCodeProvider()],
+  ['grok', new GrokProvider()],
 ]);
 
 const manifests = new Map<ProviderId, ProviderManifest>();

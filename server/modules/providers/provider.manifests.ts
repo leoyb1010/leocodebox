@@ -46,12 +46,12 @@ export const PROVIDER_MANIFESTS = [
     },
   },
   {
-    id: 'grok', displayName: 'Grok / xAI API', vendor: 'xAI', visibility: 'experimental', verification: 'beta', order: 60,
-    configTarget: 'codex', docsUrl: 'https://docs.x.ai/',
+    id: 'grok', displayName: 'Grok Build', vendor: 'xAI', visibility: 'public', verification: 'beta', order: 60,
+    runtimeProvider: 'grok', configTarget: 'codex', cliTool: 'grok', docsUrl: 'https://docs.x.ai/build',
     capabilities: {
-      chat: 'unverified', auth: 'unverified', models: 'supported', sessions: 'unsupported',
-      sessionSync: 'unsupported', mcp: 'unsupported', skills: 'unsupported', configSwitch: 'supported',
-      cliInstall: 'unsupported', cliUpdate: 'unsupported',
+      chat: 'supported', auth: 'supported', models: 'supported', sessions: 'supported',
+      sessionSync: 'unsupported', mcp: 'unsupported', skills: 'supported', configSwitch: 'supported',
+      cliInstall: 'unsupported', cliUpdate: 'supported',
     },
   },
   {

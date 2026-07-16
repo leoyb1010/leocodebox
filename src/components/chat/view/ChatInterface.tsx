@@ -71,6 +71,8 @@ function ChatInterface({
     currentProviderEffortOptions,
     opencodeModel,
     setOpenCodeModel,
+    grokModel,
+    setGrokModel,
     permissionMode,
     pendingPermissionRequests,
     setPendingPermissionRequests,
@@ -207,6 +209,7 @@ function ChatInterface({
     codexModel,
     currentProviderEffort,
     opencodeModel,
+    grokModel,
     isLoading: isProcessing,
     canAbortSession,
     tokenBudget,
@@ -342,6 +345,8 @@ function ChatInterface({
           setCodexModel={setCodexModel}
           opencodeModel={opencodeModel}
           setOpenCodeModel={setOpenCodeModel}
+          grokModel={grokModel}
+          setGrokModel={setGrokModel}
           providerModelCatalog={providerModelCatalog}
           providerModelsLoading={providerModelsLoading}
           tasksEnabled={tasksEnabled}
