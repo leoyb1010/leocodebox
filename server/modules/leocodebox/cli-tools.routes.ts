@@ -298,7 +298,45 @@ export async function withCliMutation<T>(toolId: string, operation: () => Promis
   }
 }
 
-export function runCliCommand(cmd: string, args: string[], timeoutMs = 10_000, options: { env?: NodeJS.ProcessEnv } = {}): Promise<CliCommandResult> {
+// The CLI status panel fans out ~28 probes at once (7 tools × which/which-a/
+// --version). In a packaged GUI app (launched from Finder, no real stdin),
+// spawning that many child processes concurrently races libuv's fd setup and
+// throws `spawn EBADF` on some of them — so tools drop out non-deterministically
+// (verified: even 4-way concurrency still fails; fully serial always works).
+// So short probes go through a serial gate; long-running install/update
+// mutations bypass it (they are already serialised per-tool and would otherwise
+// hold the single slot for minutes, blocking status refreshes).
+const PROBE_TIMEOUT_CEILING_MS = 30_000;
+let probeSpawnBusy = false;
+const probeSpawnWaiters: Array<() => void> = [];
+function acquireProbeSlot(): Promise<void> {
+  if (!probeSpawnBusy) {
+    probeSpawnBusy = true;
+    return Promise.resolve();
+  }
+  return new Promise<void>((resolve) => { probeSpawnWaiters.push(resolve); });
+}
+function releaseProbeSlot(): void {
+  const next = probeSpawnWaiters.shift();
+  if (next) next(); // hand the slot straight to the next waiter
+  else probeSpawnBusy = false;
+}
+
+export async function runCliCommand(cmd: string, args: string[], timeoutMs = 10_000, options: { env?: NodeJS.ProcessEnv } = {}): Promise<CliCommandResult> {
+  // Long mutations (install/update) run outside the probe gate so they never
+  // block — and hold — the single probe slot for minutes.
+  if (timeoutMs > PROBE_TIMEOUT_CEILING_MS) {
+    return runCliCommandUnthrottled(cmd, args, timeoutMs, options);
+  }
+  await acquireProbeSlot();
+  try {
+    return await runCliCommandUnthrottled(cmd, args, timeoutMs, options);
+  } finally {
+    releaseProbeSlot();
+  }
+}
+
+function runCliCommandUnthrottled(cmd: string, args: string[], timeoutMs: number, options: { env?: NodeJS.ProcessEnv }): Promise<CliCommandResult> {
   return new Promise<CliCommandResult>((resolve) => {
     const useShell = process.platform === 'win32' && /\.(cmd|bat)$/i.test(cmd);
     const MAX_OUTPUT = 4 * 1024 * 1024;
