@@ -2,7 +2,7 @@
 
 ![leocodebox 本地 Agent 工作台](public/visuals/release/readme-hero.webp)
 
-![version](https://img.shields.io/badge/version-1.49.3-blue)
+![version](https://img.shields.io/badge/version-1.49.4-blue)
 ![platform](https://img.shields.io/badge/platform-macOS%20arm64-lightgrey)
 ![signed](https://img.shields.io/badge/signed-Developer%20ID%20%2B%20Notarized-brightgreen)
 ![license](https://img.shields.io/badge/license-AGPL--3.0-orange)
@@ -13,12 +13,12 @@
 
 ## ⬇️ 下载
 
-[![下载 DMG](https://img.shields.io/badge/下载-leocodebox%201.49.3%20(mac--arm64)-brightgreen?style=for-the-badge)](https://github.com/leoyb1010/leocodebox/releases/latest)
+[![下载 DMG](https://img.shields.io/badge/下载-leocodebox%201.49.4%20(mac--arm64)-brightgreen?style=for-the-badge)](https://github.com/leoyb1010/leocodebox/releases/latest)
 
 - **最新版本**：<https://github.com/leoyb1010/leocodebox/releases/latest>
-- **当前正式版**：`1.49.3`
-- **直接下载 DMG**：[leocodebox-1.49.3-mac-arm64.dmg](https://github.com/leoyb1010/leocodebox/releases/download/v1.49.3/leocodebox-1.49.3-mac-arm64.dmg)（仅 Apple 芯片）
-- **SHA-256**：`1460b2dc0d6292225d13e45b3e22ec3e979b6a932e4002868981bd046094102f`
+- **当前正式版**：`1.49.4`
+- **直接下载 DMG**：[leocodebox-1.49.4-mac-arm64.dmg](https://github.com/leoyb1010/leocodebox/releases/download/v1.49.4/leocodebox-1.49.4-mac-arm64.dmg)（仅 Apple 芯片）
+- **SHA-256**：`13eea84a6320935a12c5cf995e3779fd352d76dabafa58ed08c3990bb83e0b95`
 
 已 **Developer ID 签名 + Apple 公证**：双击 DMG → 拖入「应用程序」→ 双击运行，无 Gatekeeper 警告，无需 `xattr` 去隔离。
 
