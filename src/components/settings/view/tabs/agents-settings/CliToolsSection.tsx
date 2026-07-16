@@ -30,6 +30,10 @@ export type CliToolStatus = {
   installSource: string;
   executablePath: string | null;
   copies?: CliCopyInfo[];
+  /** True only when the copy that actually runs is behind a newer shadowed copy. */
+  hasNewerShadowCopy?: boolean;
+  /** Highest version across all copies (server-computed with semver order). */
+  newestCopyVersion?: string | null;
   canInstall: boolean;
   canSelfUpdate: boolean;
   mutationsAllowed: boolean;
@@ -228,15 +232,14 @@ export default function CliToolsSection({ onToolsChange }: CliToolsSectionProps)
                   <span>{t('agents.cliTools.commandMissing', { command: tool.command })}</span>
                 )}
               </div>
-              {tool.copies && tool.copies.length > 1
-                && new Set(tool.copies.map((copy) => copy.version ?? '?')).size > 1 && (
+              {tool.hasNewerShadowCopy && tool.copies && tool.copies.length > 1 && (
                 <p
                   className="mt-0.5 truncate text-[10px] text-amber-700 dark:text-amber-300"
                   title={tool.copies.map((copy) => `${copy.active ? '● ' : '○ '}${copy.path} → ${copy.version ?? '?'}（${copy.source}）`).join('\n')}
                 >
                   {t('agents.cliTools.multipleCopies', {
-                    count: tool.copies.length,
-                    versions: [...new Set(tool.copies.map((copy) => copy.version ?? '?'))].join(' / '),
+                    active: tool.currentVersion ?? '?',
+                    newest: tool.newestCopyVersion ?? '?',
                   })}
                 </p>
               )}

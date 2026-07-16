@@ -14,6 +14,7 @@ import {
   deriveNpmPrefixFromCopyPath,
   detectCliInstallSource,
   discoverCliCopies,
+  getCliToolStatus,
   readCliLatestVersion,
   resolveCliUpdateCommand,
   withCliMutation,
@@ -74,6 +75,38 @@ test('copy discovery follows the user login-shell PATH, not the server PATH', as
   const fallback = await discoverCliCopies(fakeTool);
   assert.equal(fallback.length >= 1, true);
   assert.equal(fallback[0].path, path.join(serverOnlyBin, 'fakecli'));
+});
+
+test('shadow-copy warning fires only when the ACTIVE copy is the stale one', async (t) => {
+  const scratch = await fs.mkdtemp(path.join(os.tmpdir(), 'leocodebox-cli-shadow-'));
+  const newBin = path.join(scratch, 'new-bin');
+  const oldBin = path.join(scratch, 'old-bin');
+  await Promise.all([newBin, oldBin].map((dir) => fs.mkdir(dir)));
+  // Two genuinely different files → realpath dedup keeps both as copies.
+  await fs.writeFile(path.join(newBin, 'shadowcli'), '#!/bin/sh\necho "1.18.2"\n', { mode: 0o755 });
+  await fs.writeFile(path.join(oldBin, 'shadowcli'), '#!/bin/sh\necho "1.17.18"\n', { mode: 0o755 });
+
+  const previousLoginPath = process.env.LEOCODEBOX_LOGIN_SHELL_PATH;
+  t.after(() => {
+    if (previousLoginPath === undefined) delete process.env.LEOCODEBOX_LOGIN_SHELL_PATH;
+    else process.env.LEOCODEBOX_LOGIN_SHELL_PATH = previousLoginPath;
+  });
+  const tool = { id: 'shadowcli', label: 'ShadowCLI', cmd: 'shadowcli', npmPackage: null, updateArgs: null } as never;
+
+  // Active (first in PATH) is the NEWEST → older shadow is harmless → no warning.
+  process.env.LEOCODEBOX_LOGIN_SHELL_PATH = `${newBin}:${oldBin}:/usr/bin:/bin`;
+  const quiet = await getCliToolStatus(tool, { checkLatest: false });
+  assert.equal(quiet.copies.length, 2);
+  assert.equal(quiet.currentVersion, '1.18.2');
+  assert.equal(quiet.newestCopyVersion, '1.18.2');
+  assert.equal(quiet.hasNewerShadowCopy, false, 'running the newest copy must not warn');
+
+  // Active is the OLDER one while a newer copy is shadowed → warn.
+  process.env.LEOCODEBOX_LOGIN_SHELL_PATH = `${oldBin}:${newBin}:/usr/bin:/bin`;
+  const noisy = await getCliToolStatus(tool, { checkLatest: false });
+  assert.equal(noisy.currentVersion, '1.17.18');
+  assert.equal(noisy.newestCopyVersion, '1.18.2');
+  assert.equal(noisy.hasNewerShadowCopy, true, 'running a stale shadowed copy must warn');
 });
 
 test('explicit Agent PATH stays ahead of login-shell and host server copies', async (t) => {

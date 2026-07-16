@@ -359,6 +359,15 @@ export async function getCliToolStatus(tool: CliTool, { checkLatest = true, forc
     if (probe.ok) active.version = parseCliVersionText(probe.stdout || probe.stderr);
   }
   const currentVersion = active?.version ?? null;
+  // Only a DRIFT THAT AFFECTS YOU is worth surfacing: the copy the bare command
+  // actually runs (copies[0]) being behind a newer shadowed copy. Older copies
+  // sitting in other node roots while you already run the newest are pure noise
+  // — the single most common case on multi-manager (nvm + brew + npm) machines.
+  const hasNewerShadowCopy = Boolean(currentVersion)
+    && copies.some((copy) => copy.version && compareSemver(copy.version, currentVersion) > 0);
+  const newestCopyVersion = copies.reduce<string | null>((newest, copy) => (
+    copy.version && (!newest || compareSemver(copy.version, newest) > 0) ? copy.version : newest
+  ), null);
   const latest = checkLatest && runnable
     ? await readCliLatestVersion(tool, { force: forceLatest })
     : { version: null, checkedAt: null, source: 'skipped' };
@@ -387,6 +396,8 @@ export async function getCliToolStatus(tool: CliTool, { checkLatest = true, forc
     installSource,
     executablePath: active?.path ?? null,
     copies,
+    hasNewerShadowCopy,
+    newestCopyVersion,
     canInstall: !installed && Boolean(tool.install),
     canSelfUpdate: runnable && Boolean(updateCommand),
     mutationsAllowed: allowMutations,
@@ -490,9 +501,15 @@ router.post('/:id/update', requireLocalOnly, async (req, res, next) => {
       if (tool.npmPackage && /allow-scripts/i.test(combinedOutput) && combinedOutput.includes(tool.npmPackage)) {
         notice = `npm 的 allow-scripts 拦截了 ${tool.npmPackage} 的安装脚本，更新可能不完整。终端执行一次：npm install -g --allow-scripts=${tool.npmPackage} ${tool.npmPackage}@latest`;
       }
-      const divergentVersions = new Set(after.copies.map((copy) => copy.version ?? '?'));
-      if (result.ok && after.copies.length > 1 && divergentVersions.size > 1) {
-        const shadowNote = `你的终端 PATH 里有 ${after.copies.length} 份 ${tool.label} 且版本不一致，已更新首位这份（${activeBefore?.path ?? after.executablePath}）。若终端里版本未变，请清理旧副本。`;
+      // Only nag about shadow copies when the active one is STILL behind a
+      // newer copy after updating — i.e. the update landed somewhere the bare
+      // command doesn't run. If the copy you run is now the newest, older
+      // copies elsewhere are harmless and not worth a warning.
+      const activeAfterVersion = after.copies[0]?.version ?? null;
+      const activeStillStale = Boolean(activeAfterVersion)
+        && after.copies.some((copy) => copy.version && compareSemver(copy.version, activeAfterVersion) > 0);
+      if (result.ok && activeStillStale) {
+        const shadowNote = `更新装到了另一处,你终端里实际会跑的仍是旧版 ${tool.label}(${activeBefore?.path ?? after.executablePath})。请对这份路径单独更新或清理旧副本。`;
         notice = notice ? `${notice}\n${shadowNote}` : shadowNote;
       }
 

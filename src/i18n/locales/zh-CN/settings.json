@@ -371,7 +371,7 @@
       "loading": "正在检查本机智能体",
       "diagnostics": "导出诊断",
       "diagnosticsHint": "导出脱敏诊断 JSON(CLI 清单与接口状态,密钥已打码)",
-      "multipleCopies": "终端 PATH 里有 {{count}} 份副本且版本不一（{{versions}}），App 管理首位这份，悬停查看全部路径"
+      "multipleCopies": "终端里实际在跑旧版 {{active}}，另有更新的副本 {{newest}} 未生效；悬停查看全部路径"
     },
     "authStatus": {
       "checking": "检查中...",
