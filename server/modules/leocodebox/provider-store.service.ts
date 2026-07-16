@@ -35,7 +35,18 @@ export type SwitchProviderInput = Partial<Omit<SwitchProvider, 'endpoints' | 'mo
   endpoints?: ProviderEndpoint[];
   modelMapping?: Partial<ProviderModelMapping>;
 };
-export type ProviderStore = { providers: SwitchProvider[]; activeByTarget: Record<string, string> };
+/** Persisted background health-monitor preferences (see provider-health.service). */
+export type HealthMonitorSettings = {
+  enabled: boolean;
+  intervalMinutes: number;
+  /** Targets where a degraded active provider may be auto-switched to a healthy sibling. */
+  autoFailoverTargets: string[];
+};
+export type ProviderStore = {
+  providers: SwitchProvider[];
+  activeByTarget: Record<string, string>;
+  healthMonitor: HealthMonitorSettings;
+};
 type StatusError = Error & { statusCode?: number };
 
 let switchMutationQueue: Promise<unknown> = Promise.resolve();
@@ -225,12 +236,35 @@ export function withSwitchMutation<T>(operation: () => Promise<T> | T): Promise<
   return result;
 }
 
+export const HEALTH_MONITOR_DEFAULTS: HealthMonitorSettings = {
+  enabled: true,
+  intervalMinutes: 5,
+  autoFailoverTargets: [],
+};
+
+export function normalizeHealthMonitorSettings(input: unknown): HealthMonitorSettings {
+  const source = input && typeof input === 'object' ? input as Partial<HealthMonitorSettings> : {};
+  const interval = Number(source.intervalMinutes);
+  return {
+    enabled: source.enabled !== false,
+    intervalMinutes: Number.isFinite(interval) ? Math.min(60, Math.max(1, Math.round(interval))) : HEALTH_MONITOR_DEFAULTS.intervalMinutes,
+    autoFailoverTargets: Array.isArray(source.autoFailoverTargets)
+      ? source.autoFailoverTargets.map((item) => safeText(item, 40).toLowerCase()).filter((item) => Boolean(TARGETS[item])).slice(0, 10)
+      : [],
+  };
+}
+
 export async function readStore(): Promise<ProviderStore> {
   await ensureDir(switchDir());
-  const store = await readJsonFile<ProviderStore>(providerStorePath(), { providers: [], activeByTarget: {} });
+  const store = await readJsonFile<ProviderStore>(providerStorePath(), {
+    providers: [],
+    activeByTarget: {},
+    healthMonitor: HEALTH_MONITOR_DEFAULTS,
+  });
   return {
     providers: Array.isArray(store.providers) ? store.providers : [],
     activeByTarget: store.activeByTarget && typeof store.activeByTarget === 'object' ? store.activeByTarget : {},
+    healthMonitor: normalizeHealthMonitorSettings(store.healthMonitor),
   };
 }
 

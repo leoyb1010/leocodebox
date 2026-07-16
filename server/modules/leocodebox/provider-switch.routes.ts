@@ -9,6 +9,12 @@ import { PROVIDER_TEMPLATES } from '../../shared/provider-templates.js';
 
 import { applyProviderTransactionally } from './provider-apply.service.js';
 import {
+  clearAutoFailoverRecord,
+  getHealthSnapshot,
+  runHealthTick,
+} from './provider-health.service.js';
+import {
+  adoptLiveProviderEdits,
   detectActiveByTarget,
   importCcSwitchProviders,
   importCurrentProviders,
@@ -32,6 +38,7 @@ import {
 import {
   appendEndpointSamples,
   normalizeEndpointUrls,
+  normalizeHealthMonitorSettings,
   normalizeModelMapping,
   normalizeProvider,
   normalizeTarget,
@@ -116,11 +123,27 @@ router.get('/switch/status', async (_req, res, next) => {
       // Shell exports (e.g. left behind by another switcher like cc-switch)
       // outrank config files for TERMINAL sessions — surface them so a switch
       // that "does nothing in the terminal" is explainable at a glance.
-      // In-app sessions are covered by the active-provider env overlay.
+      // In-app sessions are covered by the active-provider env overlay
+      // (claude/codex); gemini has no in-app runtime, so the warning is the
+      // only guardrail there. opencode reads OPENCODE_CONFIG-style redirects
+      // through the same env-aware path resolution we write with, so it needs
+      // no entry here.
       shellOverrides: {
-        claude: process.env.ANTHROPIC_BASE_URL ? { baseUrl: process.env.ANTHROPIC_BASE_URL } : null,
+        claude: process.env.ANTHROPIC_BASE_URL || process.env.ANTHROPIC_AUTH_TOKEN || process.env.ANTHROPIC_API_KEY
+          ? {
+            ...(process.env.ANTHROPIC_BASE_URL ? { baseUrl: process.env.ANTHROPIC_BASE_URL } : {}),
+            ...(process.env.ANTHROPIC_AUTH_TOKEN || process.env.ANTHROPIC_API_KEY ? { apiKeyPresent: true } : {}),
+          }
+          : null,
         codex: process.env.OPENAI_API_KEY ? { apiKeyPresent: true } : null,
+        gemini: process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY || process.env.GOOGLE_GEMINI_BASE_URL
+          ? {
+            ...(process.env.GOOGLE_GEMINI_BASE_URL ? { baseUrl: process.env.GOOGLE_GEMINI_BASE_URL } : {}),
+            ...(process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY ? { apiKeyPresent: true } : {}),
+          }
+          : null,
       },
+      health: getHealthSnapshot(store.healthMonitor),
     });
   } catch (error) {
     next(error);
@@ -264,12 +287,20 @@ router.post('/switch/providers/:id/apply', async (req, res, next) => {
       }
 
       await ensureDefaultSnapshot(provider.target, store);
+      // Switching away? First fold any hand edits the user made to the live
+      // config back into the outgoing provider record, so switching back later
+      // restores what they actually run today (lean write-back).
+      if (store.activeByTarget[provider.target] && store.activeByTarget[provider.target] !== provider.id) {
+        await adoptLiveProviderEdits(store, provider.target);
+      }
       const changedFiles = await applyProviderTransactionally(provider, async () => {
         store.activeByTarget[provider.target] = provider.id;
         provider.lastAppliedAt = nowIso();
         provider.updatedAt = nowIso();
         await writeStore(store);
       });
+      // A manual apply supersedes any auto-failover breadcrumb for this target.
+      clearAutoFailoverRecord(provider.target);
 
       res.json({
         success: true,
@@ -302,11 +333,15 @@ router.post('/switch/targets/:target/restore-default', async (req, res, next) =>
 
       const current = await captureFiles(targetConfigPaths(target));
       try {
+        const store = await readStore();
+        // Restoring the native config is also "switching away" — keep the
+        // user's live hand edits on the outgoing provider record first.
+        await adoptLiveProviderEdits(store, target);
         for (const filePath of targetConfigPaths(target)) await backupFile(filePath);
         await restoreFiles(snapshots);
-        const store = await readStore();
         delete store.activeByTarget[target];
         await writeStore(store);
+        clearAutoFailoverRecord(target);
         res.json({
           success: true,
           target,
@@ -317,6 +352,30 @@ router.post('/switch/targets/:target/restore-default', async (req, res, next) =>
         await restoreFiles(current);
         throw error;
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Run one health poll immediately (the scheduler keeps its own cadence).
+router.post('/switch/health/check-now', async (_req, res, next) => {
+  try {
+    const snapshot = await runHealthTick();
+    res.json({ success: true, health: snapshot });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Persist health-monitor preferences (enabled / interval / per-target auto failover).
+router.post('/switch/health/settings', async (req, res, next) => {
+  try {
+    await withSwitchMutation(async () => {
+      const store = await readStore();
+      store.healthMonitor = normalizeHealthMonitorSettings({ ...store.healthMonitor, ...(req.body || {}) });
+      await writeStore(store);
+      res.json({ success: true, health: getHealthSnapshot(store.healthMonitor) });
     });
   } catch (error) {
     next(error);

@@ -204,6 +204,10 @@
     .state-chip.health-fail { background: rgba(248, 81, 73, .16); color: #ff6b63; }
     .state-chip.health-idle { background: var(--chip-bg); color: var(--muted); }
     .provider-health { display: block; margin-top: 5px; color: var(--subtle); font-size: 11px; }
+    .health-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 10px; padding: 9px 12px; border-radius: 10px; font-size: 12px; line-height: 1.5; }
+    .health-banner.warn { background: rgba(210, 153, 34, .12); color: #d29922; border: 1px solid rgba(210, 153, 34, .35); }
+    .health-banner.info { background: rgba(56, 139, 253, .1); color: #58a6ff; border: 1px solid rgba(56, 139, 253, .3); }
+    .health-banner .quiet-button { padding: 3px 10px; font-size: 12px; }
     .failover-button { border-color: rgba(210, 153, 34, .55); color: #d29922; }
     .card-actions {
       display: flex; align-items: center; justify-content: flex-end; gap: 7px;
@@ -557,6 +561,21 @@
             <button class="quiet-button" id="importLegacy" type="button"><img class="button-icon" src="/icons/lucide/history.svg" alt="">导入旧切换器数据</button>
           </div>
         </section>
+        <section class="setting-section">
+          <h3>健康监控</h3>
+          <p>后台定期探测各智能体当前启用的节点（走免费的模型列表请求，不消耗 token）。节点连续失败会在列表顶部提醒。</p>
+          <div class="field-grid">
+            <div class="field">
+              <label class="check-row"><input id="healthEnabled" type="checkbox" checked>启用后台轮询</label>
+            </div>
+            <div class="field">
+              <label for="healthInterval">轮询间隔（分钟）</label>
+              <input id="healthInterval" type="number" min="1" max="60" step="1" value="5">
+            </div>
+          </div>
+          <p>勾选的智能体在当前节点降级时<strong>自动切换</strong>到同类健康备用（切换前自动备份，可一键撤销）：</p>
+          <div class="field-grid" id="healthAutoTargets"></div>
+        </section>
       </div>
       <div class="settings-panel" id="advancedSettings" role="tabpanel" aria-labelledby="advancedTab" hidden>
         <section class="setting-section">
@@ -664,6 +683,38 @@
       localStorage.setItem("leoapi-diagnostic-settings", JSON.stringify(settings));
       loadDiagnosticSettings();
       return settings;
+    }
+
+    // ---- 健康监控设置（服务端持久化，随 /switch/status 下发） ----
+    function loadHealthSettings() {
+      const health = state?.health || {};
+      $("#healthEnabled").checked = health.enabled !== false;
+      $("#healthInterval").value = health.intervalMinutes || 5;
+      const autoTargets = Array.isArray(health.autoFailoverTargets) ? health.autoFailoverTargets : [];
+      const writable = Object.values(state?.targets || {}).filter((target) => target.writable);
+      $("#healthAutoTargets").innerHTML = writable.map((target) => `<div class="field"><label class="check-row"><input type="checkbox" data-health-auto="${escapeHtml(target.id)}" ${autoTargets.includes(target.id) ? "checked" : ""}>${escapeHtml(target.label)}</label></div>`).join("");
+    }
+
+    async function saveHealthSettings() {
+      const autoFailoverTargets = Array.from(document.querySelectorAll("[data-health-auto]"))
+        .filter((input) => input.checked)
+        .map((input) => input.dataset.healthAuto);
+      const body = {
+        enabled: $("#healthEnabled").checked,
+        intervalMinutes: Math.min(60, Math.max(1, Number($("#healthInterval").value) || 5)),
+        autoFailoverTargets,
+      };
+      const result = await api("/api/leocodebox/switch/health/settings", { method: "POST", body: JSON.stringify(body) });
+      if (state) state.health = { ...state.health, ...result.health };
+    }
+
+    async function healthCheckNow() {
+      showToast("正在重新探测…");
+      const result = await api("/api/leocodebox/switch/health/check-now", { method: "POST", body: "{}" });
+      if (state) state.health = result.health;
+      renderProviders();
+      const entry = result.health?.targets?.[selectedTarget];
+      showToast(entry ? (entry.status === "ok" ? `探测通过${entry.lastLatencyMs != null ? ` · ${entry.lastLatencyMs} ms` : ""}` : entry.lastNote || "探测未通过") : "已完成探测", entry?.status === "ok" ? "ok" : entry ? "error" : "");
     }
 
     function syncTheme() {
@@ -951,6 +1002,10 @@
         overrideNote = ` · ⚠️ 检测到 shell 环境变量 ANTHROPIC_BASE_URL=${shellOverride.baseUrl}（可能来自 cc-switch 等），终端会话会优先走它；本应用内会话由 Leoapi 接管`;
       } else if (selectedTarget === "codex" && shellOverride?.apiKeyPresent && activeProviderForTarget) {
         overrideNote = " · ⚠️ 检测到 shell 环境变量 OPENAI_API_KEY，终端会话会优先使用它；本应用内会话由 Leoapi 接管";
+      } else if (selectedTarget === "gemini" && (shellOverride?.baseUrl || shellOverride?.apiKeyPresent) && activeProviderForTarget) {
+        // Gemini has no in-app runtime, so terminal sessions are the ONLY
+        // sessions — a shell export silently defeating ~/.gemini/.env matters more here.
+        overrideNote = ` · ⚠️ 检测到 shell 环境变量${shellOverride.baseUrl ? ` GOOGLE_GEMINI_BASE_URL=${shellOverride.baseUrl}` : " GEMINI_API_KEY/GOOGLE_API_KEY"}，终端里的 Gemini CLI 会优先使用它而不是 Leoapi 写入的配置`;
       }
       $("#currentTargetMeta").textContent = `${providers.length + 1} 个配置 · 选择需要使用的接口${overrideNote}`;
       if (nativeActive) {
@@ -1013,7 +1068,22 @@
         return healthRank(a) - healthRank(b) || latency(a) - latency(b);
       });
       const section = (label, content) => (content ? `<div class="provider-section-label">${label}</div>${content}` : "");
+      // Live background-monitor banners: degraded active node, or a recent
+      // auto-failover with one-click undo (undo = a plain confirmed re-apply).
+      let healthBanner = "";
+      const liveHealth = state.health?.targets?.[selectedTarget];
+      if (liveHealth?.status === "degraded" && activeProvider && liveHealth.providerId === activeProvider.id) {
+        healthBanner = `<div class="health-banner warn">⚠️ 「${escapeHtml(liveHealth.providerName)}」连续 ${liveHealth.consecutiveFailures} 次后台探测失败${liveHealth.lastNote ? `：${escapeHtml(liveHealth.lastNote)}` : ""}
+          <button class="quiet-button" type="button" data-failover="${escapeHtml(activeProvider.id)}">切换到健康备用</button>
+          <button class="quiet-button" type="button" data-health-check>立即重测</button></div>`;
+      } else if (liveHealth?.lastAutoFailover) {
+        const failover = liveHealth.lastAutoFailover;
+        const fromStillExists = state.providers.some((item) => item.id === failover.fromId);
+        healthBanner = `<div class="health-banner info">已自动切换：「${escapeHtml(failover.fromName)}」探测失败 → 「${escapeHtml(failover.toName)}」（${escapeHtml(relativeTime(failover.at))}）
+          ${fromStillExists ? `<button class="quiet-button" type="button" data-apply="${escapeHtml(failover.fromId)}">撤销，切回原节点</button>` : ""}</div>`;
+      }
       $("#providerList").innerHTML = [
+        healthBanner,
         section("本机原配置", nativeCard),
         section("今天在用", activeProvider ? renderProviderCard(activeProvider) : ""),
         section("备选节点", alternatives.map(renderProviderCard).join("")),
@@ -1581,6 +1651,8 @@
       if (apply) applyProvider(apply.dataset.apply).catch((error) => showToast(error.message, "error"));
       const failover = event.target.closest("[data-failover]");
       if (failover) suggestFailover(failover.dataset.failover).catch((error) => showToast(error.message, "error"));
+      const healthCheck = event.target.closest("[data-health-check]");
+      if (healthCheck) healthCheckNow().catch((error) => showToast(error.message, "error"));
       const test = event.target.closest("[data-test]");
       if (test) openProviderTools(test.dataset.test);
       const copy = event.target.closest("[data-copy]");
@@ -1613,7 +1685,10 @@
     $("#closeProvider").addEventListener("click", () => $("#providerDialog").close());
     $("#cancelProvider").addEventListener("click", () => $("#providerDialog").close());
     $("#refresh").addEventListener("click", () => refresh().catch((error) => showToast(error.message, "error")));
-    $("#openSettings").addEventListener("click", () => { loadDiagnosticSettings(); switchSettingsPanel("general"); $("#settingsDialog").showModal(); });
+    $("#openSettings").addEventListener("click", () => { loadDiagnosticSettings(); loadHealthSettings(); switchSettingsPanel("general"); $("#settingsDialog").showModal(); });
+    $("#healthEnabled").addEventListener("change", () => saveHealthSettings().catch((error) => showToast(error.message, "error")));
+    $("#healthInterval").addEventListener("change", () => saveHealthSettings().catch((error) => showToast(error.message, "error")));
+    $("#healthAutoTargets").addEventListener("change", () => saveHealthSettings().catch((error) => showToast(error.message, "error")));
     $("#closeSettings").addEventListener("click", () => $("#settingsDialog").close());
     $("#generalTab").addEventListener("click", () => switchSettingsPanel("general"));
     $("#advancedTab").addEventListener("click", () => switchSettingsPanel("advanced"));

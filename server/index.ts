@@ -24,7 +24,7 @@ import projectModuleRoutes from './modules/projects/projects.routes.js';
 import notificationRoutes from './modules/notifications/notifications.routes.js';
 import userRoutes from './routes/user.js';
 import pluginsRoutes from './routes/plugins.js';
-import leocodeboxRoutes from './modules/leocodebox/index.js';
+import leocodeboxRoutes, { startHealthMonitor } from './modules/leocodebox/index.js';
 import providerRoutes from './modules/providers/provider.routes.js';
 import agentProfilesRoutes from './modules/agent-profiles/agent-profiles.routes.js';
 import voiceRoutes from './voice-proxy.js';
@@ -250,4 +250,10 @@ app.use(globalErrorHandler);
 void browserUseService.repairAgentMcpRegistration().catch((error) => {
     console.warn('[Browser] Failed to repair managed MCP registration:', error instanceof Error ? error.message : error);
 });
+
+// Background Leoapi health monitor — same gate as the /switch routes it serves.
+if (process.env.LEOCODEBOX_LOCAL_ONLY === '1') {
+  startHealthMonitor();
+}
+
 void startServerLifecycle({ server, appRoot: APP_ROOT, installMode, runningVersion: RUNNING_VERSION });

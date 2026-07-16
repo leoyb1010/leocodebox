@@ -497,10 +497,60 @@ async function testProviderEndpoints(provider: SwitchProvider, options: Endpoint
 
 
 
+export type ProviderHealthProbe = {
+  ok: boolean;
+  latencyMs: number | null;
+  httpStatus: number | null;
+  note: string;
+};
+
+/**
+ * Cost-free health probe for background polling. Unlike
+ * testProviderConnectivity (whose claude branch POSTs a paid 1-token message),
+ * this always uses the GET model-list endpoint, so a 5-minute poll never
+ * spends tokens. Classification is deliberately forgiving: only credential
+ * rejection (401/403), upstream 5xx, network errors and timeouts count as
+ * unhealthy — 404/405 on /models (common on relays) is still "alive".
+ */
+async function probeProviderHealth(provider: SwitchProvider): Promise<ProviderHealthProbe> {
+  const rawBase = safeText(provider.baseUrl, 800);
+  if (!rawBase) {
+    return { ok: false, latencyMs: null, httpStatus: null, note: '未配置 Base URL。' };
+  }
+  const validatedBase = validateProviderBaseUrl(rawBase);
+  const probe = buildModelListProbe(provider, validatedBase);
+  const startedAt = Date.now();
+  try {
+    const response = await fetch(probe.url, {
+      method: 'GET',
+      headers: probe.headers,
+      // Same key-safety stance as every other probe: never follow redirects.
+      redirect: 'manual',
+      signal: AbortSignal.timeout(8000),
+    });
+    const latencyMs = Date.now() - startedAt;
+    if (response.status === 401 || response.status === 403) {
+      return { ok: false, latencyMs, httpStatus: response.status, note: `凭据被拒绝（HTTP ${response.status}）。` };
+    }
+    if (response.status >= 500) {
+      return { ok: false, latencyMs, httpStatus: response.status, note: `上游服务异常（HTTP ${response.status}）。` };
+    }
+    return { ok: true, latencyMs, httpStatus: response.status, note: '探测通过。' };
+  } catch (error) {
+    return {
+      ok: false,
+      latencyMs: Date.now() - startedAt,
+      httpStatus: null,
+      note: isTimeoutError(error) ? '连接超时（8 秒）。' : `无法连接：${errorMessage(error) || '未知错误'}`,
+    };
+  }
+}
+
 export {
   benchmarkProviderModel,
   discoverProviderModels,
   parseBoundedInteger,
+  probeProviderHealth,
   testProviderConnectivity,
   testProviderEndpoints,
   validateProviderBaseUrl,

@@ -396,4 +396,97 @@ async function importCcSwitchProviders(store: ProviderStore): Promise<{ dbFound:
 
 
 
-export { detectActiveByTarget, importCcSwitchProviders, importCurrentProviders };
+/**
+ * Adopt hand edits from the live config into the currently-active provider
+ * record for `target`, so switching away doesn't lose them and switching back
+ * restores what the user actually runs today.
+ *
+ * Deliberately narrow (lean write-back, not cc-switch's global snippet system):
+ * - Only fires when the live config still points at the SAME destination we
+ *   applied (base URL / managed marker match). If another tool rewrote the
+ *   config to a different endpoint, we must NOT pollute the stored provider.
+ * - claude/codex/gemini only. opencode/hermes configs are fully-managed
+ *   fragments whose blocks are documented as "may be replaced" — hand edits
+ *   there are not a supported surface.
+ *
+ * Mutates `store` in place; the caller persists. Returns true when anything
+ * was adopted.
+ */
+async function adoptLiveProviderEdits(store: ProviderStore, target: string): Promise<boolean> {
+  const activeId = store.activeByTarget?.[target];
+  if (!activeId) return false;
+  const provider = store.providers.find((item) => item.id === activeId);
+  if (!provider) return false;
+
+  const adopt = (updates: Partial<Pick<SwitchProvider, 'apiKey' | 'model'>> & { modelMapping?: Partial<SwitchProvider['modelMapping']> }): boolean => {
+    let changed = false;
+    if (updates.apiKey && updates.apiKey !== provider.apiKey) {
+      provider.apiKey = safeText(updates.apiKey, 4000);
+      changed = true;
+    }
+    if (updates.model && updates.model !== provider.model) {
+      provider.model = safeText(updates.model, 200);
+      changed = true;
+    }
+    if (updates.modelMapping) {
+      for (const slot of ['sonnet', 'opus', 'haiku'] as const) {
+        const value = safeText(updates.modelMapping[slot] || '', 240);
+        if (value && value !== provider.modelMapping[slot]) {
+          provider.modelMapping[slot] = value;
+          changed = true;
+        }
+      }
+    }
+    if (changed) provider.updatedAt = new Date().toISOString();
+    return changed;
+  };
+
+  try {
+    if (target === 'claude') {
+      const [settingsPath] = targetConfigPaths('claude');
+      const settings = await readJsonFile<JsonRecord | null>(settingsPath, null);
+      const env = asStringRecord(settings?.env);
+      const liveBase = (env.ANTHROPIC_BASE_URL || '').replace(/\/+$/, '');
+      if (!liveBase || liveBase !== provider.baseUrl) return false;
+      return adopt({
+        apiKey: env.ANTHROPIC_AUTH_TOKEN || env.ANTHROPIC_API_KEY || '',
+        model: env.ANTHROPIC_MODEL || '',
+        modelMapping: {
+          sonnet: env.ANTHROPIC_DEFAULT_SONNET_MODEL || '',
+          opus: env.ANTHROPIC_DEFAULT_OPUS_MODEL || '',
+          haiku: env.ANTHROPIC_DEFAULT_HAIKU_MODEL || '',
+        },
+      });
+    }
+
+    if (target === 'codex') {
+      const [authPath, configPath] = targetConfigPaths('codex');
+      const [auth, config] = await Promise.all([
+        readJsonFile<StringRecord>(authPath, {}),
+        fs.readFile(configPath, 'utf8').catch(() => ''),
+      ]);
+      // Only adopt while our managed provider is still selected in config.toml.
+      if (!config.includes(`model_provider = "leocodebox_${sanitizeIdPart(provider.id)}"`)) return false;
+      return adopt({
+        apiKey: auth.OPENAI_API_KEY || '',
+        model: config.match(/^\s*model\s*=\s*["']([^"']+)["']/m)?.[1] || '',
+      });
+    }
+
+    if (target === 'gemini') {
+      const [envPath] = targetConfigPaths('gemini');
+      const env = parseEnv(await fs.readFile(envPath, 'utf8'));
+      const liveBase = (env.GOOGLE_GEMINI_BASE_URL || '').replace(/\/+$/, '');
+      if (!liveBase || liveBase !== provider.baseUrl) return false;
+      return adopt({
+        apiKey: env.GEMINI_API_KEY || env.GOOGLE_API_KEY || '',
+        model: env.GEMINI_MODEL || '',
+      });
+    }
+  } catch {
+    // Write-back is best-effort: an unreadable config must never block a switch.
+  }
+  return false;
+}
+
+export { adoptLiveProviderEdits, detectActiveByTarget, importCcSwitchProviders, importCurrentProviders };
