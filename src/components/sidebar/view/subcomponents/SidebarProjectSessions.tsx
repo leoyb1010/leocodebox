@@ -46,8 +46,8 @@ function SessionListSkeleton() {
           <div className="flex items-start gap-2">
             <div className="skeleton mt-0.5 h-3 w-3 rounded-full" />
             <div className="flex-1 space-y-1">
-              <div className="skeleton h-3 rounded" style={{ width: `${60 + index * 15}%` }} />
-              <div className="skeleton h-2 w-1/2 rounded" />
+              <div className="skeleton h-3 rounded-md" style={{ width: `${60 + index * 15}%` }} />
+              <div className="skeleton h-2 w-1/2 rounded-md" />
             </div>
           </div>
         </div>
@@ -90,7 +90,7 @@ export default function SidebarProjectSessions({
     <div className="ml-3 space-y-1 border-l border-border pl-3">
       <div className="px-3 pb-1 pt-1 md:hidden">
         <button
-          className="flex h-8 w-full items-center justify-center gap-2 rounded-md bg-primary text-xs font-medium text-primary-foreground transition-all duration-150 hover:bg-primary/90 active:scale-[0.98]"
+          className="flex h-8 w-full items-center justify-center gap-2 rounded-md bg-primary text-xs font-medium text-primary-foreground transition-all duration-fast hover:bg-primary/90 active:scale-[0.98]"
           onClick={() => {
             onProjectSelect(project);
             onNewSession(project);

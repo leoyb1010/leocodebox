@@ -22,7 +22,7 @@ function HighlightedSnippet({ snippet, highlights }: { snippet: string; highligh
       parts.push(snippet.slice(cursor, h.start));
     }
     parts.push(
-      <mark key={h.start} className="rounded-sm bg-yellow-200 px-0.5 text-foreground dark:bg-yellow-800">
+      <mark key={h.start} className="rounded-md bg-warning px-0.5 text-foreground dark:bg-warning">
         {snippet.slice(h.start, h.end)}
       </mark>
     );
@@ -261,7 +261,7 @@ export default function SidebarContent({
               {isSearching && searchProgress && (
                 <div className="mx-1 h-0.5 overflow-hidden rounded-full bg-muted">
                   <div
-                    className="h-full rounded-full bg-primary/60 transition-all duration-300"
+                    className="h-full rounded-full bg-primary/60 transition-all duration-slow"
                     style={{ width: `${Math.round((searchProgress.scannedProjects / searchProgress.totalProjects) * 100)}%` }}
                   />
                 </div>
@@ -294,7 +294,7 @@ export default function SidebarContent({
                           {session.sessionSummary}
                         </span>
                         {session.provider && session.provider !== 'claude' && (
-                          <span className="flex-shrink-0 rounded bg-muted px-1 py-0.5 text-[9px] uppercase text-muted-foreground">
+                          <span className="flex-shrink-0 rounded-md bg-muted px-1 py-0.5 text-[9px] uppercase text-muted-foreground">
                             {session.provider}
                           </span>
                         )}
@@ -335,16 +335,16 @@ export default function SidebarContent({
             </div>
           ) : (
             <div className="space-y-2">
-              <div className="mx-2 flex items-center justify-between rounded-lg border border-border/60 bg-card/50 px-3 py-2 shadow-sm">
+              <div className="mx-2 flex items-center justify-between rounded-lg border border-border/60 bg-card/50 px-3 py-2 shadow-elevation-1">
                 <div className="flex min-w-0 items-center gap-2">
-                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                  <span className="flex h-6 w-6 items-center justify-center rounded-md bg-success/10 text-success dark:text-success">
                     <Activity className="h-3.5 w-3.5" />
                   </span>
                   <span className="truncate text-xs font-normal text-foreground">
                     {t('running.title', 'Running now')}
                   </span>
                 </div>
-                <span className="rounded-full bg-emerald-500/10 px-2 py-0.5 text-[11px] font-normal text-emerald-700 dark:text-emerald-300">
+                <span className="rounded-full bg-success/10 px-2 py-0.5 text-[11px] font-normal text-success dark:text-success">
                   {runningSessionsCount}
                 </span>
               </div>
@@ -394,7 +394,7 @@ export default function SidebarContent({
                 const projectSessions = getAllSessions(project);
 
                 return (
-                  <div key={project.projectId} className="overflow-hidden rounded-xl border border-border/70 bg-card/60 shadow-sm">
+                  <div key={project.projectId} className="overflow-hidden rounded-xl border border-border/70 bg-card/60 shadow-elevation-1">
                     <div className="flex items-start justify-between gap-3 border-b border-border/60 px-3 py-2.5">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
@@ -411,7 +411,7 @@ export default function SidebarContent({
                         </p>
                       </div>
                       <button
-                        className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 transition-colors hover:bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
+                        className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-success text-success transition-colors hover:bg-success dark:bg-success/20 dark:text-success dark:hover:bg-success/30"
                         onClick={() => onRestoreArchivedProject(project.projectId)}
                         title={t('archived.restoreProject', 'Restore workspace')}
                       >
@@ -483,7 +483,7 @@ export default function SidebarContent({
                 );
               })}
               {groupedArchivedSessions.map((group) => (
-                <div key={group.key} className="overflow-hidden rounded-xl border border-border/70 bg-card/60 shadow-sm">
+                <div key={group.key} className="overflow-hidden rounded-xl border border-border/70 bg-card/60 shadow-elevation-1">
                   <div className="flex items-start justify-between gap-3 border-b border-border/60 px-3 py-2.5">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -532,14 +532,14 @@ export default function SidebarContent({
                           </div>
                         </button>
                         <button
-                          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-700 transition-colors hover:bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-300 dark:hover:bg-emerald-900/30"
+                          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-success text-success transition-colors hover:bg-success dark:bg-success/20 dark:text-success dark:hover:bg-success/30"
                           onClick={() => onRestoreArchivedSession(session.sessionId)}
                           title={t('archived.restore', 'Restore session')}
                         >
                           <RotateCcw className="h-3.5 w-3.5" />
                         </button>
                         <button
-                          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-red-50 text-red-700 transition-colors hover:bg-red-100 dark:bg-red-900/20 dark:text-red-300 dark:hover:bg-red-900/30"
+                          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-destructive text-destructive transition-colors hover:bg-destructive dark:bg-destructive/20 dark:text-destructive dark:hover:bg-destructive/30"
                           onClick={() => onDeleteArchivedSession(session)}
                           title={t('archived.deletePermanently', 'Delete permanently')}
                         >

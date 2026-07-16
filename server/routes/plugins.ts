@@ -39,9 +39,9 @@ function localizePlugin<T extends { name: string; displayName?: string; descript
 }
 
 // GET / — List all installed plugins (includes server running status)
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const plugins = scanPlugins().map(p => ({
+    const plugins = (await scanPlugins()).map(p => ({
       ...localizePlugin(p),
       serverRunning: p.server ? isPluginRunning(p.name) : false,
     }));
@@ -52,12 +52,12 @@ router.get('/', (req, res) => {
 });
 
 // GET /:name/manifest — Get single plugin manifest
-router.get('/:name/manifest', (req, res) => {
+router.get('/:name/manifest', async (req, res) => {
   try {
     if (!/^[a-zA-Z0-9_-]+$/.test(req.params.name)) {
       return res.status(400).json({ error: 'Invalid plugin name' });
     }
-    const plugins = scanPlugins();
+    const plugins = await scanPlugins();
     const plugin = plugins.find(p => p.name === req.params.name);
     if (!plugin) {
       return res.status(404).json({ error: 'Plugin not found' });
@@ -69,7 +69,7 @@ router.get('/:name/manifest', (req, res) => {
 });
 
 // GET /:name/assets/* — Serve plugin static files
-router.get('/:name/assets/*', (req, res) => {
+router.get('/:name/assets/*', async (req, res) => {
   const pluginName = req.params.name;
   if (!/^[a-zA-Z0-9_-]+$/.test(pluginName)) {
     return res.status(400).json({ error: 'Invalid plugin name' });
@@ -80,7 +80,7 @@ router.get('/:name/assets/*', (req, res) => {
     return res.status(400).json({ error: 'No asset path specified' });
   }
 
-  const resolvedPath = resolvePluginAssetPath(pluginName, assetPath);
+  const resolvedPath = await resolvePluginAssetPath(pluginName, assetPath);
   if (!resolvedPath) {
     return res.status(404).json({ error: 'Asset not found' });
   }
@@ -119,20 +119,20 @@ router.put('/:name/enable', requireLocalOnly, async (req, res) => {
       return res.status(400).json({ error: '"enabled" must be a boolean' });
     }
 
-    const plugins = scanPlugins();
+    const plugins = await scanPlugins();
     const plugin = plugins.find(p => p.name === req.params.name);
     if (!plugin) {
       return res.status(404).json({ error: 'Plugin not found' });
     }
 
-    const config = getPluginsConfig();
+    const config = await getPluginsConfig();
     config[req.params.name] = { ...config[req.params.name], enabled };
-    savePluginsConfig(config);
+    await savePluginsConfig(config);
 
     // Start or stop the plugin server as needed
     if (plugin.server) {
       if (enabled && !isPluginRunning(plugin.name)) {
-        const pluginDir = getPluginDir(plugin.name);
+        const pluginDir = await getPluginDir(plugin.name);
         if (pluginDir) {
           try {
             await startPluginServer(plugin.name, pluginDir, plugin.server);
@@ -168,7 +168,7 @@ router.post('/install', requireLocalOnly, async (req, res) => {
 
     // Auto-start the server if the plugin has one (enabled by default)
     if (manifest.server) {
-      const pluginDir = getPluginDir(manifest.name);
+      const pluginDir = await getPluginDir(manifest.name);
       if (pluginDir) {
         try {
           await startPluginServer(manifest.name, pluginDir, manifest.server);
@@ -202,7 +202,7 @@ router.post('/:name/update', requireLocalOnly, async (req, res) => {
 
     // Restart server if it was running before the update
     if (wasRunning && manifest.server) {
-      const pluginDir = getPluginDir(pluginName);
+      const pluginDir = await getPluginDir(pluginName);
       if (pluginDir) {
         try {
           await startPluginServer(pluginName, pluginDir, manifest.server);
@@ -230,7 +230,7 @@ router.all('/:name/rpc/*', async (req, res) => {
   let port = getPluginPort(pluginName);
   if (!port) {
     // Lazily start the plugin server if it exists and is enabled
-    const plugins = scanPlugins();
+    const plugins = await scanPlugins();
     const plugin = plugins.find(p => p.name === pluginName);
     if (!plugin || !plugin.server) {
       return res.status(503).json({ error: 'Plugin server is not running' });
@@ -238,7 +238,7 @@ router.all('/:name/rpc/*', async (req, res) => {
     if (!plugin.enabled) {
       return res.status(503).json({ error: 'Plugin is disabled' });
     }
-    const pluginDir = path.join(getPluginsDir(), plugin.dirName);
+    const pluginDir = path.join(await getPluginsDir(), plugin.dirName);
     try {
       port = await startPluginServer(pluginName, pluginDir, plugin.server);
     } catch (err) {
@@ -247,7 +247,7 @@ router.all('/:name/rpc/*', async (req, res) => {
   }
 
   // Inject configured secrets as headers
-  const config = getPluginsConfig();
+  const config = await getPluginsConfig();
   const pluginConfig = config[pluginName] || {};
   const secrets = pluginConfig.secrets || {};
 

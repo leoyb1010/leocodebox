@@ -75,12 +75,12 @@ export default function PermissionRequestsBanner({
                 <div>
                   <span className="font-medium text-foreground">Permission required</span>
                   <span className="ml-2 text-muted-foreground">
-                    Tool: <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{request.toolName}</code>
+                    Tool: <code className="rounded-md bg-muted px-1.5 py-0.5 text-xs">{request.toolName}</code>
                   </span>
                 </div>
                 {permissionEntry && (
                   <div className="mt-1 text-xs text-muted-foreground">
-                    Allow rule: <code className="rounded bg-muted px-1 py-0.5 text-xs">{permissionEntry}</code>
+                    Allow rule: <code className="rounded-md bg-muted px-1 py-0.5 text-xs">{permissionEntry}</code>
                   </div>
                 )}
               </ConfirmationRequest>

@@ -29,6 +29,7 @@ export type ProviderModelsCacheInfo = {
 export type AppTab = 'chat' | 'files' | 'shell' | 'git' | 'tasks' | 'browser' | 'audit' | `plugin:${string}`;
 
 export interface ProjectSession {
+  isPinned?: boolean;
   id: string;
   title?: string;
   summary?: string;

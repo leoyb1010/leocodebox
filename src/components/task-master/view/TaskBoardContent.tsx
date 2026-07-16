@@ -39,11 +39,11 @@ function KanbanColumns({
       )}
     >
       {columns.map((column) => (
-        <div key={column.id} className={cn('rounded-xl border shadow-sm transition-shadow hover:shadow-md', column.color)}>
+        <div key={column.id} className={cn('rounded-xl border shadow-elevation-1 transition-shadow hover:shadow-elevation-2', column.color)}>
           <div className={cn('px-4 py-3 rounded-t-xl border-b', column.headerColor)}>
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold">{column.title}</h3>
-              <span className="rounded-full bg-white/60 px-2 py-1 text-xs font-medium dark:bg-black/20">
+              <span className="rounded-full bg-card/60 px-2 py-1 text-xs font-medium dark:bg-black/20">
                 {column.tasks.length}
               </span>
             </div>
@@ -51,12 +51,12 @@ function KanbanColumns({
 
           <div className="max-h-[calc(100vh-300px)] min-h-[200px] space-y-3 overflow-y-auto p-3">
             {column.tasks.length === 0 ? (
-              <div className="py-8 text-center text-gray-400 dark:text-gray-500">
-                <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-gray-200 dark:bg-gray-700">
-                  <div className="h-3 w-3 rounded-full bg-gray-300 dark:bg-gray-600" />
+              <div className="py-8 text-center text-muted-foreground dark:text-muted-foreground">
+                <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full bg-muted dark:bg-muted">
+                  <div className="h-3 w-3 rounded-full bg-muted dark:bg-muted" />
                 </div>
-                <div className="text-xs font-medium text-gray-500 dark:text-gray-400">{t('kanban.noTasksYet')}</div>
-                <div className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+                <div className="text-xs font-medium text-muted-foreground dark:text-muted-foreground">{t('kanban.noTasksYet')}</div>
+                <div className="mt-1 text-xs text-muted-foreground dark:text-muted-foreground">
                   {column.status === 'pending'
                     ? t('kanban.tasksWillAppear')
                     : column.status === 'in-progress'
@@ -73,7 +73,7 @@ function KanbanColumns({
                   task={task}
                   onClick={() => onTaskClick(task)}
                   showParent={showParentTasks}
-                  className="w-full shadow-sm hover:shadow-md"
+                  className="w-full shadow-elevation-1 hover:shadow-elevation-2"
                 />
               ))
             )}
@@ -97,7 +97,7 @@ export default function TaskBoardContent({
   if (filteredTaskCount === 0) {
     return (
       <div className="py-12 text-center">
-        <div className="text-gray-500 dark:text-gray-400">
+        <div className="text-muted-foreground dark:text-muted-foreground">
           <Search className="mx-auto mb-4 h-12 w-12 opacity-50" />
           <h3 className="mb-2 text-lg font-medium">{t('noMatchingTasks.title')}</h3>
           <p className="text-sm">{t('noMatchingTasks.description')}</p>

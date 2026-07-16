@@ -90,7 +90,7 @@ export default function AgentHub({ onAfterLaunch }: AgentHubProps) {
       </div>
 
       {(error || importError) && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+        <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning dark:text-warning">
           {importError || error}
         </div>
       )}
@@ -119,7 +119,7 @@ export default function AgentHub({ onAfterLaunch }: AgentHubProps) {
           {profiles.map((profile) => (
             <div
               key={profile.id}
-              className="group relative flex flex-col overflow-hidden rounded-xl border border-border/70 bg-card p-4 transition-all hover:border-primary/40 hover:shadow-md hover:shadow-primary/5"
+              className="group relative flex flex-col overflow-hidden rounded-xl border border-border/70 bg-card p-4 transition-all hover:border-primary/40 hover:shadow-elevation-2 hover:shadow-primary/5"
             >
               <div className="flex items-start gap-3">
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted/60 text-xl">{profile.emoji}</span>
@@ -166,7 +166,7 @@ export default function AgentHub({ onAfterLaunch }: AgentHubProps) {
                   type="button"
                   onClick={() => handleDelete(profile)}
                   title={t('agentHub.delete', { defaultValue: '删除' })}
-                  className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-red-500/10 hover:text-red-600"
+                  className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
@@ -178,7 +178,7 @@ export default function AgentHub({ onAfterLaunch }: AgentHubProps) {
 
       <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) closeDialog(); }}>
         <DialogContent
-          className={cn('w-[min(560px,92vw)] overflow-hidden rounded-xl border border-border bg-card p-0 shadow-xl')}
+          className={cn('w-[min(560px,92vw)] overflow-hidden rounded-xl border border-border bg-card p-0 shadow-elevation-3')}
           onEscapeKeyDown={closeDialog}
           onPointerDownOutside={closeDialog}
         >

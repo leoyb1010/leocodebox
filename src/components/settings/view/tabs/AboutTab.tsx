@@ -77,7 +77,7 @@ export default function AboutTab() {
       <div className="relative h-40 overflow-hidden rounded-lg border border-border/60 bg-zinc-950">
         <img src="/visuals/release/feature-overview.webp" alt="" className="h-full w-full object-cover opacity-90" />
         <div className="absolute inset-0 bg-black/35" />
-        <div className="absolute inset-y-0 left-0 flex items-end p-5 text-sm font-medium text-white">
+        <div className="absolute inset-y-0 left-0 flex items-end p-5 text-sm font-medium text-primary-foreground">
           {desktopUpdate?.status === 'downloaded'
             ? t('about.downloaded', { version: desktopUpdate.latestVersion })
             : t('about.localData')}
@@ -134,7 +134,7 @@ export default function AboutTab() {
             <h3 className="text-sm font-medium text-foreground">{t('about.updates')}</h3>
             <p aria-live="polite" className="mt-1 text-xs text-muted-foreground">{updateStatusText(desktopUpdate, t)}</p>
           </div>
-          {desktopUpdate?.status === 'up-to-date' && <CheckCircle2 className="h-5 w-5 text-emerald-600" />}
+          {desktopUpdate?.status === 'up-to-date' && <CheckCircle2 className="h-5 w-5 text-success" />}
         </div>
 
         {window.leocodeboxDesktopUpdater && desktopUpdate?.credentialRequired && !desktopUpdate.configured && (

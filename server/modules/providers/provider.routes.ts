@@ -626,6 +626,27 @@ router.put(
   }),
 );
 
+router.post(
+  '/sessions/:sessionId/pin',
+  asyncHandler(async (req: Request, res: Response) => {
+    const sessionId = parseSessionId(req.params.sessionId);
+    const pinned = Boolean((req.body as Record<string, unknown> | undefined)?.pinned);
+    res.json(createApiSuccessResponse(sessionsService.setSessionPinned(sessionId, pinned)));
+  }),
+);
+
+router.get(
+  '/sessions/:sessionId/export',
+  asyncHandler(async (req: Request, res: Response) => {
+    const sessionId = parseSessionId(req.params.sessionId);
+    const format = req.query.format === 'json' ? 'json' : 'markdown';
+    const exported = await sessionsService.exportSession(sessionId, format);
+    res.setHeader('Content-Type', exported.mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${exported.fileName}"`);
+    res.send(exported.content);
+  }),
+);
+
 router.get(
   '/sessions/:sessionId/messages',
   asyncHandler(async (req: Request, res: Response) => {

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 
-import { projectsDb, sessionsDb, sessionRuntimeStateDb } from '@/modules/database/index.js';
+import { appConfigDb, projectsDb, sessionsDb, sessionRuntimeStateDb } from '@/modules/database/index.js';
 import { chatRunRegistry } from '@/modules/websocket/index.js';
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
 import type {
@@ -12,6 +12,32 @@ import type {
   NormalizedMessage,
 } from '@/shared/types.js';
 import { AppError, normalizeProjectPath } from '@/shared/utils.js';
+
+
+const PINNED_SESSIONS_KEY = 'pinned_session_ids';
+
+function readPinnedSessionIds(): Set<string> {
+  try {
+    const parsed = JSON.parse(appConfigDb.get(PINNED_SESSIONS_KEY) || '[]');
+    return new Set(Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === 'string') : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writePinnedSessionIds(ids: Set<string>): void {
+  appConfigDb.set(PINNED_SESSIONS_KEY, JSON.stringify([...ids].slice(-500)));
+}
+
+function messageToMarkdown(message: NormalizedMessage): string {
+  const timestamp = message.timestamp ? ` · ${message.timestamp}` : '';
+  if (message.kind === 'tool_use') {
+    return `### Tool: ${message.toolName || 'Tool'}${timestamp}\n\n\`\`\`json\n${JSON.stringify(message.toolInput ?? {}, null, 2)}\n\`\`\``;
+  }
+  const role = message.role === 'user' ? 'User' : message.kind === 'thinking' ? 'Thinking' : 'Assistant';
+  const content = typeof message.content === 'string' ? message.content : '';
+  return `## ${role}${timestamp}\n\n${content}`;
+}
 
 type CreateAppSessionResult = {
   sessionId: string;
@@ -301,6 +327,44 @@ export const sessionsService = {
 
     sessionsDb.updateSessionIsArchived(sessionId, false);
     return { sessionId, isArchived: false };
+  },
+
+  isSessionPinned(sessionId: string): boolean {
+    return readPinnedSessionIds().has(sessionId);
+  },
+
+  setSessionPinned(sessionId: string, pinned: boolean): { sessionId: string; isPinned: boolean } {
+    if (!sessionsDb.getSessionById(sessionId)) {
+      throw new AppError(`Session "${sessionId}" was not found.`, { code: 'SESSION_NOT_FOUND', statusCode: 404 });
+    }
+    const ids = readPinnedSessionIds();
+    if (pinned) ids.add(sessionId); else ids.delete(sessionId);
+    writePinnedSessionIds(ids);
+    return { sessionId, isPinned: pinned };
+  },
+
+  async exportSession(sessionId: string, format: 'markdown' | 'json'): Promise<{ fileName: string; mimeType: string; content: string }> {
+    const session = sessionsDb.getSessionById(sessionId);
+    if (!session) {
+      throw new AppError(`Session "${sessionId}" was not found.`, { code: 'SESSION_NOT_FOUND', statusCode: 404 });
+    }
+    const history = await this.fetchHistory(sessionId, { limit: null, offset: 0 });
+    const safeTitle = (session.custom_name || sessionId).replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '') || sessionId;
+    if (format === 'json') {
+      return {
+        fileName: `${safeTitle}.json`,
+        mimeType: 'application/json; charset=utf-8',
+        content: JSON.stringify({ session, exportedAt: new Date().toISOString(), ...history }, null, 2),
+      };
+    }
+    const title = session.custom_name || `Session ${sessionId}`;
+    const header = `# ${title}\n\n- Provider: ${session.provider}\n- Session: ${sessionId}\n- Project: ${session.project_path || 'Unknown'}\n- Exported: ${new Date().toISOString()}\n`;
+    return {
+      fileName: `${safeTitle}.md`,
+      mimeType: 'text/markdown; charset=utf-8',
+      content: `${header}\n${history.messages.map(messageToMarkdown).join('\n\n---\n\n')}\n`,
+    };
+
   },
 
   /**

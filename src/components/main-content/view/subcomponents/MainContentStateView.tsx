@@ -38,7 +38,7 @@ export default function MainContentStateView({ mode, isMobile, onMenuClick }: Ma
       ) : (
         <div className="leocodebox-workspace-enter flex flex-1 items-center justify-center px-6">
           <div className="grid w-full max-w-5xl items-center gap-8 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-            <picture className="block overflow-hidden rounded-lg border border-border/60 bg-muted/20 shadow-sm">
+            <picture className="block overflow-hidden rounded-lg border border-border/60 bg-muted/20 shadow-elevation-1">
               <source media="(prefers-color-scheme: dark)" srcSet="/visuals/onboarding/local-workbench-dark.webp" />
               <img src="/visuals/onboarding/local-workbench-light.webp" alt="" className="aspect-[16/10] w-full object-cover" />
             </picture>
@@ -67,7 +67,7 @@ export default function MainContentStateView({ mode, isMobile, onMenuClick }: Ma
               <div className="flex items-center gap-3 py-3.5">
                 <span className="flex h-7 w-7 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground">3</span>
                 <span className="flex-1 text-foreground">{t('workspaceRuntime.stepLocalOnly')}</span>
-                <ShieldCheck className="h-4 w-4 text-emerald-500" />
+                <ShieldCheck className="h-4 w-4 text-success" />
               </div>
             </div>
 

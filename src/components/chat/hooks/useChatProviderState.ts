@@ -653,5 +653,7 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
     selectProviderModel,
     setStoredProviderEffort,
     resolvePermissionModeForProvider,
+    supportsPermissionRequests: providerCapabilities?.[provider]?.supportsPermissionRequests ?? provider === 'claude',
+    supportsTokenUsage: providerCapabilities?.[provider]?.supportsTokenUsage ?? provider !== 'cursor',
   };
 }

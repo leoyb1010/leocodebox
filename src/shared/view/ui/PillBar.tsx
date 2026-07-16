@@ -28,7 +28,7 @@ export function PillBar({ children, className }: PillBarProps) {
     <div ref={rootRef} className={cn('relative inline-flex items-center gap-[2px] rounded-lg bg-muted/60 p-[3px]', className)}>
       <span
         aria-hidden
-        className="pointer-events-none absolute bottom-[3px] top-[3px] rounded-md bg-background shadow-[var(--elevation-1)] transition-[transform,width,opacity] duration-200 ease-out"
+        className="pointer-events-none absolute bottom-[3px] top-[3px] rounded-md bg-background shadow-elevation-2 transition-[transform,width,opacity] duration-base ease-out"
         style={{ width: indicator.width, transform: `translateX(${indicator.x}px)`, opacity: indicator.visible ? 1 : 0 }}
       />
       {children}

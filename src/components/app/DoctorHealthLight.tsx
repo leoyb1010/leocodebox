@@ -7,9 +7,9 @@ import { useDoctorReport } from '../../hooks/useDoctorReport';
 import { resolveDoctorTone, type DoctorTone } from './doctorLight';
 
 const TONE_DOT: Record<DoctorTone, string> = {
-  ok: 'bg-emerald-500',
-  warn: 'bg-amber-500',
-  fail: 'bg-red-500',
+  ok: 'bg-success',
+  warn: 'bg-warning',
+  fail: 'bg-destructive',
 };
 
 /** Status-bar environment health light with an upward check-list popover. */
@@ -65,7 +65,7 @@ export default function DoctorHealthLight() {
         <Stethoscope className="h-3 w-3" />
       </button>
       {open && (
-        <div className="absolute bottom-full right-0 z-[70] mb-2 max-h-[60vh] w-72 overflow-y-auto rounded-lg border border-border bg-popover p-2 text-popover-foreground shadow-lg">
+        <div className="absolute bottom-full right-0 z-[70] mb-2 max-h-[60vh] w-72 overflow-y-auto rounded-lg border border-border bg-popover p-2 text-popover-foreground shadow-elevation-2">
           <div className="px-2 py-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
             {t('workspaceShell.healthTitle', { defaultValue: '环境体检' })}
           </div>
@@ -76,7 +76,7 @@ export default function DoctorHealthLight() {
           ) : (
             <ul className="space-y-0.5">
               {report!.checks.map((check) => (
-                <li key={check.id} className="flex items-start gap-2 rounded px-2 py-1.5 text-xs hover:bg-accent/50">
+                <li key={check.id} className="flex items-start gap-2 rounded-md px-2 py-1.5 text-xs hover:bg-accent/50">
                   <span className={`mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full ${TONE_DOT[check.status]}`} />
                   <span className="min-w-0 flex-1">
                     <span className="font-medium text-foreground">{check.label}</span>

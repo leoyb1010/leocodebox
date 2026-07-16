@@ -1,5 +1,3 @@
-import fsSync from 'node:fs';
-
 import Database from 'better-sqlite3';
 
 import { parseImagesInputTag } from '@/shared/image-attachments.js';
@@ -13,7 +11,6 @@ import {
   readObjectRecord,
   readJsonRecord,
   readOptionalString,
-  sliceTailPage,
   unwrapJsonStringLiteral,
 } from '@/shared/utils.js';
 
@@ -41,15 +38,15 @@ let cachedOpenCodeDatabasePath = '';
 
 const openOpenCodeDatabase = (): Database.Database | null => {
   const dbPath = getOpenCodeDatabasePath();
-  if (!fsSync.existsSync(dbPath)) {
-    return null;
-  }
-
   const isTest = process.env.NODE_ENV === 'test' || Boolean(process.env.LEOCODEBOX_TEST_HOME);
   if (!isTest && cachedOpenCodeDatabase && cachedOpenCodeDatabasePath === dbPath) return cachedOpenCodeDatabase;
-  const database = new Database(dbPath, { readonly: true, fileMustExist: true });
-  if (!isTest) { cachedOpenCodeDatabase = database; cachedOpenCodeDatabasePath = dbPath; }
-  return database;
+  try {
+    const database = new Database(dbPath, { readonly: true, fileMustExist: true });
+    if (!isTest) { cachedOpenCodeDatabase = database; cachedOpenCodeDatabasePath = dbPath; }
+    return database;
+  } catch {
+    return null;
+  }
 };
 
 const formatToolContent = (value: unknown): string => {
@@ -325,38 +322,91 @@ export class OpenCodeSessionsProvider implements IProviderSessions {
     }
 
     try {
-      const rows = db.prepare(`
-        SELECT
-          m.id AS message_id,
-          m.time_created AS message_time_created,
-          m.data AS message_data,
-          p.id AS part_id,
-          p.time_created AS part_time_created,
-          p.data AS part_data
-        FROM message m
-        LEFT JOIN part p
-          ON p.session_id = m.session_id
-         AND p.message_id = m.id
-        WHERE m.session_id = ?
-        ORDER BY
-          COALESCE(m.time_created, 0),
-          m.id,
-          COALESCE(p.time_created, 0),
-          p.id
-      `).all(providerSessionId) as OpenCodeHistoryRow[];
+      // Build the pageable event stream in SQLite instead of loading the full
+      // transcript into JavaScript. Each CTE row maps to exactly one normalized
+      // event: a supported part or an assistant message-level error.
+      const historyCte = `
+        WITH history AS (
+          SELECT
+            m.id AS message_id,
+            m.time_created AS message_time_created,
+            m.data AS message_data,
+            p.id AS part_id,
+            p.time_created AS part_time_created,
+            p.data AS part_data,
+            1 AS event_rank
+          FROM message m
+          JOIN part p
+            ON p.session_id = m.session_id
+           AND p.message_id = m.id
+          WHERE m.session_id = @sessionId
+            AND json_valid(p.data)
+            AND json_extract(p.data, '$.type') IN ('text', 'reasoning', 'tool', 'step-finish', 'patch', 'agent')
+            AND (
+              json_extract(p.data, '$.type') NOT IN ('text', 'reasoning')
+              OR trim(COALESCE(json_extract(p.data, '$.text'), json_extract(p.data, '$.content'), '')) <> ''
+            )
 
-      const normalized = this.normalizeHistoryRows(rows, sessionId);
-      const tokenUsage = aggregateOpenCodeSessionTokenUsage(db, providerSessionId);
+          UNION ALL
 
+          SELECT
+            m.id AS message_id,
+            m.time_created AS message_time_created,
+            m.data AS message_data,
+            NULL AS part_id,
+            m.time_created AS part_time_created,
+            NULL AS part_data,
+            0 AS event_rank
+          FROM message m
+          WHERE m.session_id = @sessionId
+            AND json_valid(m.data)
+            AND json_extract(m.data, '$.role') = 'assistant'
+            AND json_type(m.data, '$.error') IS NOT NULL
+        )
+      `;
+      const countRow = db.prepare(`${historyCte} SELECT COUNT(*) AS total FROM history`).get({
+        sessionId: providerSessionId,
+      }) as { total: number } | undefined;
+      const total = Number(countRow?.total ?? 0);
       const normalizedOffset = Math.max(0, offset);
       const normalizedLimit = limit === null ? null : Math.max(0, limit);
-      const total = normalized.length;
-      const { page, hasMore } = sliceTailPage(normalized, normalizedLimit, normalizedOffset);
+      const pageEnd = Math.max(0, total - normalizedOffset);
+      const pageStart = normalizedLimit === null
+        ? 0
+        : Math.max(0, pageEnd - normalizedLimit);
+      const pageSize = Math.max(0, pageEnd - pageStart);
+
+      const rows = pageSize === 0
+        ? []
+        : db.prepare(`${historyCte}
+            SELECT
+              message_id,
+              message_time_created,
+              message_data,
+              part_id,
+              part_time_created,
+              part_data
+            FROM history
+            ORDER BY
+              COALESCE(message_time_created, 0),
+              message_id,
+              COALESCE(part_time_created, 0),
+              event_rank,
+              part_id
+            LIMIT @pageSize OFFSET @pageStart
+          `).all({
+            sessionId: providerSessionId,
+            pageSize,
+            pageStart,
+          }) as OpenCodeHistoryRow[];
+
+      const messages = this.normalizeHistoryRows(rows, sessionId);
+      const tokenUsage = aggregateOpenCodeSessionTokenUsage(db, providerSessionId);
 
       return {
-        messages: page,
+        messages,
         total,
-        hasMore,
+        hasMore: pageStart > 0,
         offset: normalizedOffset,
         limit: normalizedLimit,
         tokenUsage,

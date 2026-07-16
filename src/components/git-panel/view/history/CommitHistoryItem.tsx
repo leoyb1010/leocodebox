@@ -76,7 +76,7 @@ export default function CommitHistoryItem({
         className="flex w-full cursor-pointer items-start border-0 bg-transparent p-3 text-left transition-colors hover:bg-accent/50"
         onClick={onToggle}
       >
-        <span className="mr-2 mt-1 rounded p-0.5 hover:bg-accent">
+        <span className="mr-2 mt-1 rounded-md p-0.5 hover:bg-accent">
           {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
         </span>
         <div className="min-w-0 flex-1">
@@ -132,11 +132,11 @@ export default function CommitHistoryItem({
                 </div>
                 <div>
                   <div className="text-muted-foreground/60">Added</div>
-                  <div className="font-semibold text-green-600 dark:text-green-400">+{fileSummary.totalInsertions}</div>
+                  <div className="font-semibold text-success dark:text-success">+{fileSummary.totalInsertions}</div>
                 </div>
                 <div>
                   <div className="text-muted-foreground/60">Removed</div>
-                  <div className="font-semibold text-red-600 dark:text-red-400">-{fileSummary.totalDeletions}</div>
+                  <div className="font-semibold text-destructive dark:text-destructive">-{fileSummary.totalDeletions}</div>
                 </div>
               </div>
             )}
@@ -156,7 +156,7 @@ export default function CommitHistoryItem({
                       }`}
                     >
                       <span
-                        className={`inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border text-[9px] font-bold ${getStatusBadgeClass(file.status)}`}
+                        className={`inline-flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-md border text-[9px] font-bold ${getStatusBadgeClass(file.status)}`}
                       >
                         {file.status}
                       </span>
@@ -168,11 +168,11 @@ export default function CommitHistoryItem({
                       </span>
                       <span className="flex-shrink-0 font-mono text-muted-foreground/60">
                         {file.insertions > 0 && (
-                          <span className="text-green-600 dark:text-green-400">+{file.insertions}</span>
+                          <span className="text-success dark:text-success">+{file.insertions}</span>
                         )}
                         {file.insertions > 0 && file.deletions > 0 && '/'}
                         {file.deletions > 0 && (
-                          <span className="text-red-600 dark:text-red-400">-{file.deletions}</span>
+                          <span className="text-destructive dark:text-destructive">-{file.deletions}</span>
                         )}
                       </span>
                     </div>

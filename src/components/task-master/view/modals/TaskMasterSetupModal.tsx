@@ -33,21 +33,21 @@ export default function TaskMasterSetupModal({ isOpen, project, onClose, onAfter
 
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 p-4 pt-16 backdrop-blur-sm">
-      <div className="flex h-[600px] w-full max-w-4xl flex-col rounded-lg border border-gray-200 bg-white shadow-xl dark:border-gray-700 dark:bg-gray-900">
-        <div className="flex items-center justify-between border-b border-gray-200 p-4 dark:border-gray-700">
+      <div className="flex h-[600px] w-full max-w-4xl flex-col rounded-lg border border-border bg-card shadow-elevation-3 dark:border-border dark:bg-muted">
+        <div className="flex items-center justify-between border-b border-border p-4 dark:border-border">
           <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 dark:bg-blue-900/50">
-              <Terminal className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-info dark:bg-info/50">
+              <Terminal className="h-4 w-4 text-info dark:text-info" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">{t('setupModal.title')}</h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400">{t('setupModal.subtitle', { projectName: project.displayName })}</p>
+              <h2 className="text-lg font-semibold text-muted-foreground dark:text-primary-foreground">{t('setupModal.title')}</h2>
+              <p className="text-sm text-muted-foreground dark:text-muted-foreground">{t('setupModal.subtitle', { projectName: project.displayName })}</p>
             </div>
           </div>
 
           <button
             onClick={closeModal}
-            className="rounded-md p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+            className="rounded-md p-2 text-muted-foreground hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted dark:hover:text-muted-foreground"
             title="Close"
           >
             <Plus className="h-5 w-5 rotate-45" />
@@ -71,12 +71,12 @@ export default function TaskMasterSetupModal({ isOpen, project, onClose, onAfter
           </div>
         </div>
 
-        <div className="border-t border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
+        <div className="border-t border-border bg-muted p-4 dark:border-border dark:bg-muted/50">
           <div className="flex items-center justify-between">
-            <div className="text-sm text-gray-600 dark:text-gray-400">
+            <div className="text-sm text-muted-foreground dark:text-muted-foreground">
               {isTaskMasterComplete ? (
-                <span className="flex items-center gap-2 text-green-600 dark:text-green-400">
-                  <span className="h-2 w-2 rounded-full bg-green-500" />
+                <span className="flex items-center gap-2 text-success dark:text-success">
+                  <span className="h-2 w-2 rounded-full bg-success" />
                   {t('setupModal.completed')}
                 </span>
               ) : (
@@ -89,8 +89,8 @@ export default function TaskMasterSetupModal({ isOpen, project, onClose, onAfter
               className={cn(
                 'px-4 py-2 text-sm font-medium rounded-md transition-colors',
                 isTaskMasterComplete
-                  ? 'bg-green-600 hover:bg-green-700 text-white'
-                  : 'text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600',
+                  ? 'bg-success hover:bg-success text-primary-foreground'
+                  : 'text-muted-foreground dark:text-muted-foreground bg-card dark:bg-muted border border-border dark:border-border hover:bg-muted dark:hover:bg-muted',
               )}
             >
               {isTaskMasterComplete ? t('setupModal.closeContinueButton') : t('setupModal.closeButton')}

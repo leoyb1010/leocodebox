@@ -200,14 +200,14 @@ export function stopAllPlugins(): Promise<void[]> {
  * Called once on host server boot.
  */
 export async function startEnabledPluginServers(): Promise<void> {
-  const plugins = scanPlugins();
-  const config = getPluginsConfig();
+  const plugins = await scanPlugins();
+  const config = await getPluginsConfig();
 
   for (const plugin of plugins) {
     if (!plugin.server) continue;
     if (config[plugin.name]?.enabled === false) continue;
 
-    const pluginDir = getPluginDir(plugin.name);
+    const pluginDir = await getPluginDir(plugin.name);
     if (!pluginDir) continue;
 
     try {

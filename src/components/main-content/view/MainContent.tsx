@@ -174,7 +174,7 @@ function MainContent({
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className={`flex min-h-0 min-w-[200px] flex-col overflow-hidden ${editorExpanded ? 'hidden' : ''} flex-1`}>
-          <div className={`h-full ${activeTab === 'chat' ? 'block' : 'hidden'}`}>
+          <div className={`workspace-tab-panel h-full ${activeTab === 'chat' ? 'block' : 'hidden'}`} data-active={activeTab === 'chat'}>
             <ErrorBoundary showDetails>
               <React.Suspense fallback={panelFallback}>
               <ChatInterface
@@ -202,7 +202,7 @@ function MainContent({
           </div>
 
           {activeTab === 'files' && (
-            <div className="h-full overflow-hidden">
+            <div className="workspace-tab-panel h-full overflow-hidden" data-active="true">
               <ErrorBoundary showDetails>
               <React.Suspense fallback={panelFallback}>
                 <FileTree selectedProject={selectedProject} onFileOpen={handleFileOpen} />
@@ -212,7 +212,7 @@ function MainContent({
           )}
 
           {activeTab === 'shell' && (
-            <div className="h-full w-full overflow-hidden">
+            <div className="workspace-tab-panel h-full w-full overflow-hidden" data-active="true">
               <ErrorBoundary showDetails>
               <React.Suspense fallback={panelFallback}>
                 <StandaloneShell
@@ -227,7 +227,7 @@ function MainContent({
           )}
 
           {activeTab === 'git' && (
-            <div className="h-full overflow-hidden">
+            <div className="workspace-tab-panel h-full overflow-hidden" data-active="true">
               <ErrorBoundary showDetails>
               <React.Suspense fallback={panelFallback}>
                 <GitPanel selectedProject={selectedProject} isMobile={isMobile} onFileOpen={handleFileOpen} />
@@ -245,7 +245,7 @@ function MainContent({
           )}
 
           {shouldShowBrowserTab && activeTab === 'browser' && (
-            <div className="h-full overflow-hidden">
+            <div className="workspace-tab-panel h-full overflow-hidden" data-active="true">
               <ErrorBoundary showDetails>
               <React.Suspense fallback={panelFallback}>
                 <BrowserUsePanel isVisible={activeTab === 'browser'} onShowSettings={onShowSettings} />
@@ -255,7 +255,7 @@ function MainContent({
           )}
 
           {activeTab === 'audit' && (
-            <div className="h-full overflow-hidden">
+            <div className="workspace-tab-panel h-full overflow-hidden" data-active="true">
               <ErrorBoundary showDetails>
                 <React.Suspense fallback={panelFallback}>
                   <ConversationAuditPanel />
@@ -265,7 +265,7 @@ function MainContent({
           )}
 
           {activeTab.startsWith('plugin:') && (
-            <div className="h-full overflow-hidden">
+            <div className="workspace-tab-panel h-full overflow-hidden" data-active="true">
               <ErrorBoundary showDetails>
               <React.Suspense fallback={panelFallback}>
                 <PluginTabContent

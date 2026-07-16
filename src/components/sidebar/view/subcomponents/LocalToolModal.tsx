@@ -27,8 +27,8 @@ export default function LocalToolModal({ title, src, onClose }: LocalToolModalPr
   }, [onClose]);
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 p-3 backdrop-blur-sm motion-safe:duration-200 motion-safe:animate-in motion-safe:fade-in md:p-8" role="dialog" aria-modal="true" aria-label={title}>
-      <div className="leocodebox-settings-dialog flex h-[min(90vh,900px)] w-full max-w-7xl flex-col overflow-hidden rounded-2xl border border-border/70 bg-background shadow-2xl motion-safe:duration-200 motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 p-3 backdrop-blur-sm motion-safe:duration-base motion-safe:animate-in motion-safe:fade-in md:p-8" role="dialog" aria-modal="true" aria-label={title}>
+      <div className="leocodebox-settings-dialog flex h-[min(90vh,900px)] w-full max-w-7xl flex-col overflow-hidden rounded-xl border border-border/70 bg-background shadow-elevation-3 motion-safe:duration-base motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95">
       <div className="leocodebox-main-header flex h-14 shrink-0 items-center justify-between border-b border-border/70 px-4">
         <div className="flex min-w-0 items-center gap-2.5">
           <img src="/logo-32.png" alt="leocodebox" className="h-7 w-7 rounded-md" />

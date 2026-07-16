@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import { randomBytes, randomUUID } from 'node:crypto';
-import fs from 'node:fs';
+import fsSync, { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
@@ -128,30 +128,24 @@ function writeSettings(settings: BrowserUseSettings): BrowserUseSettings {
   return normalized;
 }
 
-function getOrCreateMcpToken(): string {
+async function getOrCreateMcpToken(): Promise<string> {
   const existing = appConfigDb.get(BROWSER_USE_MCP_TOKEN_KEY);
   if (existing) {
-    syncMcpTokenFile(existing);
+    await syncMcpTokenFile(existing);
     return existing;
   }
   const token = randomBytes(32).toString('hex');
   appConfigDb.set(BROWSER_USE_MCP_TOKEN_KEY, token);
-  syncMcpTokenFile(token);
+  await syncMcpTokenFile(token);
   return token;
 }
 
-function syncMcpTokenFile(token: string): void {
-  fs.mkdirSync(path.dirname(MCP_TOKEN_FILE), { recursive: true, mode: 0o700 });
+async function syncMcpTokenFile(token: string): Promise<void> {
+  await fs.mkdir(path.dirname(MCP_TOKEN_FILE), { recursive: true, mode: 0o700 });
   let current = '';
-  try {
-    current = fs.readFileSync(MCP_TOKEN_FILE, 'utf8').trim();
-  } catch {
-    // Missing or unreadable token files are replaced below.
-  }
-  if (current !== token) {
-    fs.writeFileSync(MCP_TOKEN_FILE, `${token}\n`, { encoding: 'utf8', mode: 0o600 });
-  }
-  fs.chmodSync(MCP_TOKEN_FILE, 0o600);
+  try { current = (await fs.readFile(MCP_TOKEN_FILE, 'utf8')).trim(); } catch { /* replace below */ }
+  if (current !== token) await fs.writeFile(MCP_TOKEN_FILE, `${token}\n`, { encoding: 'utf8', mode: 0o600 });
+  try { await fs.chmod(MCP_TOKEN_FILE, 0o600); } catch { /* best effort */ }
 }
 
 function getSetupMessage(settings: BrowserUseSettings, readiness: RuntimeReadiness): string {
@@ -178,16 +172,15 @@ function getPlaywright(): any | null {
   }
 }
 
-function findHeadlessChromium(root: string): string | null {
-  let versions: string[] = [];
+async function findHeadlessChromium(root: string): Promise<string | null> {
+  let versions: string[];
   try {
-    versions = fs.readdirSync(root)
-      .filter((entry) => entry.startsWith('chromium_headless_shell-'))
+    versions = (await fs.readdir(root, { withFileTypes: true }))
+      .filter((entry) => entry.isDirectory() && entry.name.startsWith('chromium_headless_shell-'))
+      .map((entry) => entry.name)
       .sort()
       .reverse();
-  } catch {
-    return null;
-  }
+  } catch { return null; }
 
   const executableName = process.platform === 'win32' ? 'chrome-headless-shell.exe' : 'chrome-headless-shell';
   for (const version of versions) {
@@ -195,12 +188,8 @@ function findHeadlessChromium(root: string): string | null {
     while (pending.length > 0) {
       const current = pending.pop();
       if (!current) continue;
-      let entries: import('node:fs').Dirent[] = [];
-      try {
-        entries = fs.readdirSync(current, { withFileTypes: true });
-      } catch {
-        continue;
-      }
+      let entries: import('node:fs').Dirent[];
+      try { entries = await fs.readdir(current, { withFileTypes: true }); } catch { continue; }
       for (const entry of entries) {
         const candidate = path.join(current, entry.name);
         if (entry.isDirectory()) pending.push(candidate);
@@ -219,24 +208,26 @@ function getBundledBrowserRoot(): string | null {
   }
 }
 
-function resolveChromiumExecutable(playwright: any | null): string | null {
+async function resolveChromiumExecutable(playwright: any | null): Promise<string | null> {
   const bundledRoot = getBundledBrowserRoot();
-  const managed = findHeadlessChromium(BROWSER_RUNTIME_ROOT);
-  const bundled = bundledRoot ? findHeadlessChromium(bundledRoot) : null;
-  if (bundled && fs.existsSync(bundled)) return bundled;
-  if (managed && fs.existsSync(managed)) return managed;
+  const [managed, bundled] = await Promise.all([
+    findHeadlessChromium(BROWSER_RUNTIME_ROOT),
+    bundledRoot ? findHeadlessChromium(bundledRoot) : Promise.resolve(null),
+  ]);
+  if (bundled) return bundled;
+  if (managed) return managed;
   try {
     const defaultExecutable = playwright?.chromium?.executablePath?.();
-    return defaultExecutable && fs.existsSync(defaultExecutable) ? defaultExecutable : null;
-  } catch {
-    return null;
-  }
+    if (!defaultExecutable) return null;
+    await fs.access(defaultExecutable);
+    return defaultExecutable;
+  } catch { return null; }
 }
 
 export function getMcpRegistration(): { command: string; args: string[]; env: Record<string, string> } {
   const serverDir = path.resolve(__dirname, '..', '..');
   const mcpScriptPath = path.join(serverDir, 'browser-use-mcp.js');
-  if (fs.existsSync(mcpScriptPath)) {
+  if (fsSync.existsSync(mcpScriptPath)) {
     return {
       command: process.execPath,
       args: [mcpScriptPath],
@@ -287,9 +278,9 @@ function getProfilePath(profileName: string): string {
   return path.join(PROFILE_ROOT, safeName);
 }
 
-function probeRuntime(): RuntimeProbe {
+async function probeRuntime(): Promise<RuntimeProbe> {
   const playwright = getPlaywright();
-  const chromiumExecutablePath = resolveChromiumExecutable(playwright);
+  const chromiumExecutablePath = await resolveChromiumExecutable(playwright);
   const readiness: RuntimeProbe = {
     playwright,
     playwrightInstalled: Boolean(playwright),
@@ -300,14 +291,14 @@ function probeRuntime(): RuntimeProbe {
   return readiness;
 }
 
-function getRuntimeReadiness(options: { force?: boolean } = {}): RuntimeReadiness {
+async function getRuntimeReadiness(options: { force?: boolean } = {}): Promise<RuntimeReadiness> {
   const now = Date.now();
   const cachedProbe = runtimeProbeCache;
   const canUseCache = !options.force
     && !installPromise
     && cachedProbe
     && now - cachedProbe.updatedAt < RUNTIME_READINESS_CACHE_TTL_MS;
-  const probe = canUseCache ? cachedProbe.value : probeRuntime();
+  const probe = canUseCache ? cachedProbe.value : await probeRuntime();
 
   if (!canUseCache && !installPromise) {
     runtimeProbeCache = { value: probe, updatedAt: now };
@@ -388,10 +379,10 @@ async function installRuntime(): Promise<{ success: boolean; message: string }> 
     try {
       const playwrightRoot = path.dirname(require.resolve('playwright/package.json'));
       const playwrightCli = path.join(playwrightRoot, 'cli.js');
-      if (!fs.existsSync(playwrightCli)) {
+      if (!fsSync.existsSync(playwrightCli)) {
         throw new Error('The bundled Playwright package is missing. Reinstall leocodebox.');
       }
-      fs.mkdirSync(BROWSER_RUNTIME_ROOT, { recursive: true, mode: 0o700 });
+      fsSync.mkdirSync(BROWSER_RUNTIME_ROOT, { recursive: true, mode: 0o700 });
       lastInstallMessage = 'Installing Chromium runtime in the leocodebox user data directory...';
       await runCommand(
         process.execPath,
@@ -532,7 +523,7 @@ export const browserUseService = {
 
   async getStatus() {
     const settings = readSettings();
-    const readiness = getRuntimeReadiness();
+    const readiness = await getRuntimeReadiness();
     const available = settings.enabled && readiness.playwrightInstalled && readiness.chromiumInstalled;
 
     return {
@@ -550,7 +541,7 @@ export const browserUseService = {
   },
 
   async registerAgentMcp() {
-    getOrCreateMcpToken();
+    await getOrCreateMcpToken();
     const { command, args, env: runtimeEnv } = getMcpRegistration();
     await Promise.all(LEGACY_MCP_SERVER_NAMES.map((name) => removeMcpServerFromAllProviders(name)));
     const results = await providerMcpService.addMcpServerToAllProviders({
@@ -573,7 +564,7 @@ export const browserUseService = {
     return { repaired: true };
   },
 
-  getMcpToken() {
+  async getMcpToken() {
     return getOrCreateMcpToken();
   },
 
@@ -632,7 +623,7 @@ export const browserUseService = {
       throw new Error(`Browser is limited to ${MAX_SESSIONS_PER_OWNER} active agent sessions.`);
     }
 
-    const readiness = getRuntimeReadiness();
+    const readiness = await getRuntimeReadiness();
     if (!settings.enabled || !readiness.playwrightInstalled || !readiness.chromiumInstalled || !readiness.playwright) {
       session.message = getSetupMessage(settings, readiness);
       sessions.set(session.id, session);
@@ -653,7 +644,7 @@ export const browserUseService = {
     };
 
     if (profileName) {
-      fs.mkdirSync(PROFILE_ROOT, { recursive: true });
+      fsSync.mkdirSync(PROFILE_ROOT, { recursive: true });
       context = await readiness.playwright.chromium.launchPersistentContext(getProfilePath(profileName), {
         ...launchOptions,
         ...contextOptions,

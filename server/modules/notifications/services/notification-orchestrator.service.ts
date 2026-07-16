@@ -184,7 +184,8 @@ function buildNotificationPayload(event: NotificationEvent): NotificationPayload
     'run.stopped': normalizedEvent.meta?.stopReason || 'Run Stopped: The run has stopped',
     'run.failed': normalizedEvent.meta?.error ? `Run Failed: ${normalizedEvent.meta.error}` : 'Run Failed: The run encountered an error',
     'agent.notification': normalizedEvent.meta?.message ? String(normalizedEvent.meta.message) : 'You have a new notification',
-    'push.enabled': 'Push notifications are now enabled!'
+    'push.enabled': 'Push notifications are now enabled!',
+    'usage.daily_summary': normalizedEvent.meta?.message || 'Your daily usage summary is ready'
   };
   const providerLabel = PROVIDER_LABELS[normalizedEvent.provider] || 'Assistant';
   const sessionName = resolveSessionName(normalizedEvent);

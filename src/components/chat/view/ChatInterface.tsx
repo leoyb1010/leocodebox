@@ -85,6 +85,8 @@ function ChatInterface({
     selectProviderModel,
     setStoredProviderEffort,
     resolvePermissionModeForProvider,
+    supportsPermissionRequests,
+    supportsTokenUsage,
   } = useChatProviderState({
     selectedSession,
     selectedProject,
@@ -381,7 +383,7 @@ function ChatInterface({
                 type="button"
                 onClick={scrollToBottomAndReset}
                 aria-label={t('input.scrollToBottom', { defaultValue: 'Scroll to bottom' })}
-                className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full border border-border/50 bg-card text-muted-foreground shadow-sm transition-all duration-200 hover:bg-accent hover:text-foreground"
+                className="pointer-events-auto flex h-8 w-8 items-center justify-center rounded-full border border-border/50 bg-card text-muted-foreground shadow-elevation-1 transition-all duration-base hover:bg-accent hover:text-foreground"
                 title={t('input.scrollToBottom', { defaultValue: 'Scroll to bottom' })}
               >
                 <ArrowDownIcon className="h-4 w-4" aria-hidden />
@@ -397,6 +399,8 @@ function ChatInterface({
           isLoading={isProcessing}
           onAbortSession={handleAbortSession}
           permissionMode={permissionMode}
+          supportsPermissionRequests={supportsPermissionRequests}
+          supportsTokenUsage={supportsTokenUsage}
           onModeSwitch={cyclePermissionMode}
           effort={currentProviderEffort}
           availableEffortOptions={currentProviderEffortOptions}

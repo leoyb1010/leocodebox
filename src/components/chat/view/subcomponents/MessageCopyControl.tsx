@@ -162,8 +162,8 @@ const MessageCopyControl = ({
   };
 
   const toneClass = messageType === 'user'
-    ? 'text-blue-100 hover:text-white'
-    : 'text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300';
+    ? 'text-info hover:text-primary-foreground'
+    : 'text-muted-foreground hover:text-muted-foreground dark:text-muted-foreground dark:hover:text-muted-foreground';
   const copyTitle = copied ? t('copyMessage.copied') : t('copyMessage.copy');
   const rootClassName = canSelectCopyFormat
     ? 'relative flex min-w-0 flex-1 items-center gap-0.5 sm:min-w-max sm:flex-none sm:w-auto'
@@ -176,7 +176,7 @@ const MessageCopyControl = ({
         onClick={handleCopyClick}
         title={copyTitle}
         aria-label={copyTitle}
-        className={`inline-flex items-center gap-1 rounded px-1 py-0.5 transition-colors ${toneClass}`}
+        className={`inline-flex items-center gap-1 rounded-md px-1 py-0.5 transition-colors ${toneClass}`}
       >
         {copied ? (
           <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
@@ -209,7 +209,7 @@ const MessageCopyControl = ({
             ref={triggerRef}
             type="button"
             onClick={() => (isDropdownOpen ? setIsDropdownOpen(false) : openDropdown())}
-            className={`rounded px-1 py-0.5 transition-colors ${toneClass}`}
+            className={`rounded-md px-1 py-0.5 transition-colors ${toneClass}`}
             aria-label={t('copyMessage.selectFormat', { defaultValue: 'Select copy format' })}
             title={t('copyMessage.selectFormat', { defaultValue: 'Select copy format' })}
           >
@@ -227,7 +227,7 @@ const MessageCopyControl = ({
             <div
               ref={menuRef}
               style={menuStyle}
-              className="min-w-36 rounded-md border border-border bg-popover p-1 shadow-lg"
+              className="min-w-36 rounded-md border border-border bg-popover p-1 shadow-elevation-2"
             >
               {copyFormatOptions.map((option) => {
                 const isSelected = option.format === selectedFormat;
@@ -236,7 +236,7 @@ const MessageCopyControl = ({
                     key={option.format}
                     type="button"
                     onClick={() => handleFormatChange(option.format)}
-                    className={`block w-full rounded px-2 py-1.5 text-left transition-colors ${isSelected
+                    className={`block w-full rounded-md px-2 py-1.5 text-left transition-colors ${isSelected
                       ? 'bg-accent text-foreground'
                       : 'text-foreground hover:bg-accent'
                       }`}

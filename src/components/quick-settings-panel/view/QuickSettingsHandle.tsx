@@ -32,11 +32,11 @@ export default function QuickSettingsHandle({
 
   const placementClass = isOpen ? 'right-64' : 'right-0';
   const borderClass = isDragging
-    ? 'border-blue-500 dark:border-blue-400'
-    : 'border-gray-200 dark:border-gray-700';
+    ? 'border-info dark:border-info'
+    : 'border-border dark:border-border';
   const transitionClass = isDragging
     ? ''
-    : 'transition-all duration-150 ease-out';
+    : 'transition-all duration-fast ease-out';
   const cursorClass = isDragging ? 'cursor-grabbing' : 'cursor-pointer';
   const ariaLabel = isDragging
     ? t('quickSettings.dragHandle.dragging')
@@ -53,7 +53,7 @@ export default function QuickSettingsHandle({
       onClick={onClick}
       onMouseDown={onMouseDown}
       onTouchStart={onTouchStart}
-      className={`fixed ${placementClass} z-50 ${transitionClass} border bg-card ${borderClass} rounded-l-md p-2 shadow-[var(--elevation-2)] transition-colors hover:bg-accent ${cursorClass} touch-none`}
+      className={`fixed ${placementClass} z-50 ${transitionClass} border bg-card ${borderClass} rounded-l-md p-2 shadow-elevation-2 transition-colors hover:bg-accent ${cursorClass} touch-none`}
       style={{
         ...style,
         touchAction: 'none',

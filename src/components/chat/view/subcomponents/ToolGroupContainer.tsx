@@ -105,7 +105,7 @@ function ToolGroupContainer({
           className={`h-3.5 w-3.5 flex-shrink-0 text-muted-foreground transition-transform ${isExpanded ? 'rotate-90' : ''}`}
           aria-hidden
         />
-        <span className={`${iconClass} flex h-5 w-5 flex-shrink-0 items-center justify-center rounded bg-background/80 text-xs font-medium`}>
+        <span className={`${iconClass} flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-md bg-background/80 text-xs font-medium`}>
           {icon}
         </span>
         <span className="min-w-0 flex-shrink-0 text-xs font-medium text-foreground">{label}</span>

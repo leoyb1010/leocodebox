@@ -84,7 +84,7 @@ export default function DesktopAppRail({
             <span>{t('workspaceShell.settings')}</span>
           </button>
         </Tooltip>
-        <span className="mt-1 h-1.5 w-1.5 rounded-full bg-emerald-500" title={t('workspaceShell.serviceHealthy')} />
+        <span className="mt-1 h-1.5 w-1.5 rounded-full bg-success" title={t('workspaceShell.serviceHealthy')} />
       </div>
     </aside>
   );

@@ -31,7 +31,7 @@ export default function McpOverview() {
       })}
     >
       {(errors.length > 0 || writeError) && (
-        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-300">
+        <div className="rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-warning dark:text-warning">
           {writeError || `${t('mcpOverview.partialError', { defaultValue: '部分 CLI 配置未能读取：' })}${errors.join('；')}`}
         </div>
       )}
@@ -40,8 +40,8 @@ export default function McpOverview() {
         <SettingsCard divided>
           {Array.from({ length: 3 }).map((_, index) => (
             <div key={index} className="flex items-center justify-between gap-4 px-4 py-4">
-              <div className="skeleton h-4 w-40 rounded" />
-              <div className="skeleton h-5 w-24 rounded" />
+              <div className="skeleton h-4 w-40 rounded-md" />
+              <div className="skeleton h-5 w-24 rounded-md" />
             </div>
           ))}
         </SettingsCard>
@@ -95,7 +95,7 @@ export default function McpOverview() {
                         className={cn(
                           'group inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs transition-colors',
                           installed
-                            ? 'border-primary/40 bg-primary/10 text-primary hover:border-red-400/50 hover:bg-red-500/10 hover:text-red-600'
+                            ? 'border-primary/40 bg-primary/10 text-primary hover:border-destructive/50 hover:bg-destructive/10 hover:text-destructive'
                             : 'border-dashed border-border text-muted-foreground hover:border-primary/50 hover:text-foreground',
                           blocked && 'cursor-not-allowed opacity-40 hover:border-border hover:text-muted-foreground',
                           pending !== null && !blocked && 'opacity-60',

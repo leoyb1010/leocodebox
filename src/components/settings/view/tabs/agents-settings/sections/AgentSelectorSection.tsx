@@ -25,7 +25,7 @@ export default function AgentSelectorSection({
       <PillBar className="scrollbar-hide w-full justify-start overflow-x-auto md:w-auto">
         {agents.map((agent) => {
           const dotColor =
-            agent === 'claude' ? 'bg-blue-500' :
+            agent === 'claude' ? 'bg-info' :
             agent === 'cursor' ? 'bg-purple-500' :
             agent === 'opencode' ? 'bg-zinc-500' : 'bg-foreground/60';
 
@@ -53,7 +53,7 @@ export default function AgentSelectorSection({
           >
             <SessionProviderLogo provider={tool.id} className="h-4 w-4 flex-shrink-0" />
             <span className="truncate">{tool.label}</span>
-            <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${tool.runnable ? 'bg-emerald-500' : 'bg-muted-foreground/40'}`} />
+            <span className={`h-1.5 w-1.5 flex-shrink-0 rounded-full ${tool.runnable ? 'bg-success' : 'bg-muted-foreground/40'}`} />
           </Pill>
         ))}
       </PillBar>

@@ -3,7 +3,7 @@ import { useCallback, useState } from 'react';
 import { apiClient } from '../../../utils/apiClient';
 import type { LLMProvider } from '../../../types/app';
 
-export const HANDOFF_TARGET_PROVIDERS: LLMProvider[] = ['claude', 'codex', 'cursor', 'opencode'];
+export const HANDOFF_TARGET_PROVIDERS: LLMProvider[] = ['claude', 'codex', 'cursor', 'opencode', 'grok'];
 
 type HistoryMessage = {
   kind?: string;
@@ -16,31 +16,31 @@ type HistoryResponse = {
   data?: { messages?: HistoryMessage[] };
 };
 
-const MAX_CONTEXT_MESSAGES = 8;
-const MAX_MESSAGE_CHARS = 1200;
-
 /**
- * The dumbest handoff that works: recent messages quoted verbatim under a
- * short preamble. No summarization — the user edits the draft before sending.
+ * Builds a compact, editable context summary for cross-provider continuation.
+ * The summary is deterministic and local: it preserves decisions and recent
+ * user/assistant outcomes without sending conversation history to a third API.
  */
 export function buildHandoffText(sourceProvider: string, messages: HistoryMessage[]): string {
-  const transcript = messages
+  const turns = messages
     .filter((message) => (message.role === 'user' || message.role === 'assistant')
       && typeof message.content === 'string' && message.content.trim())
-    .slice(-MAX_CONTEXT_MESSAGES)
+    .slice(-12)
     .map((message) => {
-      const text = message.content!.trim();
-      const clipped = text.length > MAX_MESSAGE_CHARS ? `${text.slice(0, MAX_MESSAGE_CHARS)}…` : text;
-      return `[${message.role}] ${clipped}`;
-    })
-    .join('\n\n');
+      const text = message.content!.trim().replace(/\s+/g, ' ');
+      const clipped = text.length > 500 ? `${text.slice(0, 500)}…` : text;
+      return `- ${message.role === 'user' ? 'Request' : 'Outcome'}: ${clipped}`;
+    });
 
   return [
-    `【接力】以下上下文来自另一个 ${sourceProvider} 会话，请基于它继续工作。`,
+    `【Cross-provider handoff from ${sourceProvider}】`,
     '',
-    transcript || '（原会话暂无可引用的文本消息）',
+    'Context summary:',
+    ...(turns.length ? turns : ['- No persisted text turns were available.']),
     '',
-    '接着做：',
+    'Continue from this state. First verify the current workspace rather than assuming the summary is authoritative.',
+    '',
+    'Next instruction:',
     '',
   ].join('\n');
 }

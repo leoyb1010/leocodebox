@@ -5,19 +5,19 @@ export type ToolStatus = 'running' | 'completed' | 'error' | 'denied';
 const STATUS_CONFIG: Record<ToolStatus, { label: string; className: string }> = {
   running: {
     label: 'Running',
-    className: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+    className: 'bg-info text-info dark:bg-info/30 dark:text-info',
   },
   completed: {
     label: 'Completed',
-    className: 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+    className: 'bg-success text-success dark:bg-success/30 dark:text-success',
   },
   error: {
     label: 'Error',
-    className: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+    className: 'bg-destructive text-destructive dark:bg-destructive/30 dark:text-destructive',
   },
   denied: {
     label: 'Denied',
-    className: 'bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300',
+    className: 'bg-warning text-warning dark:bg-warning/30 dark:text-warning',
   },
 };
 
@@ -31,7 +31,7 @@ export function ToolStatusBadge({ status, className }: ToolStatusBadgeProps) {
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded px-1.5 py-px text-[10px] font-medium',
+        'inline-flex items-center rounded-md px-1.5 py-px text-[10px] font-medium',
         config.className,
         className,
       )}

@@ -450,6 +450,14 @@ test('OpenCode sessions provider reads sqlite history and token usage', { concur
     assert.equal(paged.messages.length, 2);
     assert.equal(paged.hasMore, true);
     assert.equal(paged.messages[0]?.content, 'The provider is wired.');
+
+
+    const previousPage = await provider.fetchHistory('open-session-1', { limit: 2, offset: 2 });
+    assert.equal(previousPage.total, 4);
+    assert.equal(previousPage.messages.length, 2);
+    assert.equal(previousPage.hasMore, false);
+    assert.equal(previousPage.messages[0]?.content, 'Build the OpenCode integration.');
+    assert.equal(previousPage.messages[1]?.kind, 'thinking');
   } finally {
     restoreHomeDir();
     await rm(tempRoot, { recursive: true, force: true });

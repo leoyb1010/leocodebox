@@ -117,7 +117,7 @@ export default function AppearanceSettingsTab({
                   onClick={() => setThemeMode(mode)}
                   aria-pressed={themeMode === mode}
                   className={`inline-flex h-8 items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors ${
-                    themeMode === mode ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                    themeMode === mode ? 'bg-card text-foreground shadow-elevation-1' : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   <Icon className="h-3.5 w-3.5" />

@@ -189,7 +189,7 @@ export default function ChangesView({
           </div>
         ) : gitStatus?.hasCommits === false ? (
           <div className="flex flex-col items-center justify-center p-8 text-center">
-            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-muted/50">
+            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-muted/50">
               <GitBranch className="h-7 w-7 text-muted-foreground/50" />
             </div>
             <h3 className="mb-2 text-lg font-medium text-foreground">No commits yet</h3>

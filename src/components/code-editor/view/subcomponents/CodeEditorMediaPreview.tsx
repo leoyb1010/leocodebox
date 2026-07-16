@@ -162,7 +162,7 @@ export default function CodeEditorMediaPreview({
         // load inside a sandboxed frame (any `sandbox` value yields a broken
         // viewer). Script execution is instead prevented upstream by validating
         // the PDF magic bytes and pinning the blob's MIME type to application/pdf.
-        return <iframe src={currentUrl} title={file.name} className="h-full w-full border-0 bg-white" />;
+        return <iframe src={currentUrl} title={file.name} className="h-full w-full border-0 bg-card" />;
       case 'video':
         return (
           <video src={currentUrl} controls className="max-h-full max-w-full" autoPlay={false}>
@@ -207,7 +207,7 @@ export default function CodeEditorMediaPreview({
           href={currentUrl}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center justify-center rounded-md p-1.5 text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
+          className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-muted-foreground dark:text-muted-foreground dark:hover:bg-muted dark:hover:text-primary-foreground"
           aria-label={labels.openInNewTab}
           title={labels.openInNewTab}
         >
@@ -220,7 +220,7 @@ export default function CodeEditorMediaPreview({
         <button
           type="button"
           onClick={onToggleFullscreen}
-          className="flex items-center justify-center rounded-md p-1.5 text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
+          className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-muted-foreground dark:text-muted-foreground dark:hover:bg-muted dark:hover:text-primary-foreground"
           aria-label={isFullscreen ? labels.exitFullscreen : labels.fullscreen}
           title={isFullscreen ? labels.exitFullscreen : labels.fullscreen}
         >
@@ -238,7 +238,7 @@ export default function CodeEditorMediaPreview({
       <button
         type="button"
         onClick={onClose}
-        className="flex items-center justify-center rounded-md p-1.5 text-gray-600 hover:bg-gray-100 hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-white"
+        className="flex items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-muted-foreground dark:text-muted-foreground dark:hover:bg-muted dark:hover:text-primary-foreground"
         aria-label={labels.close}
         title={labels.close}
       >
@@ -252,7 +252,7 @@ export default function CodeEditorMediaPreview({
   const header = (
     <div className="flex flex-shrink-0 items-center justify-between border-b border-border px-3 py-1.5">
       <div className="flex min-w-0 flex-1 items-center gap-2">
-        <h3 className="truncate text-sm font-medium text-gray-900 dark:text-white">{file.name}</h3>
+        <h3 className="truncate text-sm font-medium text-muted-foreground dark:text-primary-foreground">{file.name}</h3>
       </div>
       {headerActions}
     </div>
@@ -273,7 +273,7 @@ export default function CodeEditorMediaPreview({
 
   const innerClassName = isFullscreen
     ? 'bg-background flex flex-col w-full h-full'
-    : 'bg-background shadow-2xl flex flex-col w-full h-full md:rounded-lg md:shadow-2xl md:w-full md:max-w-6xl md:h-[80vh] md:max-h-[80vh]';
+    : 'bg-background shadow-elevation-3 flex flex-col w-full h-full md:rounded-lg md:shadow-elevation-3 md:w-full md:max-w-6xl md:h-[80vh] md:max-h-[80vh]';
 
   return (
     <div className={containerClassName}>

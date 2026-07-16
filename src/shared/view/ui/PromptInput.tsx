@@ -42,7 +42,7 @@ export const PromptInput = React.forwardRef<HTMLFormElement, PromptInputProps>(
           ref={ref}
           data-slot="prompt-input"
           className={cn(
-            'relative overflow-hidden rounded-xl border border-border/50 bg-card/80 shadow-sm backdrop-blur-sm transition-all duration-200 focus-within:border-primary/30 focus-within:shadow-md focus-within:ring-1 focus-within:ring-primary/15',
+            'relative overflow-hidden rounded-xl border border-border/50 bg-card/80 shadow-elevation-1 backdrop-blur-sm transition-all duration-base focus-within:border-primary/30 focus-within:shadow-elevation-2 focus-within:ring-1 focus-within:ring-primary/15',
             className
           )}
           {...props}
@@ -167,7 +167,7 @@ export const PromptInputButton = React.forwardRef<HTMLButtonElement, PromptInput
             tooltip.shortcut ? (
               <span className="flex items-center gap-1.5">
                 {tooltip.content}
-                <kbd className="rounded bg-white/20 px-1 text-[10px]">{tooltip.shortcut}</kbd>
+                <kbd className="rounded-md bg-card/20 px-1 text-[10px]">{tooltip.shortcut}</kbd>
               </span>
             ) : (
               tooltip.content

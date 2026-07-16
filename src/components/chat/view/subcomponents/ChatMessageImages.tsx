@@ -106,7 +106,7 @@ function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClos
         type="button"
         onClick={onClose}
         aria-label="Close image preview"
-        className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white transition-colors hover:bg-white/20"
+        className="absolute right-4 top-4 rounded-full bg-card/10 p-2 text-primary-foreground transition-colors hover:bg-card/20"
       >
         <X className="h-5 w-5" />
       </button>
@@ -114,7 +114,7 @@ function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClos
         src={src}
         alt={alt}
         onClick={(event) => event.stopPropagation()}
-        className="max-h-[90vh] max-w-[92vw] rounded-lg object-contain shadow-2xl"
+        className="max-h-[90vh] max-w-[92vw] rounded-lg object-contain shadow-elevation-3"
       />
     </div>,
     document.body,
@@ -144,12 +144,12 @@ function ChatMessageImage({ image, projectId }: { image: ChatImage; projectId?: 
         type="button"
         onClick={() => setExpanded(true)}
         aria-label={`Expand ${alt}`}
-        className="block overflow-hidden rounded-xl border border-border/50 shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/60"
+        className="block overflow-hidden rounded-xl border border-border/50 shadow-elevation-1 focus:outline-none focus:ring-2 focus:ring-primary/60"
       >
         <img
           src={src}
           alt={alt}
-          className="h-28 w-28 cursor-zoom-in object-cover transition-transform duration-200 hover:scale-105"
+          className="h-28 w-28 cursor-zoom-in object-cover transition-transform duration-base hover:scale-105"
         />
       </button>
       {expanded && <ImageLightbox src={src} alt={alt} onClose={() => setExpanded(false)} />}
@@ -159,7 +159,7 @@ function ChatMessageImage({ image, projectId }: { image: ChatImage; projectId?: 
 
 /**
  * Image attachments for a user turn, rendered claude.ai-style: standalone
- * rounded square cards shown above the message bubble. Each thumbnail
+ * rounded-md square cards shown above the message bubble. Each thumbnail
  * expands to a fullscreen lightbox on click.
  */
 export default function ChatMessageImages({ images, projectId }: ChatMessageImagesProps) {

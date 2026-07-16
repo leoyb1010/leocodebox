@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
-import { sessionSynchronizerService } from '@/modules/providers/index.js';
+import { sessionSynchronizerService, sessionsService } from '@/modules/providers/index.js';
 import { WS_OPEN_STATE, connectedClients } from '@/modules/websocket/index.js';
 import type { RealtimeClientConnection } from '@/shared/types.js';
 import { AppError } from '@/shared/utils.js';
@@ -15,6 +15,7 @@ type SessionSummary = {
   summary: string;
   messageCount: number;
   lastActivity: string;
+  isPinned: boolean;
 };
 
 type SessionRepositoryRow = {
@@ -351,6 +352,7 @@ function mapSessionRowToSummary(row: SessionRepositoryRow): SessionSummary {
     summary: sessionDisplaySummary(row),
     messageCount: 0,
     lastActivity: row.updated_at ?? row.created_at ?? new Date().toISOString(),
+    isPinned: sessionsService.isSessionPinned(row.session_id),
   };
 }
 

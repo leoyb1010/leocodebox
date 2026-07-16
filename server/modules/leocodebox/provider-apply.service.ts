@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
 import fs from 'node:fs/promises';
 
 import TOML from '@iarna/toml';
@@ -22,6 +23,11 @@ function toNodeError(error: unknown): NodeJS.ErrnoException {
   return error instanceof Error ? error as NodeJS.ErrnoException : new Error(String(error));
 }
 
+
+const applyContext = new AsyncLocalStorage<{ preview: boolean }>();
+async function maybeBackup(filePath: string): Promise<void> {
+  if (!applyContext.getStore()?.preview) await backupFile(filePath);
+}
 
 function managedTomlBlocks(provider: SwitchProvider, includeProfile = true): { topLevel: string; tables: string } {
   const providerKey = `leocodebox_${sanitizeIdPart(provider.id)}`;
@@ -78,7 +84,7 @@ function removeManagedTopLevelKeys(config: unknown): string {
 
 async function applyClaudeProvider(provider: SwitchProvider): Promise<string[]> {
   const [settingsPath] = targetConfigPaths('claude');
-  await backupFile(settingsPath);
+  await maybeBackup(settingsPath);
   const settings = await readJsonFile<JsonRecord>(settingsPath, {});
   const env: Record<string, string> = settings.env && typeof settings.env === 'object' && !Array.isArray(settings.env)
     ? { ...(settings.env as Record<string, string>) }
@@ -114,8 +120,8 @@ async function applyClaudeProvider(provider: SwitchProvider): Promise<string[]> 
 
 async function applyCodexProvider(provider: SwitchProvider): Promise<string[]> {
   const [authPath, configPath] = targetConfigPaths('codex');
-  await backupFile(authPath);
-  await backupFile(configPath);
+  await maybeBackup(authPath);
+  await maybeBackup(configPath);
 
   const auth = await readJsonFile<Record<string, string>>(authPath, {});
   if (provider.apiKey) {
@@ -201,7 +207,7 @@ function updateManagedEnv(content: unknown, updates: Record<string, string | nul
 
 async function applyGeminiProvider(provider: SwitchProvider): Promise<string[]> {
   const [envPath] = targetConfigPaths('gemini');
-  await backupFile(envPath);
+  await maybeBackup(envPath);
   let existing = '';
   try {
     existing = await fs.readFile(envPath, 'utf8');
@@ -237,7 +243,7 @@ function opencodeProviderFragment(provider: SwitchProvider): Record<string, unkn
 
 async function applyOpenCodeProvider(provider: SwitchProvider): Promise<string[]> {
   const [configPath] = targetConfigPaths('opencode');
-  await backupFile(configPath);
+  await maybeBackup(configPath);
   const config = await readJsonFile<OpenCodeConfig>(configPath, {
     $schema: 'https://opencode.ai/config.json',
   });
@@ -284,7 +290,7 @@ function removeManagedHermesBlock(config: unknown): string {
 
 async function applyHermesProvider(provider: SwitchProvider): Promise<string[]> {
   const [configPath] = targetConfigPaths('hermes');
-  await backupFile(configPath);
+  await maybeBackup(configPath);
   let existing = '';
   try {
     existing = await fs.readFile(configPath, 'utf8');
@@ -313,6 +319,26 @@ async function applyProvider(provider: SwitchProvider): Promise<string[]> {
   throw error;
 }
 
+async function previewProviderChanges(provider: SwitchProvider): Promise<Array<{ filePath: string; before: string | null; after: string | null; changed: boolean }>> {
+  const filePaths = targetConfigPaths(provider.target);
+  const before = await captureFiles(filePaths);
+  try {
+    await applyContext.run({ preview: true }, () => applyProvider(provider));
+    const after = await captureFiles(filePaths);
+    const mask = (value: string | null): string | null => {
+      if (!value || !provider.apiKey) return value;
+      return value.split(provider.apiKey).join('••••••••');
+    };
+    return filePaths.map((filePath, index) => {
+      const left = before[index]?.exists ? before[index]?.contents?.toString('utf8') ?? '' : null;
+      const right = after[index]?.exists ? after[index]?.contents?.toString('utf8') ?? '' : null;
+      return { filePath, before: mask(left), after: mask(right), changed: left !== right };
+    });
+  } finally {
+    await restoreFiles(before);
+  }
+}
+
 async function applyProviderTransactionally(provider: SwitchProvider, commit?: (changedFiles: string[]) => Promise<unknown> | unknown): Promise<string[]> {
   const filePaths = targetConfigPaths(provider.target);
   const snapshots = await captureFiles(filePaths);
@@ -333,4 +359,4 @@ async function applyProviderTransactionally(provider: SwitchProvider, commit?: (
 }
 
 
-export { applyProviderTransactionally };
+export { applyProviderTransactionally, previewProviderChanges };

@@ -92,7 +92,7 @@ export const SubagentContainer: React.FC<SubagentContainerProps> = ({
 
         {/* Completion status */}
         {isComplete && (
-          <div className="mt-1 flex items-center gap-1.5 text-xs text-green-600 dark:text-green-400">
+          <div className="mt-1 flex items-center gap-1.5 text-xs text-success dark:text-success">
             <svg className="h-3 w-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
             </svg>
@@ -105,7 +105,7 @@ export const SubagentContainer: React.FC<SubagentContainerProps> = ({
           <Collapsible className="mt-2">
             <CollapsibleTrigger className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground">
               <svg
-                className="h-2.5 w-2.5 flex-shrink-0 transition-transform duration-150 data-[state=open]:rotate-90"
+                className="h-2.5 w-2.5 flex-shrink-0 transition-transform duration-fast data-[state=open]:rotate-90"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -126,7 +126,7 @@ export const SubagentContainer: React.FC<SubagentContainerProps> = ({
                       </span>
                     )}
                     {child.toolResult?.isError && (
-                      <span className="flex-shrink-0 text-red-500">(error)</span>
+                      <span className="flex-shrink-0 text-destructive">(error)</span>
                     )}
                   </div>
                 ))}

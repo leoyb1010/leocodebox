@@ -246,7 +246,7 @@ export default function BrowserUsePanel({ isVisible, onShowSettings }: BrowserUs
 
   const renderEmptyState = () => (
     <div className="flex min-h-0 flex-1 items-center justify-center p-6">
-      <div className="grid w-full max-w-5xl overflow-hidden rounded-md border border-border bg-card/40 shadow-sm md:grid-cols-[1.05fr_.95fr]">
+      <div className="grid w-full max-w-5xl overflow-hidden rounded-md border border-border bg-card/40 shadow-elevation-1 md:grid-cols-[1.05fr_.95fr]">
         <img src="/visuals/release/local-security.webp" alt="" className="hidden h-full min-h-64 w-full object-cover opacity-90 md:block" />
         <div className="p-5">
         <div className="flex items-start gap-3">
@@ -313,10 +313,10 @@ export default function BrowserUsePanel({ isVisible, onShowSettings }: BrowserUs
           />
           {cursorStyle && (
             <div
-              className="pointer-events-none absolute h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/90 bg-primary/80 shadow-[0_0_0_6px_hsl(var(--primary)/0.18)]"
+              className="pointer-events-none absolute h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white/90 bg-primary/80 shadow-elevation-2"
               style={cursorStyle}
             >
-              <div className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white" />
+              <div className="absolute left-1/2 top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full bg-card" />
             </div>
           )}
         </div>
@@ -418,7 +418,7 @@ export default function BrowserUsePanel({ isVisible, onShowSettings }: BrowserUs
             renderEmptyState()
           ) : (
             <div className="min-h-0 flex-1 overflow-auto bg-muted/20 p-4">
-              <div className="mx-auto flex min-h-[500px] max-w-7xl flex-col overflow-hidden rounded-md border border-border bg-background shadow-sm">
+              <div className="mx-auto flex min-h-[500px] max-w-7xl flex-col overflow-hidden rounded-md border border-border bg-background shadow-elevation-1">
                 <div className="flex flex-wrap items-center gap-2 border-b border-border/60 px-3 py-2">
                   <Badge variant="outline" className={selectedSession ? cn('text-[10px]', getStatusTone(selectedSession.status)) : 'text-[10px]'}>
                     {selectedSession?.status || 'empty'}
@@ -510,7 +510,7 @@ export default function BrowserUsePanel({ isVisible, onShowSettings }: BrowserUs
       {isFullscreen && selectedSession && (
         <div className="fixed inset-0 z-50 bg-black/90 p-6">
           <div className="flex h-full flex-col rounded-md border border-white/10 bg-black">
-            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 text-sm text-white/80">
+            <div className="flex items-center justify-between border-b border-white/10 px-4 py-3 text-sm text-primary-foreground/80">
               <div className="min-w-0 truncate">{selectedSession.title || selectedSession.url || 'Browser session'}</div>
               <Button variant="outline" size="sm" onClick={() => setIsFullscreen(false)}>
                 <X className="h-4 w-4" />

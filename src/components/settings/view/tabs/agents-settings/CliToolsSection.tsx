@@ -156,7 +156,7 @@ export default function CliToolsSection({ onToolsChange }: CliToolsSectionProps)
         <div className="flex items-center gap-1">
           <button
             onClick={() => void exportDiagnostics()}
-            className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             title={t('agents.cliTools.diagnosticsHint')}
           >
             <FileDown className="h-3 w-3" />
@@ -164,7 +164,7 @@ export default function CliToolsSection({ onToolsChange }: CliToolsSectionProps)
           </button>
           <button
             onClick={() => void load(true)}
-            className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             title={t('agents.cliTools.refresh')}
           >
             <RefreshCw className={cn('h-3 w-3', loading && 'animate-spin')} />
@@ -198,25 +198,25 @@ export default function CliToolsSection({ onToolsChange }: CliToolsSectionProps)
                 <span className="truncate text-sm font-medium text-foreground">{tool.label}</span>
                 {tool.installed && tool.runnable ? (
                   tool.updateAvailable ? (
-                    <span className="inline-flex items-center gap-1 rounded bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 dark:text-amber-300">
+                    <span className="inline-flex items-center gap-1 rounded-md bg-warning/15 px-1.5 py-0.5 text-[10px] font-medium text-warning dark:text-warning">
                       <ArrowUpCircle className="h-3 w-3" />
                       {t('agents.cliTools.updateAvailable')}
                     </span>
                   ) : ['registry', 'cache', 'stale-cache'].includes(tool.latestVersionSource || '') ? (
-                    <span className="inline-flex items-center gap-1 rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300">
+                    <span className="inline-flex items-center gap-1 rounded-md bg-success/15 px-1.5 py-0.5 text-[10px] font-medium text-success dark:text-success">
                       <CheckCircle2 className="h-3 w-3" />
                       {t('agents.cliTools.latest')}
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                    <span className="inline-flex items-center gap-1 rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
                       <CircleHelp className="h-3 w-3" />
                       {t('agents.cliTools.unavailable')}
                     </span>
                   )
                 ) : tool.installed ? (
-                  <span className="rounded bg-red-500/15 px-1.5 py-0.5 text-[10px] text-red-700 dark:text-red-300">{t('agents.cliTools.notRunnable')}</span>
+                  <span className="rounded-md bg-destructive/15 px-1.5 py-0.5 text-[10px] text-destructive dark:text-destructive">{t('agents.cliTools.notRunnable')}</span>
                 ) : (
-                  <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{t('agents.cliTools.notInstalled')}</span>
+                  <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{t('agents.cliTools.notInstalled')}</span>
                 )}
               </div>
               <div className="mt-0.5 truncate text-xs text-muted-foreground">
@@ -233,7 +233,7 @@ export default function CliToolsSection({ onToolsChange }: CliToolsSectionProps)
               </div>
               {tool.hasNewerShadowCopy && tool.copies && tool.copies.length > 1 && (
                 <p
-                  className="mt-0.5 truncate text-[10px] text-amber-700 dark:text-amber-300"
+                  className="mt-0.5 truncate text-[10px] text-warning dark:text-warning"
                   title={tool.copies.map((copy) => `${copy.active ? '● ' : '○ '}${copy.path} → ${copy.version ?? '?'}（${copy.source}）`).join('\n')}
                 >
                   {t('agents.cliTools.multipleCopies', {

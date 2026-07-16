@@ -51,7 +51,7 @@ export default function NewBranchModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <button type="button" aria-label="Close create branch dialog" className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
       <div
-        className="relative w-full max-w-md overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
+        className="relative w-full max-w-md overflow-hidden rounded-xl border border-border bg-card shadow-elevation-3"
         role="dialog"
         aria-modal="true"
         aria-labelledby="new-branch-title"

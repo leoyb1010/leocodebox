@@ -238,7 +238,7 @@ export default function CodeEditor({
 
   const innerContainerClassName = isSidebar
     ? 'bg-background flex flex-col w-full h-full'
-    : `bg-background shadow-2xl flex flex-col w-full h-full md:rounded-lg md:shadow-2xl${
+    : `bg-background shadow-elevation-3 flex flex-col w-full h-full md:rounded-lg md:shadow-elevation-3${
       isFullscreen ? ' md:w-full md:h-full md:rounded-none' : ' md:w-full md:max-w-6xl md:h-[80vh] md:max-h-[80vh]'
     }`;
 
@@ -280,7 +280,7 @@ export default function CodeEditor({
           />
 
           {saveError && (
-            <div className="border-b border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-300">
+            <div className="border-b border-destructive bg-destructive px-3 py-1.5 text-xs text-destructive dark:border-destructive/40 dark:bg-destructive/20 dark:text-destructive">
               {saveError}
             </div>
           )}

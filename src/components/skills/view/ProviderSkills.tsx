@@ -83,12 +83,12 @@ const SCOPE_LABELS: Record<SkillsScope, string> = {
 };
 
 const SCOPE_BADGE_CLASSES: Record<SkillsScope, string> = {
-  user: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
-  plugin: 'border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300',
-  repo: 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-  project: 'border-orange-500/30 bg-orange-500/10 text-orange-700 dark:text-orange-300',
+  user: 'border-success/30 bg-success/10 text-success dark:text-success',
+  plugin: 'border-info/30 bg-info/10 text-info dark:text-info',
+  repo: 'border-warning/30 bg-warning/10 text-warning dark:text-warning',
+  project: 'border-warning/30 bg-warning/10 text-warning dark:text-warning',
   admin: 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-300',
-  system: 'border-slate-500/30 bg-slate-500/10 text-slate-700 dark:text-slate-300',
+  system: 'border-border/30 bg-muted/10 text-muted-foreground dark:text-muted-foreground',
 };
 
 const SCOPE_ORDER: SkillsScope[] = ['user', 'plugin', 'repo', 'project', 'admin', 'system'];
@@ -681,8 +681,8 @@ export default function ProviderSkills({ selectedProvider, currentProjects }: Pr
             <div className={cn(
               'flex-shrink-0 border-t px-4 py-2 text-xs',
               resolveSafetyGate(safetyReport).blocking
-                ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-800/60 dark:bg-red-900/20 dark:text-red-200'
-                : 'border-amber-300/60 bg-amber-50 text-amber-800 dark:border-amber-700/50 dark:bg-amber-900/20 dark:text-amber-200',
+                ? 'border-destructive bg-destructive text-destructive dark:border-destructive/60 dark:bg-destructive/20 dark:text-destructive'
+                : 'border-warning/60 bg-warning text-warning dark:border-warning/50 dark:bg-warning/20 dark:text-warning',
             )}>
               <div className="mb-1 flex items-center gap-1.5 font-medium">
                 <ShieldAlert className="h-3.5 w-3.5 flex-shrink-0" />
@@ -706,8 +706,8 @@ export default function ProviderSkills({ selectedProvider, currentProjects }: Pr
                 <div className={cn(
                   'max-h-24 overflow-y-auto whitespace-pre-wrap rounded-lg border px-3 py-2 text-sm',
                   submitError || loadError
-                    ? 'border-red-200 bg-red-50 text-red-700 dark:border-red-800/60 dark:bg-red-900/20 dark:text-red-200'
-                    : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+                    ? 'border-destructive bg-destructive text-destructive dark:border-destructive/60 dark:bg-destructive/20 dark:text-destructive'
+                    : 'border-success/30 bg-success/10 text-success dark:text-success',
                 )}>
                   {submitError || loadError || 'Skills saved successfully.'}
                 </div>
@@ -752,13 +752,13 @@ export default function ProviderSkills({ selectedProvider, currentProjects }: Pr
       </Dialog>
 
       {!isAddDialogOpen && (submitError || loadError) && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-800/60 dark:bg-red-900/20 dark:text-red-200">
+        <div className="rounded-lg border border-destructive bg-destructive px-3 py-2 text-sm text-destructive dark:border-destructive/60 dark:bg-destructive/20 dark:text-destructive">
           {submitError || loadError}
         </div>
       )}
 
       {justInstalled && saveStatus === 'success' && !isAddDialogOpen && (
-        <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/30 bg-emerald-500/10 px-3 py-1 text-xs font-medium text-emerald-700 dark:text-emerald-300">
+        <div className="inline-flex items-center gap-2 rounded-full border border-success/30 bg-success/10 px-3 py-1 text-xs font-medium text-success dark:text-success">
           <CheckCircle2 className="h-4 w-4" />
           Skills saved successfully.
         </div>
@@ -820,7 +820,7 @@ export default function ProviderSkills({ selectedProvider, currentProjects }: Pr
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="h-8 w-8 flex-shrink-0 p-0 text-muted-foreground hover:text-red-600"
+                        className="h-8 w-8 flex-shrink-0 p-0 text-muted-foreground hover:text-destructive"
                         disabled={deletingDir !== null}
                         aria-label={`Remove ${skill.name}`}
                         title={t('providerSkills.deleteSkill', { defaultValue: '删除(可从回收站还原)' })}

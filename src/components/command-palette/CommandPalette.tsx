@@ -211,7 +211,7 @@ export default function CommandPalette({
                   type="button"
                   onClick={popPage}
                   aria-label={t('commandPalette.back')}
-                  className="ml-0.5 rounded-sm opacity-70 hover:opacity-100"
+                  className="ml-0.5 rounded-md opacity-70 hover:opacity-100"
                 >
                   <X className="h-3 w-3" />
                 </button>

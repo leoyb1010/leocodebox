@@ -33,16 +33,16 @@ type GraphCommit = {
 // Colors cycle per lane, VSCode Git Graph style. Chosen to stay readable on
 // both light and dark backgrounds.
 const GRAPH_COLORS = [
-  '#0ea5e9', // sky
-  '#f97316', // orange
-  '#a855f7', // purple
-  '#22c55e', // green
-  '#ef4444', // red
-  '#eab308', // yellow
-  '#14b8a6', // teal
-  '#ec4899', // pink
-  '#6366f1', // indigo
-  '#84cc16', // lime
+  'hsl(var(--info))',
+  'hsl(var(--warning))',
+  'hsl(var(--graph-3))',
+  'hsl(var(--success))',
+  'hsl(var(--destructive))',
+  'hsl(var(--graph-6))',
+  'hsl(var(--graph-7))',
+  'hsl(var(--graph-8))',
+  'hsl(var(--graph-9))',
+  'hsl(var(--graph-10))',
 ];
 
 export const laneColor = (lane: number) => GRAPH_COLORS[lane % GRAPH_COLORS.length];

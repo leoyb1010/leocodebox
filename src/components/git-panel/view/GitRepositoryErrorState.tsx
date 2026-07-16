@@ -8,7 +8,7 @@ type GitRepositoryErrorStateProps = {
 export default function GitRepositoryErrorState({ error, details }: GitRepositoryErrorStateProps) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-6 py-12 text-muted-foreground">
-      <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-muted/50">
+      <div className="mb-6 flex h-16 w-16 items-center justify-center rounded-xl bg-muted/50">
         <GitBranch className="h-8 w-8 opacity-40" />
       </div>
       <h3 className="mb-3 text-center text-lg font-medium text-foreground">{error}</h3>

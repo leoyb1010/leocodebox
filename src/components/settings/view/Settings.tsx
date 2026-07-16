@@ -190,7 +190,7 @@ function Settings({ isOpen, onClose, projects = [], initialTab = 'agents' }: Set
 
   return (
     <div className="modal-backdrop fixed inset-0 z-[9999] flex items-center justify-center bg-black/35 backdrop-blur-[3px] md:p-4">
-      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="leocodebox-settings-title" tabIndex={-1} className="leocodebox-settings-dialog flex h-full w-full flex-col overflow-hidden border border-border bg-background shadow-2xl md:h-[88vh] md:max-w-5xl md:rounded-lg">
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="leocodebox-settings-title" tabIndex={-1} className="leocodebox-settings-dialog flex h-full w-full flex-col overflow-hidden border border-border bg-background shadow-elevation-3 md:h-[88vh] md:max-w-5xl md:rounded-lg">
         {/* Header */}
         <div className="flex h-14 flex-shrink-0 items-center justify-between border-b border-border px-4 md:px-5">
           <h2 id="leocodebox-settings-title" className="text-base font-semibold text-foreground">{t('title')}</h2>

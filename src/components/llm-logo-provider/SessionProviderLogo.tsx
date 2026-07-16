@@ -29,11 +29,11 @@ export default function SessionProviderLogo({
   }
 
   if (provider === 'gemini') {
-    return <Sparkles aria-label="Gemini CLI" className={`${className} text-blue-500`} />;
+    return <Sparkles aria-label="Gemini CLI" className={`${className} text-info`} />;
   }
 
   if (provider === 'hermes') {
-    return <TerminalSquare aria-label="Hermes Agent" className={`${className} text-amber-600`} />;
+    return <TerminalSquare aria-label="Hermes Agent" className={`${className} text-warning`} />;
   }
 
   if (provider === 'grok') {

@@ -64,6 +64,8 @@ interface ChatComposerProps {
   isLoading: boolean;
   onAbortSession: () => void;
   permissionMode: PermissionMode | string;
+  supportsPermissionRequests: boolean;
+  supportsTokenUsage: boolean;
   onModeSwitch: () => void;
   effort: string;
   availableEffortOptions: NonNullable<ProviderModelOption['effort']>['values'];
@@ -122,6 +124,8 @@ function ChatComposer({
   isLoading,
   onAbortSession,
   permissionMode,
+  supportsPermissionRequests,
+  supportsTokenUsage,
   onModeSwitch,
   effort,
   availableEffortOptions,
@@ -321,7 +325,7 @@ function ChatComposer({
 
       {!hasQuestionPanel && <div className="relative mx-auto max-w-[54.25rem]">
         {showFileDropdown && filteredFiles.length > 0 && (
-          <div className="absolute bottom-full left-0 right-0 z-50 mb-2 max-h-48 overflow-y-auto rounded-xl border border-border/50 bg-card/95 shadow-lg backdrop-blur-md">
+          <div className="absolute bottom-full left-0 right-0 z-50 mb-2 max-h-48 overflow-y-auto rounded-xl border border-border/50 bg-card/95 shadow-elevation-2 backdrop-blur-md">
             {filteredFiles.map((file, index) => (
               <div
                 key={file.path}
@@ -367,8 +371,8 @@ function ChatComposer({
           {...getRootProps()}
         >
           {isDragActive && (
-            <div className="absolute inset-0 z-50 flex items-center justify-center rounded-2xl border-2 border-dashed border-primary/50 bg-primary/15">
-              <div className="rounded-xl border border-border/30 bg-card p-4 shadow-lg">
+            <div className="absolute inset-0 z-50 flex items-center justify-center rounded-xl border-2 border-dashed border-primary/50 bg-primary/15">
+              <div className="rounded-xl border border-border/30 bg-card p-4 shadow-elevation-2">
                 <svg className="mx-auto mb-2 h-8 w-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path
                     strokeLinecap="round"
@@ -441,15 +445,15 @@ function ChatComposer({
             <button
               type="button"
               onClick={onModeSwitch}
-              className={`inline-flex h-8 items-center rounded-lg border px-2 text-xs font-medium transition-all duration-200 sm:px-2.5 ${
+              className={`inline-flex h-8 items-center rounded-lg border px-2 text-xs font-medium transition-all duration-base sm:px-2.5 ${
                 permissionMode === 'default'
                   ? 'border-border/60 bg-muted/50 text-muted-foreground hover:bg-muted'
                   : permissionMode === 'acceptEdits'
-                    ? 'border-green-300/60 bg-green-50 text-green-700 hover:bg-green-100 dark:border-green-600/40 dark:bg-green-900/15 dark:text-green-300 dark:hover:bg-green-900/25'
+                    ? 'border-success/60 bg-success text-success hover:bg-success dark:border-success/40 dark:bg-success/15 dark:text-success dark:hover:bg-success/25'
                     : permissionMode === 'auto'
-                      ? 'border-blue-300/60 bg-blue-50 text-blue-700 hover:bg-blue-100 dark:border-blue-600/40 dark:bg-blue-900/15 dark:text-blue-300 dark:hover:bg-blue-900/25'
+                      ? 'border-info/60 bg-info text-info hover:bg-info dark:border-info/40 dark:bg-info/15 dark:text-info dark:hover:bg-info/25'
                       : permissionMode === 'bypassPermissions'
-                        ? 'border-orange-300/60 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-600/40 dark:bg-orange-900/15 dark:text-orange-300 dark:hover:bg-orange-900/25'
+                        ? 'border-warning/60 bg-warning text-warning hover:bg-warning dark:border-warning/40 dark:bg-warning/15 dark:text-warning dark:hover:bg-warning/25'
                         : 'border-primary/20 bg-primary/5 text-primary hover:bg-primary/10'
               }`}
               title={t('input.clickToChangeMode')}
@@ -460,11 +464,11 @@ function ChatComposer({
                     permissionMode === 'default'
                       ? 'bg-muted-foreground'
                       : permissionMode === 'acceptEdits'
-                        ? 'bg-green-500'
+                        ? 'bg-success'
                         : permissionMode === 'auto'
-                          ? 'bg-blue-500'
+                          ? 'bg-info'
                           : permissionMode === 'bypassPermissions'
-                            ? 'bg-orange-500'
+                            ? 'bg-warning'
                             : 'bg-primary'
                   }`}
                 />
@@ -477,6 +481,14 @@ function ChatComposer({
                 </span>
               </div>
             </button>
+            <span
+              className="hidden max-w-40 truncate text-[10px] text-muted-foreground lg:inline"
+              title={supportsPermissionRequests
+                ? 'This provider supports interactive tool approvals while running.'
+                : 'This provider applies the selected permission mode at launch and cannot pause for interactive approval.'}
+            >
+              {supportsPermissionRequests ? 'Interactive approvals' : 'Launch-time permissions'}
+            </span>
 
             {availableEffortOptions.length > 0 && (
               <div ref={effortDropdownRef} className="relative">
@@ -487,7 +499,7 @@ function ChatComposer({
                     updateEffortDropdownPosition();
                     setIsEffortDropdownOpen((current) => !current);
                   }}
-                  className="flex h-8 items-center gap-1.5 rounded-lg border border-border/60 bg-muted/40 px-2 text-xs font-medium text-foreground transition-all duration-200 hover:bg-muted"
+                  className="flex h-8 items-center gap-1.5 rounded-lg border border-border/60 bg-muted/40 px-2 text-xs font-medium text-foreground transition-all duration-base hover:bg-muted"
                   aria-haspopup="menu"
                   aria-expanded={isEffortDropdownOpen}
                   aria-label="Select reasoning effort"
@@ -501,7 +513,7 @@ function ChatComposer({
                 {isEffortDropdownOpen && effortDropdownPosition && createPortal(
                   <div
                     ref={effortDropdownMenuRef}
-                    className="fixed z-[100] min-w-36 overflow-y-auto rounded-lg border border-border bg-card p-1 shadow-lg"
+                    className="fixed z-[100] min-w-36 overflow-y-auto rounded-lg border border-border bg-card p-1 shadow-elevation-2"
                     style={{
                       left: effortDropdownPosition.left,
                       top: effortDropdownPosition.top,
@@ -523,7 +535,7 @@ function ChatComposer({
                             onSelectEffort(option.value);
                             setIsEffortDropdownOpen(false);
                           }}
-                          className={`flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs capitalize transition-colors ${
+                          className={`flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs capitalize transition-colors ${
                             isSelected
                               ? 'bg-accent text-foreground'
                               : 'text-muted-foreground hover:bg-accent/70 hover:text-foreground'
@@ -542,7 +554,9 @@ function ChatComposer({
               </div>
             )}
 
-            <TokenUsageSummary usage={tokenBudget} onClick={onShowTokenUsage} />
+            {supportsTokenUsage
+              ? <TokenUsageSummary usage={tokenBudget} onClick={onShowTokenUsage} />
+              : <span className="hidden text-[10px] text-muted-foreground sm:inline" title="This provider does not expose token usage.">Usage unavailable</span>}
 
             <PromptInputButton
               tooltip={{ content: t('input.showAllCommands') }}
@@ -573,7 +587,7 @@ function ChatComposer({
 
           <div className="flex items-center gap-2">
             <div
-              className={`hidden text-xs text-muted-foreground/50 transition-opacity duration-200 lg:block ${
+              className={`hidden text-xs text-muted-foreground/50 transition-opacity duration-base lg:block ${
                 input.trim() && !canQueueDraft ? 'opacity-0' : 'opacity-100'
               }`}
             >

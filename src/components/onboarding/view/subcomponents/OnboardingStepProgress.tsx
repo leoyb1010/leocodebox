@@ -22,11 +22,11 @@ export default function OnboardingStepProgress({ currentStep }: OnboardingStepPr
             <div key={step.title} className="contents">
               <div className="flex flex-1 flex-col items-center">
                 <div
-                  className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all duration-200 ${
+                  className={`flex h-10 w-10 items-center justify-center rounded-full border-2 transition-all duration-base ${
                     isCompleted
-                      ? 'border-emerald-500 bg-emerald-500 text-white shadow-lg shadow-emerald-500/25'
+                      ? 'border-success bg-success text-primary-foreground shadow-elevation-2 shadow-emerald-500/25'
                       : isActive
-                        ? 'border-primary bg-primary text-primary-foreground shadow-lg shadow-primary/25'
+                        ? 'border-primary bg-primary text-primary-foreground shadow-elevation-2 shadow-primary/25'
                         : 'border-border bg-card text-muted-foreground'
                   }`}
                 >
@@ -37,12 +37,12 @@ export default function OnboardingStepProgress({ currentStep }: OnboardingStepPr
                   <p className={`text-sm font-medium ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}>
                     {step.title}
                   </p>
-                  {step.required && <span className="text-xs text-red-500">Required</span>}
+                  {step.required && <span className="text-xs text-destructive">Required</span>}
                 </div>
               </div>
 
               {index < onboardingSteps.length - 1 && (
-                <div className={`mx-2 h-0.5 flex-1 transition-colors duration-200 ${isCompleted ? 'bg-emerald-500' : 'bg-border'}`} />
+                <div className={`mx-2 h-0.5 flex-1 transition-colors duration-base ${isCompleted ? 'bg-success' : 'bg-border'}`} />
               )}
             </div>
           );

@@ -637,6 +637,18 @@ async function queryClaudeSDK(command: string, options: ClaudeRuntimeOptions = {
         },
         onCancel: (reason) => {
           ws.send(createNormalizedMessage({ kind: 'permission_cancelled', requestId, reason, sessionId: capturedSessionId || sessionId || null, provider: 'claude' }));
+          if (reason === 'timeout') {
+            emitNotification(createNotificationEvent({
+              provider: 'claude',
+              sessionId: capturedSessionId || sessionId || null,
+              kind: 'action_required',
+              code: 'permission.timed_out',
+              meta: { toolName, sessionName: sessionSummary, requestId },
+              severity: 'warning',
+              requiresUserAction: true,
+              dedupeKey: `claude:permission-timeout:${capturedSessionId || sessionId || 'none'}:${requestId}`,
+            }));
+          }
         }
       });
       if (!decision) {

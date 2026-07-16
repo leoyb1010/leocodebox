@@ -10,6 +10,33 @@ import tailwindcss from "eslint-plugin-tailwindcss";
 import unusedImports from "eslint-plugin-unused-imports";
 import globals from "globals";
 
+const designSystem = {
+  rules: {
+    'radius-tiers': {
+      meta: { type: 'problem', schema: [], messages: { invalid: 'Use only rounded-md, rounded-lg, rounded-xl, or rounded-full design-system tiers.' } },
+      create(context) {
+        const inspect = (node, value) => {
+          if (typeof value !== 'string') return;
+          if (/\brounded(?:-(?:sm|2xl|3xl|\[[^\]]+\]))\b/.test(value) || /(^|\s)rounded(?=\s|$)/.test(value)) {
+            context.report({ node, messageId: 'invalid' });
+          }
+        };
+        return {
+          Literal(node) { inspect(node, node.value); },
+          TemplateElement(node) { inspect(node, node.value?.raw); },
+        };
+      },
+    },
+    'motion-tokens': {
+      meta: { type: 'problem', schema: [], messages: { invalid: 'Use duration-fast, duration-base, or duration-slow motion tokens.' } },
+      create(context) {
+        const inspect = (node, value) => { if (typeof value === 'string' && /\bduration-\d+\b/.test(value)) context.report({ node, messageId: 'invalid' }); };
+        return { Literal(node) { inspect(node, node.value); }, TemplateElement(node) { inspect(node, node.value?.raw); } };
+      },
+    },
+  },
+};
+
 export default tseslint.config(
   {
     ignores: ["dist/**", "node_modules/**", "public/**"],
@@ -24,6 +51,7 @@ export default tseslint.config(
       "import-x": importX, // for import order/sorting. It also detercts circular dependencies and duplicate imports.
       tailwindcss, // for detecting invalid Tailwind classnames and enforcing classname order
       "unused-imports": unusedImports, // for detecting unused imports
+      "design-system": designSystem,
     },
     languageOptions: {
       globals: {
@@ -92,6 +120,8 @@ export default tseslint.config(
       "tailwindcss/classnames-order": "warn",
       "tailwindcss/no-contradicting-classname": "warn",
       "tailwindcss/no-unnecessary-arbitrary-value": "warn",
+      "design-system/radius-tiers": "error",
+      "design-system/motion-tokens": "error",
 
       // --- Disabled base rules ---
       "@typescript-eslint/no-explicit-any": "off",

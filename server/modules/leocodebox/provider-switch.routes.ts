@@ -9,7 +9,7 @@ import { appConfigDb } from '@/modules/database/index.js';
 import { PROVIDER_TEMPLATES } from '../../shared/provider-templates.js';
 
 
-import { applyProviderTransactionally } from './provider-apply.service.js';
+import { applyProviderTransactionally, previewProviderChanges } from './provider-apply.service.js';
 import {
   clearAutoFailoverRecord,
   getHealthSnapshot,
@@ -271,7 +271,9 @@ router.post('/switch/profiles/:name/apply', async (req, res, next) => {
     const store = await readStore();
     const provider = store.providers.find((item) => item.id === profile.providerId);
     if (!provider) return res.status(404).json({ success: false, error: 'Profile provider not found.' });
-    const changedFiles = await applyProviderTransactionally(provider, async () => {
+    const profileProvider: SwitchProvider = { ...provider, modelMapping: normalizeModelMapping(profile.modelMapping || {}, provider, provider.model) };
+    const changedFiles = await applyProviderTransactionally(profileProvider, async () => {
+      provider.modelMapping = profileProvider.modelMapping;
       store.activeByTarget[provider.target] = provider.id;
       provider.lastAppliedAt = nowIso();
       provider.updatedAt = nowIso();
@@ -339,20 +341,18 @@ router.get('/switch/providers/:id/preview', async (req, res, next) => {
     const store = await readStore();
     const provider = store.providers.find((item) => item.id === req.params.id);
     if (!provider) return res.status(404).json({ success: false, error: 'Provider not found.' });
-    const paths = targetConfigPaths(provider.target).map((filePath) => displayConfigPath(filePath));
+    const diff = (await previewProviderChanges(provider)).map((entry) => ({
+      ...entry,
+      filePath: displayConfigPath(entry.filePath),
+    }));
     res.json({
       success: true,
       provider: sanitizeProvider(provider),
       target: provider.target,
       currentlyActive: store.activeByTarget[provider.target] === provider.id,
-      files: paths,
-      changes: {
-        model: provider.model || null,
-        modelMapping: provider.modelMapping,
-        endpoint: provider.baseUrl || null,
-        apiKey: provider.apiKey ? 'replace encrypted API key' : 'remove API key override',
-      },
-      note: 'Apply creates a backup and updates only the managed provider blocks in the listed files.',
+      files: diff.map((entry) => entry.filePath),
+      diff,
+      note: 'Preview was rendered with the same writer used by Apply; secrets are masked and files were restored afterwards.',
     });
   } catch (error) { next(error); }
 });
@@ -368,6 +368,19 @@ router.post('/switch/providers/:id/apply', async (req, res, next) => {
       }
 
       const mappedModels = Object.values(provider.modelMapping || {}).filter((model): model is string => Boolean(model));
+      if (mappedModels.length > 0 && provider.baseUrl && !process.env.LEOCODEBOX_TEST_HOME) {
+        const discovery = await discoverProviderModels(provider, { bypassCache: true, timeoutMs: req.body?.timeoutMs });
+        provider.discoveredModels = discovery.models;
+        provider.modelDiscovery = {
+          latencyMs: discovery.latencyMs,
+          httpStatus: discovery.httpStatus,
+          modelCount: discovery.models.length,
+          lastSuccessAt: nowIso(),
+          lastErrorAt: null,
+        };
+        provider.updatedAt = nowIso();
+        await writeStore(store);
+      }
       if (mappedModels.length > 0 && provider.discoveredModels.length > 0) {
         const available = new Set(provider.discoveredModels);
         const missing = mappedModels.filter((model) => !available.has(model));

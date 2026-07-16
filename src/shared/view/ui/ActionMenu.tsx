@@ -140,7 +140,7 @@ export default function ActionMenu({
           role="menu"
           tabIndex={-1}
           className={cn(
-            'absolute top-full z-50 mt-2 min-w-[220px] rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg',
+            'absolute top-full z-50 mt-2 min-w-[220px] rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-elevation-2',
             'animate-in fade-in-0 zoom-in-95',
             align === 'right' ? 'right-0' : 'left-0',
           )}
@@ -161,7 +161,7 @@ export default function ActionMenu({
                     item.disabled || item.loading
                       ? 'cursor-not-allowed opacity-50'
                       : item.isDanger
-                        ? 'text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950'
+                        ? 'text-destructive hover:bg-destructive dark:text-destructive dark:hover:bg-destructive'
                         : 'hover:bg-accent',
                   )}
                 >

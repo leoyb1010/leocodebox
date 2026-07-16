@@ -1,7 +1,7 @@
-import { getConnection } from '@/modules/database/index.js';
+import { appConfigDb, getConnection } from '@/modules/database/index.js';
 
 
-const DEFAULT_PRICES_PER_MILLION: Record<string, { input: number; output: number }> = {
+export const DEFAULT_PRICES_PER_MILLION: Record<string, { input: number; output: number }> = {
   sonnet: { input: 3, output: 15 },
   opus: { input: 15, output: 75 },
   haiku: { input: 0.8, output: 4 },
@@ -10,17 +10,38 @@ const DEFAULT_PRICES_PER_MILLION: Record<string, { input: number; output: number
   grok: { input: 5, output: 15 },
 };
 
-function modelPrice(provider: string, model?: string | null) {
-  const configured = process.env.LEOCODEBOX_MODEL_PRICES_JSON;
-  if (configured) {
-    try {
-      const parsed = JSON.parse(configured) as Record<string, { input: number; output: number }>;
-      const key = Object.keys(parsed).find((candidate) => String(model || provider).toLowerCase().includes(candidate.toLowerCase()));
-      if (key) return parsed[key];
-    } catch { /* use built-ins */ }
+const MODEL_PRICES_KEY = 'usage_model_prices_per_million';
+export type ModelPriceTable = Record<string, { input: number; output: number }>;
+
+export function getModelPrices(): ModelPriceTable {
+  try {
+    const parsed = JSON.parse(appConfigDb.get(MODEL_PRICES_KEY) || '{}') as ModelPriceTable;
+    return { ...DEFAULT_PRICES_PER_MILLION, ...parsed };
+  } catch {
+    return { ...DEFAULT_PRICES_PER_MILLION };
   }
-  const key = Object.keys(DEFAULT_PRICES_PER_MILLION).find((candidate) => String(model || provider).toLowerCase().includes(candidate));
-  return (key && DEFAULT_PRICES_PER_MILLION[key]) || { input: 0, output: 0 };
+}
+
+export function setModelPrices(value: unknown): ModelPriceTable {
+  const input = value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  const normalized: ModelPriceTable = {};
+  for (const [key, raw] of Object.entries(input)) {
+    if (!key.trim() || !raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    const row = raw as Record<string, unknown>;
+    const inputPrice = Number(row.input);
+    const outputPrice = Number(row.output);
+    if (!Number.isFinite(inputPrice) || inputPrice < 0 || !Number.isFinite(outputPrice) || outputPrice < 0) continue;
+    normalized[key.trim().toLowerCase()] = { input: inputPrice, output: outputPrice };
+  }
+  appConfigDb.set(MODEL_PRICES_KEY, JSON.stringify(normalized));
+  return getModelPrices();
+}
+
+function modelPrice(provider: string, model?: string | null) {
+  const prices = getModelPrices();
+  const haystack = String(model || provider).toLowerCase();
+  const key = Object.keys(prices).find((candidate) => haystack.includes(candidate.toLowerCase()));
+  return (key && prices[key]) || { input: 0, output: 0 };
 }
 
 export function estimateUsageCostUsd(provider: string, model: string | null | undefined, inputTokens: number, outputTokens: number): number {

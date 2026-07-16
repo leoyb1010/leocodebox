@@ -30,7 +30,7 @@ export function VersionUpgradeModal({ isOpen, onClose }: VersionUpgradeModalProp
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <button className="fixed inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} aria-label={t('about.close')} />
-      <div className="relative max-h-[88vh] w-full max-w-xl overflow-y-auto rounded-lg border border-border bg-card p-5 shadow-xl">
+      <div className="relative max-h-[88vh] w-full max-w-xl overflow-y-auto rounded-lg border border-border bg-card p-5 shadow-elevation-3">
         <div className="flex items-start justify-between gap-4">
           <div>
             <h2 className="text-lg font-semibold text-foreground">{t('about.modalTitle')}</h2>
@@ -61,7 +61,7 @@ export function VersionUpgradeModal({ isOpen, onClose }: VersionUpgradeModalProp
         )}
 
         {status === 'authentication-required' && (
-          <p className="mt-5 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
+          <p className="mt-5 rounded-md border border-warning/30 bg-warning/10 p-3 text-sm text-warning dark:text-warning">
             {t('about.authNotice')}
           </p>
         )}

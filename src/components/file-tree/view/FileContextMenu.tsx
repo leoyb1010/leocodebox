@@ -269,7 +269,7 @@ export default function FileContextMenu({
           style={{ position: 'fixed', left: menuPosition.x, top: menuPosition.y, zIndex: 9999 }}
           className={cn(
             'min-w-[180px] py-1 px-1',
-            'bg-popover border border-border rounded-lg shadow-lg',
+            'bg-popover border border-border rounded-lg shadow-elevation-2',
             'animate-in fade-in-0 zoom-in-95',
             'data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95',
           )}
@@ -294,7 +294,7 @@ export default function FileContextMenu({
                     action.isDisabled
                       ? 'opacity-50 cursor-not-allowed'
                       : action.isDanger
-                      ? 'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950'
+                      ? 'text-destructive dark:text-destructive hover:bg-destructive dark:hover:bg-destructive'
                       : 'hover:bg-accent',
                     isLoading && 'pointer-events-none',
                   )}

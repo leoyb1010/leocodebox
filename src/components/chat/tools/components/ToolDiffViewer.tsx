@@ -29,8 +29,8 @@ export const ToolDiffViewer: React.FC<ToolDiffViewerProps> = ({
   badgeColor = 'gray'
 }) => {
   const badgeClasses = badgeColor === 'green'
-    ? 'bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400'
-    : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400';
+    ? 'bg-success dark:bg-success/30 text-success dark:text-success'
+    : 'bg-muted dark:bg-muted text-muted-foreground dark:text-muted-foreground';
 
   const diffLines = useMemo(
     () => {
@@ -43,22 +43,22 @@ export const ToolDiffViewer: React.FC<ToolDiffViewerProps> = ({
   );
 
   return (
-    <div className="overflow-hidden rounded border border-gray-200/60 dark:border-gray-700/50">
+    <div className="overflow-hidden rounded-md border border-border dark:border-border">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-gray-200/60 bg-gray-50/80 px-2.5 py-1 dark:border-gray-700/50 dark:bg-gray-800/40">
+      <div className="flex items-center justify-between border-b border-border bg-muted/80 px-2.5 py-1 dark:border-border dark:bg-muted/40">
         {onFileClick ? (
           <button
             onClick={onFileClick}
-            className="cursor-pointer truncate font-mono text-[11px] text-blue-600 transition-colors hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
+            className="cursor-pointer truncate font-mono text-[11px] text-info transition-colors hover:text-info dark:text-info dark:hover:text-info"
           >
             {filePath}
           </button>
         ) : (
-          <span className="truncate font-mono text-[11px] text-gray-600 dark:text-gray-400">
+          <span className="truncate font-mono text-[11px] text-muted-foreground dark:text-muted-foreground">
             {filePath}
           </span>
         )}
-        <span className={`rounded px-1.5 py-px text-[10px] font-medium ${badgeClasses} ml-2 flex-shrink-0`}>
+        <span className={`rounded-md px-1.5 py-px text-[10px] font-medium ${badgeClasses} ml-2 flex-shrink-0`}>
           {badge}
         </span>
       </div>
@@ -70,8 +70,8 @@ export const ToolDiffViewer: React.FC<ToolDiffViewerProps> = ({
             <span
               className={`w-6 flex-shrink-0 select-none text-center ${
                 diffLine.type === 'removed'
-                  ? 'bg-red-50 text-red-400 dark:bg-red-950/30 dark:text-red-500'
-                  : 'bg-green-50 text-green-400 dark:bg-green-950/30 dark:text-green-500'
+                  ? 'bg-destructive text-destructive dark:bg-destructive/30 dark:text-destructive'
+                  : 'bg-success text-success dark:bg-success/30 dark:text-success'
               }`}
             >
               {diffLine.type === 'removed' ? '-' : '+'}
@@ -79,8 +79,8 @@ export const ToolDiffViewer: React.FC<ToolDiffViewerProps> = ({
             <span
               className={`flex-1 whitespace-pre-wrap px-2 ${
                 diffLine.type === 'removed'
-                  ? 'bg-red-50/50 text-red-800 dark:bg-red-950/20 dark:text-red-200'
-                  : 'bg-green-50/50 text-green-800 dark:bg-green-950/20 dark:text-green-200'
+                  ? 'bg-destructive/50 text-destructive dark:bg-destructive/20 dark:text-destructive'
+                  : 'bg-success/50 text-success dark:bg-success/20 dark:text-success'
               }`}
             >
               {diffLine.content}

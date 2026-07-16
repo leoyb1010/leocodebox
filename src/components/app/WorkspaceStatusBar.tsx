@@ -26,7 +26,7 @@ export default function WorkspaceStatusBar({ selectedProject, runningCount, acti
   return (
     <footer className="leocodebox-status-bar hidden h-7 flex-shrink-0 items-center justify-between border-t border-border px-3 text-[10px] text-muted-foreground md:flex">
       <div className="flex min-w-0 items-center gap-3">
-        <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400">
+        <span className="inline-flex items-center gap-1.5 text-success dark:text-success">
           <span className="h-1.5 w-1.5 rounded-full bg-current" />
           {t('workspaceShell.serviceHealthy')}
         </span>
@@ -47,7 +47,7 @@ export default function WorkspaceStatusBar({ selectedProject, runningCount, acti
               : t('workspaceShell.restartRequired')}
           >
             <span
-              className={`h-1.5 w-1.5 animate-pulse rounded-full ${updateBadge.tone === 'update' ? 'bg-blue-500' : 'bg-amber-500'}`}
+              className={`h-1.5 w-1.5 animate-pulse rounded-full ${updateBadge.tone === 'update' ? 'bg-info' : 'bg-warning'}`}
             />
             {updateBadge.tone === 'update'
               ? t('workspaceShell.updateReady', { version: latestVersion ?? '' })

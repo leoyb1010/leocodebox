@@ -206,7 +206,7 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
           aria-modal="true"
           className={cn(
             'fixed left-1/2 top-1/2 z-[10000] w-full max-w-lg -translate-x-1/2 -translate-y-1/2',
-            'rounded-xl border bg-popover text-popover-foreground shadow-lg',
+            'rounded-xl border bg-popover text-popover-foreground shadow-elevation-2',
             'dialog-content',
             className
           )}

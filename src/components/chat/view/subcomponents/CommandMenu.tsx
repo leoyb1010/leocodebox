@@ -70,12 +70,12 @@ const namespaceIcons: Record<string, LucideIcon> = {
 };
 
 const namespaceAccentClasses: Record<string, string> = {
-  frequent: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-200',
-  builtin: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-400/20 dark:bg-sky-400/10 dark:text-sky-200',
-  skill: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-400/20 dark:bg-emerald-400/10 dark:text-emerald-200',
+  frequent: 'border-warning bg-warning text-warning dark:border-warning/20 dark:bg-warning/10 dark:text-warning',
+  builtin: 'border-info bg-info text-info dark:border-info/20 dark:bg-info/10 dark:text-info',
+  skill: 'border-success bg-success text-success dark:border-success/20 dark:bg-success/10 dark:text-success',
   project: 'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-400/20 dark:bg-indigo-400/10 dark:text-indigo-200',
   user: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200',
-  other: 'border-gray-200 bg-gray-50 text-gray-600 dark:border-gray-500/20 dark:bg-gray-500/10 dark:text-gray-200',
+  other: 'border-border bg-muted text-muted-foreground dark:border-border dark:bg-muted/10 dark:text-muted-foreground',
 };
 
 const MENU_EDGE_GAP = 16;
@@ -257,7 +257,7 @@ export default function CommandMenu({
           {orderedNamespaces.length > 1 && (
             <div className="flex items-center justify-between px-2 pb-1.5 pt-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
               <span>{namespaceLabels[namespace] || namespace}</span>
-              <span className="rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
+              <span className="rounded-md border border-border bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
                 {(groupedCommands[namespace] || []).length}
               </span>
             </div>
@@ -275,7 +275,7 @@ export default function CommandMenu({
                 aria-selected={isSelected}
                 className={`command-item group relative mb-1 flex cursor-pointer items-start gap-2 rounded-md border px-2.5 py-2 transition-all ${
                   isSelected
-                    ? 'border-primary/30 bg-primary/10 shadow-sm'
+                    ? 'border-primary/30 bg-primary/10 shadow-elevation-1'
                     : 'border-transparent bg-transparent hover:border-border hover:bg-accent'
                 }`}
                 onMouseEnter={() => onSelect && commandIndex >= 0 && onSelect(command, commandIndex, true)}
@@ -297,7 +297,7 @@ export default function CommandMenu({
                       {command.name}
                     </span>
                     {command.metadata?.type && (
-                      <span className="command-metadata-badge shrink-0 rounded border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground shadow-sm">
+                      <span className="command-metadata-badge shrink-0 rounded-md border border-border bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground shadow-elevation-1">
                         {command.metadata.type}
                       </span>
                     )}
@@ -312,7 +312,7 @@ export default function CommandMenu({
                   )}
                 </div>
                 {isSelected && (
-                  <span className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded border border-primary/30 bg-card text-primary shadow-sm">
+                  <span className="mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-primary/30 bg-card text-primary shadow-elevation-1">
                     <CornerDownLeft aria-hidden="true" size={13} strokeWidth={2.2} />
                   </span>
                 )}

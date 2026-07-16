@@ -228,7 +228,7 @@ export default function ProviderSelectionEmptyState({
     return (
       <div className="flex h-full items-center justify-center px-6">
         <div className="grid w-full max-w-5xl items-center gap-8 lg:grid-cols-[1.05fr_.95fr] lg:gap-12">
-          <picture className="order-2 block overflow-hidden rounded-lg border border-border/60 bg-muted/20 shadow-sm lg:order-1">
+          <picture className="order-2 block overflow-hidden rounded-lg border border-border/60 bg-muted/20 shadow-elevation-1 lg:order-1">
             <source media="(prefers-color-scheme: dark)" srcSet="/visuals/onboarding/local-workbench-dark.webp" />
             <img src="/visuals/onboarding/local-workbench-light.webp" alt="" className="aspect-[16/10] w-full object-cover" />
           </picture>
@@ -245,7 +245,7 @@ export default function ProviderSelectionEmptyState({
           <Dialog open={dialogOpen} onOpenChange={openDialog}>
             <DialogTrigger asChild>
               <Card
-                className="group max-w-sm cursor-pointer border-border/60 transition-all duration-150 hover:border-border hover:shadow-md active:scale-[0.99]"
+                className="group max-w-sm cursor-pointer border-border/60 transition-all duration-fast hover:border-border hover:shadow-elevation-2 active:scale-[0.99]"
               >
                 <div className="flex items-center gap-2 p-3">
                   <SessionProviderLogo
@@ -416,7 +416,7 @@ export default function ProviderSelectionEmptyState({
               values={{ shortcut: MOD_KEY === "⌘" ? "⌘K" : "Ctrl+K" }}
               components={{
                 kbd: (
-                  <kbd className="inline-flex items-center gap-0.5 rounded border border-border/60 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px]" />
+                  <kbd className="inline-flex items-center gap-0.5 rounded-md border border-border/60 bg-muted/40 px-1.5 py-0.5 font-mono text-[10px]" />
                 ),
               }}
             />

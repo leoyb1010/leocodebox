@@ -26,6 +26,7 @@ import notificationRoutes from './modules/notifications/notifications.routes.js'
 import userRoutes from './routes/user.js';
 import pluginsRoutes from './routes/plugins.js';
 import leocodeboxRoutes, { startHealthMonitor } from './modules/leocodebox/index.js';
+import { startDailyUsageSummary } from './modules/usage/index.js';
 import providerRoutes from './modules/providers/provider.routes.js';
 import agentProfilesRoutes from './modules/agent-profiles/agent-profiles.routes.js';
 import voiceRoutes from './voice-proxy.js';
@@ -258,5 +259,7 @@ void browserUseService.repairAgentMcpRegistration().catch((error) => {
 if (process.env.LEOCODEBOX_LOCAL_ONLY === '1') {
   startHealthMonitor();
 }
+
+startDailyUsageSummary();
 
 void startServerLifecycle({ server, appRoot: APP_ROOT, installMode, runningVersion: RUNNING_VERSION });

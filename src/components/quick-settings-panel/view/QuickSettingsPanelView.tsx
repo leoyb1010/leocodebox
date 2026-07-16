@@ -67,7 +67,7 @@ export default function QuickSettingsPanelView() {
       />
 
       <div
-        className={`fixed right-0 top-0 z-40 h-full w-64 transform border-l border-border bg-background shadow-xl transition-transform duration-150 ease-out ${isOpen ? 'translate-x-0' : 'translate-x-full'} ${isMobile ? 'h-screen' : ''}`}
+        className={`sheet-panel fixed right-0 top-0 z-40 h-full w-64 transform border-l border-border bg-background shadow-elevation-3 ${isOpen ? 'translate-x-0' : 'translate-x-full'} ${isMobile ? 'h-screen' : ''}`}
       >
         <div className="flex h-full flex-col">
           <QuickSettingsPanelHeader />
@@ -79,12 +79,11 @@ export default function QuickSettingsPanelView() {
         </div>
       </div>
 
-      {isOpen && (
-        <div
-          className="fixed inset-0 z-30 bg-background/80 backdrop-blur-sm transition-opacity duration-150 ease-out"
-          onClick={() => setIsOpen(false)}
-        />
-      )}
+      <div
+        className={`sheet-overlay fixed inset-0 z-30 bg-background/80 backdrop-blur-sm ${isOpen ? 'visible opacity-100' : 'pointer-events-none invisible opacity-0'}`}
+        onClick={() => setIsOpen(false)}
+        aria-hidden={!isOpen}
+      />
     </>
   );
 }

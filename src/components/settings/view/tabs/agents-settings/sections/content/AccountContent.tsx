@@ -24,11 +24,11 @@ type AgentVisualConfig = {
 const agentConfig: Record<AgentProvider, AgentVisualConfig> = {
   claude: {
     name: 'Claude',
-    bgClass: 'bg-blue-50 dark:bg-blue-900/20',
-    borderClass: 'border-blue-200 dark:border-blue-800',
-    textClass: 'text-blue-900 dark:text-blue-100',
-    subtextClass: 'text-blue-700 dark:text-blue-300',
-    buttonClass: 'bg-blue-600 hover:bg-blue-700 active:bg-blue-800',
+    bgClass: 'bg-info dark:bg-info/20',
+    borderClass: 'border-info dark:border-info',
+    textClass: 'text-info dark:text-info',
+    subtextClass: 'text-info dark:text-info',
+    buttonClass: 'bg-info hover:bg-info active:bg-info',
   },
   cursor: {
     name: 'Cursor',
@@ -41,10 +41,10 @@ const agentConfig: Record<AgentProvider, AgentVisualConfig> = {
   codex: {
     name: 'Codex',
     bgClass: 'bg-muted/50',
-    borderClass: 'border-gray-300 dark:border-gray-600',
-    textClass: 'text-gray-900 dark:text-gray-100',
-    subtextClass: 'text-gray-700 dark:text-gray-300',
-    buttonClass: 'bg-gray-800 hover:bg-gray-900 active:bg-gray-950 dark:bg-gray-700 dark:hover:bg-gray-600 dark:active:bg-gray-500',
+    borderClass: 'border-border dark:border-border',
+    textClass: 'text-muted-foreground dark:text-muted-foreground',
+    subtextClass: 'text-muted-foreground dark:text-muted-foreground',
+    buttonClass: 'bg-muted hover:bg-muted active:bg-muted dark:bg-muted dark:hover:bg-muted dark:active:bg-muted',
   },
   opencode: {
     name: 'OpenCode',
@@ -58,11 +58,11 @@ const agentConfig: Record<AgentProvider, AgentVisualConfig> = {
   grok: {
     name: 'Grok',
     description: 'xAI Grok agent',
-    bgClass: 'bg-slate-50 dark:bg-slate-900/30',
-    borderClass: 'border-slate-300 dark:border-slate-700',
-    textClass: 'text-slate-900 dark:text-slate-100',
-    subtextClass: 'text-slate-700 dark:text-slate-300',
-    buttonClass: 'bg-slate-900 hover:bg-slate-800 active:bg-slate-950 dark:bg-slate-800 dark:hover:bg-slate-700',
+    bgClass: 'bg-muted dark:bg-muted/30',
+    borderClass: 'border-border dark:border-border',
+    textClass: 'text-muted-foreground dark:text-muted-foreground',
+    subtextClass: 'text-muted-foreground dark:text-muted-foreground',
+    buttonClass: 'bg-muted hover:bg-muted active:bg-muted dark:bg-muted dark:hover:bg-muted',
   },
 };
 
@@ -127,15 +127,15 @@ export default function AccountContent({ agent, authStatus, onLogin }: AccountCo
                   {t('agents.authStatus.checking')}
                 </Badge>
               ) : authStatus.authenticated ? (
-                <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                <Badge variant="secondary" className="bg-success text-success dark:bg-success/30 dark:text-success">
                   {t('agents.authStatus.connected')}
                 </Badge>
               ) : authStatus.installed === false ? (
-                <Badge variant="secondary" className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                <Badge variant="secondary" className="bg-warning text-warning dark:bg-warning/30 dark:text-warning">
                   {t('agents.authStatus.missing')}
                 </Badge>
               ) : (
-                <Badge variant="secondary" className="bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300">
+                <Badge variant="secondary" className="bg-muted text-muted-foreground dark:bg-muted dark:text-muted-foreground">
                   {t('agents.authStatus.disconnected')}
                 </Badge>
               )}
@@ -157,7 +157,7 @@ export default function AccountContent({ agent, authStatus, onLogin }: AccountCo
                 </div>
                 <Button
                   onClick={onLogin}
-                  className={`${config.buttonClass} text-white`}
+                  className={`${config.buttonClass} text-primary-foreground`}
                   size="sm"
                 >
                   <LogIn className="mr-2 h-4 w-4" />
@@ -169,12 +169,12 @@ export default function AccountContent({ agent, authStatus, onLogin }: AccountCo
 
           {authStatus.error && (
             <div className="border-t border-border/50 pt-4">
-              <div className="text-sm text-red-600 dark:text-red-400">
+              <div className="text-sm text-destructive dark:text-destructive">
                 {t('agents.error', { error: t(authErrorKey(authStatus.error)) })}
               </div>
               <details className="mt-2 text-xs text-muted-foreground">
                 <summary className="cursor-pointer select-none">{t('agents.authErrors.details')}</summary>
-                <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap break-words rounded border border-border/60 bg-background/70 p-2 font-mono text-[11px]">
+                <pre className="mt-2 max-h-32 overflow-auto whitespace-pre-wrap break-words rounded-md border border-border/60 bg-background/70 p-2 font-mono text-[11px]">
                   {authStatus.error}
                 </pre>
               </details>

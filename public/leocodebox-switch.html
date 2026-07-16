@@ -645,6 +645,7 @@
 
     let state = null;
     let backups = [];
+    let switchProfiles = [];
     let backupError = "";
     let selectedTarget = localStorage.getItem("leoapi-target") || "claude";
     let selectedProvider = "";
@@ -1082,6 +1083,7 @@
               <summary class="icon-button" aria-label="更多操作" title="更多操作"><img src="${icon("ellipsis")}" alt=""></summary>
               <div class="menu-popover">
                 <button type="button" data-copy="${providerId}"><img src="${icon("copy")}" alt="">${text("copy")}</button>
+                <button type="button" data-save-profile="${providerId}"><img src="${icon("file-json-2")}" alt="">保存为方案</button>
                 <button class="danger" type="button" data-delete="${providerId}"><img src="${icon("trash-2")}" alt="">${text("remove")}</button>
               </div>
             </details>
@@ -1118,6 +1120,11 @@
         section("本机原配置", nativeCard),
         section("今天在用", activeProvider ? renderProviderCard(activeProvider) : ""),
         section("备选节点", alternatives.map(renderProviderCard).join("")),
+        section("一键方案", switchProfiles.filter((profile) => profile.target === selectedTarget).map((profile) => `<article class="provider-card">
+          <div class="provider-mark" aria-hidden="true"><img src="${targetIcon(profile.target)}" alt=""></div>
+          <div class="provider-info"><div class="provider-title"><strong>${escapeHtml(profile.name)}</strong><span class="state-chip readonly">Profile</span></div><span class="provider-url">${escapeHtml(state.providers.find((item) => item.id === profile.providerId)?.name || profile.providerId)}</span></div>
+          <div class="card-actions"><button class="primary-button activate-button" type="button" data-apply-profile="${escapeHtml(profile.name)}">应用</button><button class="icon-button danger" type="button" data-delete-profile="${escapeHtml(profile.name)}" title="删除方案"><img src="${icon("trash-2")}" alt=""></button></div>
+        </article>`).join("")),
       ].join("");
     }
 
@@ -1366,9 +1373,10 @@
     }
 
     async function refresh() {
-      const [statusResult, backupResult] = await Promise.allSettled([
+      const [statusResult, backupResult, profilesResult] = await Promise.allSettled([
         api("/api/leocodebox/switch/status"),
         api("/api/leocodebox/switch/backups"),
+        api("/api/leocodebox/switch/profiles"),
       ]);
       if (statusResult.status === "rejected") {
         const message = `无法读取 Leoapi 接口配置：${statusResult.reason.message}。请点击右上角刷新重试。`;
@@ -1385,6 +1393,7 @@
         backups = [];
         backupError = backupResult.reason.message;
       }
+      switchProfiles = profilesResult.status === "fulfilled" ? (profilesResult.value.profiles || []) : [];
       render();
     }
 
@@ -1561,10 +1570,15 @@
       const provider = state.providers.find((item) => item.id === id);
       if (!provider) return;
       const target = state.targets[provider.target];
-      const files = (target?.configPaths || []).join("\n");
+      const preview = await api(`/api/leocodebox/switch/providers/${encodeURIComponent(id)}/preview`);
+      const changes = (preview.diff || []).filter((entry) => entry.changed).map((entry) => {
+        const before = entry.before == null ? "(new file)" : entry.before;
+        const after = entry.after == null ? "(removed)" : entry.after;
+        return `${entry.filePath}\n--- before\n${before.slice(0, 1200)}\n+++ after\n${after.slice(0, 1200)}`;
+      }).join("\n\n");
       const prompt = language() === "en"
-        ? `Enable ${provider.name} for ${target?.label || provider.target}?\n\nThe following files will be backed up first:\n${files}`
-        : `确认将 ${provider.name} 用于 ${target?.label || provider.target}？\n\n以下文件会先备份再修改：\n${files}`;
+        ? `Enable ${provider.name} for ${target?.label || provider.target}?\n\nExact dry-run diff (secrets masked):\n${changes || "No file changes"}`
+        : `确认将 ${provider.name} 用于 ${target?.label || provider.target}？\n\n真实 dry-run 差异（密钥已隐藏）：\n${changes || "没有文件变化"}`;
       if (!(await confirmDialog(prompt))) return;
       const result = await api(`/api/leocodebox/switch/providers/${encodeURIComponent(id)}/apply`, { method: "POST", body: "{}" });
       window.parent.dispatchEvent(new CustomEvent("leocodebox-provider:applied", {
@@ -1573,6 +1587,29 @@
       selectedProvider = id;
       await refresh();
       showToast(text("applied", { name: provider.name }), "ok");
+    }
+
+    async function saveSwitchProfile(providerId) {
+      const provider = state.providers.find((item) => item.id === providerId);
+      if (!provider) return;
+      const name = window.prompt("方案名称", `${provider.name} · ${provider.target}`)?.trim();
+      if (!name) return;
+      await api("/api/leocodebox/switch/profiles", { method: "POST", body: JSON.stringify({ name, providerId }) });
+      await refresh();
+      showToast(`已保存方案 ${name}`, "ok");
+    }
+
+    async function applySwitchProfile(name) {
+      const result = await api(`/api/leocodebox/switch/profiles/${encodeURIComponent(name)}/apply`, { method: "POST", body: "{}" });
+      window.parent.dispatchEvent(new CustomEvent("leocodebox-provider:applied", { detail: { target: result.profile?.target, activeModel: result.provider?.model || null } }));
+      await refresh();
+      showToast(`已应用方案 ${name}`, "ok");
+    }
+
+    async function deleteSwitchProfile(name) {
+      if (!(await confirmDialog(`删除方案「${name}」？`))) return;
+      await api(`/api/leocodebox/switch/profiles/${encodeURIComponent(name)}`, { method: "DELETE" });
+      await refresh();
     }
 
     async function restoreDefault(target) {
@@ -1692,6 +1729,12 @@
       if (copy) copyProviderUrl(copy.dataset.copy).catch((error) => showToast(error.message, "error"));
       const remove = event.target.closest("[data-delete]");
       if (remove) deleteProvider(remove.dataset.delete).catch((error) => showToast(error.message, "error"));
+      const saveProfile = event.target.closest("[data-save-profile]");
+      if (saveProfile) saveSwitchProfile(saveProfile.dataset.saveProfile).catch((error) => showToast(error.message, "error"));
+      const applyProfile = event.target.closest("[data-apply-profile]");
+      if (applyProfile) applySwitchProfile(applyProfile.dataset.applyProfile).catch((error) => showToast(error.message, "error"));
+      const deleteProfile = event.target.closest("[data-delete-profile]");
+      if (deleteProfile) deleteSwitchProfile(deleteProfile.dataset.deleteProfile).catch((error) => showToast(error.message, "error"));
       const restore = event.target.closest("[data-restore]");
       if (restore) restoreBackup(restore.dataset.restore).catch((error) => showToast(error.message, "error"));
       const restoreDefaultButton = event.target.closest("[data-restore-default]");

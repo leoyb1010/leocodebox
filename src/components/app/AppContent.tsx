@@ -271,11 +271,11 @@ function AppContentInner() {
         </div>
       ) : (
         <div
-          className={`fixed inset-0 z-50 flex transition-all duration-150 ease-out ${sidebarOpen ? 'visible opacity-100' : 'invisible opacity-0'
+          className={`sheet-overlay fixed inset-0 z-50 flex ${sidebarOpen ? 'visible opacity-100' : 'invisible opacity-0'
             }`}
         >
           <button
-            className="fixed inset-0 bg-background/60 backdrop-blur-sm transition-opacity duration-150 ease-out"
+            className="fixed inset-0 bg-background/60 backdrop-blur-sm"
             onClick={(event) => {
               event.stopPropagation();
               setSidebarOpen(false);
@@ -288,7 +288,7 @@ function AppContentInner() {
             aria-label={t('versionUpdate.ariaLabels.closeSidebar')}
           />
           <div
-            className={`relative h-full w-[85vw] max-w-sm transform border-r border-border/40 bg-card transition-transform duration-150 ease-out sm:w-80 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
+            className={`sheet-panel relative h-full w-[85vw] max-w-sm transform border-r border-border/40 bg-card sm:w-80 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'
               }`}
             onClick={(event) => event.stopPropagation()}
             onTouchStart={(event) => event.stopPropagation()}

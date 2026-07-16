@@ -1,5 +1,5 @@
 import { memo, useEffect, useRef } from 'react';
-import { Check, Edit2, Loader2, Trash2, X } from 'lucide-react';
+import { Check, Download, Edit2, FileJson2, Loader2, Pin, PinOff, Trash2, X } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
 import { Badge, Tooltip, buttonVariants } from '../../../../shared/view/ui';
@@ -8,6 +8,8 @@ import type { Project, ProjectSession, LLMProvider } from '../../../../types/app
 import type { SessionWithProvider } from '../../types/types';
 import { createSessionViewModel } from '../../utils/utils';
 import SessionProviderLogo from '../../../llm-logo-provider/SessionProviderLogo';
+import { apiClient } from '../../../../utils/apiClient';
+import { usePaletteOps } from '../../../../contexts/PaletteOpsContext';
 
 type SidebarSessionItemProps = {
   project: Project;
@@ -80,6 +82,7 @@ function SidebarSessionItem({
   t,
 }: SidebarSessionItemProps) {
   const sessionView = createSessionViewModel(session, currentTime, t);
+  const paletteOps = usePaletteOps();
   const isSelected = selectedSession?.id === session.id;
   const isEditing = editingSession === session.id;
   const compactSessionAge = formatCompactSessionAge(sessionView.sessionTime, currentTime);
@@ -138,7 +141,7 @@ function SidebarSessionItem({
                 : t('tooltips.activeSessionIndicator')}
               className={cn(
                 'h-2 w-2 animate-pulse rounded-full',
-                showAttentionIndicator ? 'bg-amber-500' : 'bg-green-500',
+                showAttentionIndicator ? 'bg-warning' : 'bg-success',
               )}
             />
           </Tooltip>
@@ -148,12 +151,12 @@ function SidebarSessionItem({
       <div className="md:hidden">
         <div
           className={cn(
-            'p-2 mx-3 my-0.5 rounded-md bg-card border active:scale-[0.98] transition-all duration-150 relative',
+            'session-list-enter p-2 mx-3 my-0.5 rounded-md bg-card border active:scale-[0.98] transition-all duration-fast relative',
             isSelected ? 'bg-primary/5 border-primary/20' : '',
             !isSelected && isProcessing
               ? 'border-border/60 bg-muted/20'
               : !isSelected && sessionView.isActive
-              ? 'border-green-500/30 bg-green-50/5 dark:bg-green-900/5'
+              ? 'border-success/30 bg-success/5 dark:bg-success/5'
               : 'border-border/30',
           )}
           onClick={selectMobileSession}
@@ -170,6 +173,7 @@ function SidebarSessionItem({
 
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
+                {session.isPinned && <Pin className="h-3 w-3 flex-shrink-0 text-primary" aria-label="Pinned session" />}
                 <div className="min-w-0 flex-1 truncate text-sm font-normal text-foreground">{sessionView.sessionName}</div>
                 {isProcessing ? (
                   <span className="ml-auto flex-shrink-0">
@@ -194,13 +198,13 @@ function SidebarSessionItem({
 
             {!isProcessing && (
               <button
-                className="ml-1 flex h-5 w-5 items-center justify-center rounded-md bg-red-50 opacity-70 transition-transform active:scale-95 dark:bg-red-900/20"
+                className="ml-1 flex h-5 w-5 items-center justify-center rounded-md bg-destructive opacity-70 transition-transform active:scale-95 dark:bg-destructive/20"
                 onClick={(event) => {
                   event.stopPropagation();
                   requestDeleteSession();
                 }}
               >
-                <Trash2 className="h-2.5 w-2.5 text-red-600 dark:text-red-400" />
+                <Trash2 className="h-2.5 w-2.5 text-destructive dark:text-destructive" />
               </button>
             )}
           </div>
@@ -212,12 +216,12 @@ function SidebarSessionItem({
           href={`/session/${session.id}`}
           className={cn(
             buttonVariants({ variant: 'ghost' }),
-            'h-auto w-full justify-start rounded-md border bg-card p-2 text-left font-normal transition-all duration-150',
+            'h-auto w-full justify-start rounded-md border bg-card p-2 text-left font-normal transition-all duration-fast',
             isSelected ? 'border-primary/20 bg-primary/5' : 'border-border/30',
             !isSelected && isProcessing
               ? 'border-border/60 bg-muted/20 hover:bg-muted/25'
               : !isSelected && sessionView.isActive
-                ? 'border-green-500/30 bg-green-50/5 hover:bg-green-50/10 dark:bg-green-900/5 dark:hover:bg-green-900/10'
+                ? 'border-success/30 bg-success/5 hover:bg-success/10 dark:bg-success/5 dark:hover:bg-success/10'
                 : 'hover:bg-accent/50',
           )}
           // Left-click keeps in-app navigation; Ctrl/Cmd/middle-click and the
@@ -239,11 +243,12 @@ function SidebarSessionItem({
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
+                {session.isPinned && <Pin className="h-3 w-3 flex-shrink-0 text-primary" aria-label="Pinned session" />}
                 <div className="min-w-0 flex-1 truncate text-sm font-normal text-foreground">{sessionView.sessionName}</div>
                 {isProcessing ? (
                   <span
                     className={cn(
-                      'ml-auto flex-shrink-0 transition-opacity duration-200',
+                      'ml-auto flex-shrink-0 transition-opacity duration-base',
                       isEditing ? 'opacity-0' : 'group-hover:opacity-0',
                     )}
                   >
@@ -256,7 +261,7 @@ function SidebarSessionItem({
                 ) : compactSessionAge && (
                   <span
                     className={cn(
-                      'ml-auto flex-shrink-0 text-[11px] text-muted-foreground transition-opacity duration-200',
+                      'ml-auto flex-shrink-0 text-[11px] text-muted-foreground transition-opacity duration-base',
                       isEditing ? 'opacity-0' : 'group-hover:opacity-0',
                     )}
                   >
@@ -274,7 +279,7 @@ function SidebarSessionItem({
         <div
           ref={editingContainerRef}
           className={cn(
-            'absolute right-2 top-1/2 flex -translate-y-1/2 transform items-center gap-1 transition-all duration-200',
+            'absolute right-2 top-1/2 flex -translate-y-1/2 transform items-center gap-1 transition-all duration-base',
             isEditing ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
           )}
         >
@@ -293,52 +298,81 @@ function SidebarSessionItem({
                     }
                   }}
                   onClick={(event) => event.stopPropagation()}
-                  className="w-32 rounded border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="w-32 rounded-md border border-border bg-background px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-primary"
                   autoFocus
                 />
                 <button
-                  className="flex h-6 w-6 items-center justify-center rounded bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/40"
+                  className="flex h-6 w-6 items-center justify-center rounded-md bg-success hover:bg-success dark:bg-success/20 dark:hover:bg-success/40"
                   onClick={(event) => {
                     event.stopPropagation();
                     saveEditedSession();
                   }}
                   title={t('tooltips.save')}
                 >
-                  <Check className="h-3 w-3 text-green-600 dark:text-green-400" />
+                  <Check className="h-3 w-3 text-success dark:text-success" />
                 </button>
                 <button
-                  className="flex h-6 w-6 items-center justify-center rounded bg-gray-50 hover:bg-gray-100 dark:bg-gray-900/20 dark:hover:bg-gray-900/40"
+                  className="flex h-6 w-6 items-center justify-center rounded-md bg-muted hover:bg-muted dark:bg-muted/20 dark:hover:bg-muted/40"
                   onClick={(event) => {
                     event.stopPropagation();
                     onCancelEditingSession();
                   }}
                   title={t('tooltips.cancel')}
                 >
-                  <X className="h-3 w-3 text-gray-600 dark:text-gray-400" />
+                  <X className="h-3 w-3 text-muted-foreground dark:text-muted-foreground" />
                 </button>
               </>
             ) : (
               <>
                 <button
-                  className="flex h-6 w-6 items-center justify-center rounded bg-gray-50 hover:bg-gray-100 dark:bg-gray-900/20 dark:hover:bg-gray-900/40"
+                  className="flex h-6 w-6 items-center justify-center rounded-md bg-muted hover:bg-muted dark:bg-muted/20 dark:hover:bg-muted/40"
                   onClick={(event) => {
                     event.stopPropagation();
                     onStartEditingSession(session.id, sessionView.sessionName);
                   }}
                   title={t('tooltips.editSessionName')}
                 >
-                  <Edit2 className="h-3 w-3 text-gray-600 dark:text-gray-400" />
+                  <Edit2 className="h-3 w-3 text-muted-foreground dark:text-muted-foreground" />
                 </button>
+                <button
+                  className="flex h-6 w-6 items-center justify-center rounded-md bg-muted hover:bg-accent"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    void apiClient.post(`/api/providers/sessions/${encodeURIComponent(session.id)}/pin`, { pinned: !session.isPinned })
+                      .then(() => paletteOps.refreshProjects());
+                  }}
+                  title={session.isPinned ? 'Unpin session' : 'Pin session'}
+                >
+                  {session.isPinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
+                </button>
+                <a
+                  className="flex h-6 w-6 items-center justify-center rounded-md bg-muted hover:bg-accent"
+                  href={`/api/providers/sessions/${encodeURIComponent(session.id)}/export?format=markdown`}
+                  download
+                  onClick={(event) => event.stopPropagation()}
+                  title="Export session as Markdown"
+                >
+                  <Download className="h-3 w-3" />
+                </a>
+                <a
+                  className="flex h-6 w-6 items-center justify-center rounded-md bg-muted hover:bg-accent"
+                  href={`/api/providers/sessions/${encodeURIComponent(session.id)}/export?format=json`}
+                  download
+                  onClick={(event) => event.stopPropagation()}
+                  title="Export session as JSON"
+                >
+                  <FileJson2 className="h-3 w-3" />
+                </a>
                 {!isProcessing && (
                   <button
-                    className="flex h-6 w-6 items-center justify-center rounded bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/40"
+                    className="flex h-6 w-6 items-center justify-center rounded-md bg-destructive hover:bg-destructive dark:bg-destructive/20 dark:hover:bg-destructive/40"
                     onClick={(event) => {
                       event.stopPropagation();
                       requestDeleteSession();
                     }}
                     title={t('tooltips.deleteSessionOptions', 'Archive or permanently delete this session')}
                   >
-                    <Trash2 className="h-3 w-3 text-red-600 dark:text-red-400" />
+                    <Trash2 className="h-3 w-3 text-destructive dark:text-destructive" />
                   </button>
                 )}
               </>

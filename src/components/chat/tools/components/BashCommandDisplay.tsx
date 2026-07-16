@@ -67,10 +67,10 @@ export const BashCommandDisplay: React.FC<BashCommandDisplayProps> = ({
   return (
     <div
       className={cn(
-        'group/cmd overflow-hidden rounded-lg border bg-muted/40 backdrop-blur-sm transition-all duration-200',
-        isError ? 'border-red-500/30' : 'border-border/60',
+        'group/cmd overflow-hidden rounded-lg border bg-muted/40 backdrop-blur-sm transition-all duration-base',
+        isError ? 'border-destructive/30' : 'border-border/60',
         hasOutput && !open && 'hover:border-border hover:bg-muted/60',
-        open && 'bg-muted/50 shadow-sm',
+        open && 'bg-muted/50 shadow-elevation-1',
       )}
     >
       {/* Command header — clickable when there is output to expand */}
@@ -92,12 +92,12 @@ export const BashCommandDisplay: React.FC<BashCommandDisplayProps> = ({
       >
         <ChevronRight
           className={cn(
-            'h-3.5 w-3.5 flex-shrink-0 text-muted-foreground/70 transition-transform duration-200',
+            'h-3.5 w-3.5 flex-shrink-0 text-muted-foreground/70 transition-transform duration-base',
             open && 'rotate-90',
             !hasOutput && 'opacity-0',
           )}
         />
-        <span className="flex-shrink-0 select-none font-mono text-xs font-semibold text-emerald-500 dark:text-emerald-400">
+        <span className="flex-shrink-0 select-none font-mono text-xs font-semibold text-success dark:text-success">
           $
         </span>
         <code
@@ -122,11 +122,11 @@ export const BashCommandDisplay: React.FC<BashCommandDisplayProps> = ({
         <button
           onClick={handleCopy}
           onKeyDown={(event) => event.stopPropagation()}
-          className="flex-shrink-0 rounded p-0.5 text-muted-foreground/60 opacity-0 transition-all hover:bg-foreground/10 hover:text-foreground focus:opacity-100 group-hover/cmd:opacity-100"
+          className="flex-shrink-0 rounded-md p-0.5 text-muted-foreground/60 opacity-0 transition-all hover:bg-foreground/10 hover:text-foreground focus:opacity-100 group-hover/cmd:opacity-100"
           title="Copy command"
           aria-label="Copy command"
         >
-          {copied ? <Check className="h-3.5 w-3.5 text-emerald-500" /> : <Copy className="h-3.5 w-3.5" />}
+          {copied ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
         </button>
       </div>
 
@@ -145,7 +145,7 @@ export const BashCommandDisplay: React.FC<BashCommandDisplayProps> = ({
           <pre
             className={cn(
               'max-h-80 overflow-auto whitespace-pre-wrap break-all px-3 py-2 font-mono text-xs leading-relaxed',
-              isError ? 'text-red-600 dark:text-red-400' : 'text-muted-foreground',
+              isError ? 'text-destructive dark:text-destructive' : 'text-muted-foreground',
             )}
           >
             {trimmedOutput}

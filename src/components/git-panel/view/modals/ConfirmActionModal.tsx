@@ -63,7 +63,7 @@ export default function ConfirmActionModal({ action, onCancel, onConfirm }: Conf
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <button type="button" aria-label="Close confirmation dialog" className="fixed inset-0 bg-black/60 backdrop-blur-sm" onClick={onCancel} />
       <div
-        className="relative w-full max-w-md overflow-hidden rounded-xl border border-border bg-card shadow-2xl"
+        className="relative w-full max-w-md overflow-hidden rounded-xl border border-border bg-card shadow-elevation-3"
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
@@ -89,7 +89,7 @@ export default function ConfirmActionModal({ action, onCancel, onConfirm }: Conf
             </button>
             <button
               onClick={onConfirm}
-              className={`flex items-center space-x-2 rounded-lg px-4 py-2 text-sm text-white transition-colors ${CONFIRMATION_BUTTON_CLASSES[action.type]}`}
+              className={`flex items-center space-x-2 rounded-lg px-4 py-2 text-sm text-primary-foreground transition-colors ${CONFIRMATION_BUTTON_CLASSES[action.type]}`}
             >
               {renderConfirmActionIcon(action.type)}
               <span>{CONFIRMATION_ACTION_LABELS[action.type]}</span>

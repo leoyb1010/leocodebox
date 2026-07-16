@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Download, Filter, Loader2, RefreshCw, Search } from 'lucide-react';
+import { Download, Filter, Loader2, Pause, Play, RefreshCw, Search, Settings2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { apiClient } from '../../../utils/apiClient';
@@ -15,7 +15,8 @@ type AuditSession = ProjectSession & {
   resolvedProvider: LLMProvider;
   timestamp: string | null;
 };
-type UsageSummaryRow = { sessionCount: number; inputTokens: number; outputTokens: number; cacheTokens: number; costUsd: number };
+type UsageSummaryRow = { day: string; provider: string; model: string | null; sessionCount: number; inputTokens: number; outputTokens: number; cacheTokens: number; costUsd: number };
+type ModelPrices = Record<string, { input: number; output: number }>;
 
 type ReplayPayload = {
   messages: ReplayMessage[];
@@ -85,6 +86,11 @@ export default function ConversationAuditPanel() {
   const [loading, setLoading] = useState(false);
   const [replayLoading, setReplayLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPricing, setShowPricing] = useState(false);
+  const [priceText, setPriceText] = useState('{}');
+  const [replayCursor, setReplayCursor] = useState<number | null>(null);
+  const [replayPlaying, setReplayPlaying] = useState(false);
+  const [replaySpeed, setReplaySpeed] = useState(1);
   const refreshAbortRef = useRef<AbortController | null>(null);
   const replayAbortRef = useRef<AbortController | null>(null);
 
@@ -95,9 +101,10 @@ export default function ConversationAuditPanel() {
     setLoading(true);
     setError(null);
     try {
-      const [nextProjects, usage] = await Promise.all([
+      const [nextProjects, usage, pricing] = await Promise.all([
         apiClient.get<Project[]>('/api/projects'),
         apiClient.get<{ rows?: UsageSummaryRow[] }>('/api/usage/summary'),
+        apiClient.get<{ prices?: ModelPrices }>('/api/usage/prices'),
       ]);
       const sessionGroups = await mapWithConcurrency(
         nextProjects,
@@ -106,6 +113,7 @@ export default function ConversationAuditPanel() {
       );
       setProjects(nextProjects);
       setUsageRows(Array.isArray(usage.rows) ? usage.rows : []);
+      setPriceText(JSON.stringify(pricing.prices || {}, null, 2));
       setSessions(sessionGroups.flat().sort((left, right) => (
         Date.parse(right.timestamp || '') - Date.parse(left.timestamp || '')
       )));
@@ -156,7 +164,13 @@ export default function ConversationAuditPanel() {
         { limit: 1000, offset: 0 },
         controller.signal,
       );
-      setReplay(response.data || response);
+      const payload = response.data || response;
+      const sequencedMessages = (payload.messages || [])
+        .map((message, index) => ({ ...message, seq: typeof message.seq === 'number' ? message.seq : index + 1 }))
+        .sort((left, right) => Number(left.seq) - Number(right.seq));
+      setReplay({ ...payload, messages: sequencedMessages });
+      setReplayCursor(null);
+      setReplayPlaying(false);
     } catch (caughtError) {
       if (!(caughtError instanceof Error && caughtError.name === 'AbortError')) {
         setReplay(null);
@@ -184,6 +198,38 @@ export default function ConversationAuditPanel() {
     costUsd: totals.costUsd + Number(row.costUsd || 0),
   }), { sessions: 0, tokens: 0, costUsd: 0 }), [usageRows]);
 
+  const usageByDay = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const row of usageRows) totals.set(row.day, (totals.get(row.day) || 0) + Number(row.costUsd || 0));
+    return [...totals.entries()].sort(([a], [b]) => a.localeCompare(b)).slice(-14);
+  }, [usageRows]);
+
+  useEffect(() => {
+    if (!replayPlaying || !replay?.messages.length) return undefined;
+    const timer = window.setInterval(() => {
+      setReplayCursor((current) => {
+        const next = (current ?? 0) + 1;
+        if (next >= replay.messages.length) {
+          setReplayPlaying(false);
+          return replay.messages.length;
+        }
+        return next;
+      });
+    }, Math.max(100, 800 / replaySpeed));
+    return () => window.clearInterval(timer);
+  }, [replay?.messages.length, replayPlaying, replaySpeed]);
+
+  const savePrices = useCallback(async () => {
+    try {
+      const prices = JSON.parse(priceText) as ModelPrices;
+      const result = await apiClient.put<{ prices?: ModelPrices }>('/api/usage/prices', { prices });
+      setPriceText(JSON.stringify(result.prices || prices, null, 2));
+      setShowPricing(false);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : 'Invalid pricing JSON');
+    }
+  }, [priceText]);
+
   const exportAudit = useCallback(() => {
     const payload = selectedSession && replay
       ? { exportedAt: new Date().toISOString(), session: selectedSession, replay, filters: { category, query } }
@@ -208,6 +254,9 @@ export default function ConversationAuditPanel() {
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
           {t('audit.refresh')}
         </Button>
+        <Button variant="outline" size="sm" onClick={() => setShowPricing((value) => !value)}>
+          <Settings2 className="h-4 w-4" /> Prices
+        </Button>
         <Button variant="outline" size="sm" onClick={exportAudit} disabled={filteredSessions.length === 0 && !replay}>
           <Download className="h-4 w-4" />
           {t('audit.export')}
@@ -219,6 +268,25 @@ export default function ConversationAuditPanel() {
         <div className="rounded-lg bg-muted/50 px-3 py-2"><div className="text-[10px] uppercase text-muted-foreground">Tokens</div><div className="text-sm font-semibold">{usageTotals.tokens.toLocaleString()}</div></div>
         <div className="rounded-lg bg-muted/50 px-3 py-2"><div className="text-[10px] uppercase text-muted-foreground">Estimated cost</div><div className="text-sm font-semibold">${usageTotals.costUsd.toFixed(2)}</div></div>
       </div>
+
+      {usageByDay.length > 0 && (
+        <div className="border-b border-border px-3 py-2">
+          <div className="mb-1 text-[10px] uppercase text-muted-foreground">14-day cost trend</div>
+          <div className="flex h-12 items-end gap-1" aria-label="Daily cost trend">
+            {usageByDay.map(([day, cost]) => {
+              const max = Math.max(...usageByDay.map(([, value]) => value), 0.000001);
+              return <div key={day} className="min-w-0 flex-1 rounded-t bg-primary/70" style={{ height: `${Math.max(4, (cost / max) * 100)}%` }} title={`${day}: $${cost.toFixed(4)}`} />;
+            })}
+          </div>
+        </div>
+      )}
+      {showPricing && (
+        <div className="border-b border-border p-3">
+          <label className="mb-1 block text-xs font-medium">Model prices per million tokens (JSON)</label>
+          <textarea className="h-40 w-full rounded-md border border-border bg-background p-2 font-mono text-xs" value={priceText} onChange={(event) => setPriceText(event.target.value)} />
+          <div className="mt-2 flex justify-end"><Button size="sm" onClick={() => void savePrices()}>Save prices</Button></div>
+        </div>
+      )}
 
       <div className="grid gap-2 border-b border-border p-3 md:grid-cols-6">
         <label className="relative md:col-span-2">
@@ -260,11 +328,25 @@ export default function ConversationAuditPanel() {
                   <option value="all">{t('audit.allEvents')}</option><option value="tool">{t('audit.toolCalls')}</option><option value="error">{t('audit.errors')}</option><option value="permission">{t('audit.permissions')}</option>
                 </select>
               </div>
+              {replay && replay.messages.length > 0 && (
+                <div className="mb-3 flex flex-wrap items-center gap-2 rounded-md border border-border bg-muted/30 p-2">
+                  <Button size="sm" variant="outline" onClick={() => { setReplayCursor((value) => value ?? 0); setReplayPlaying((value) => !value); }}>
+                    {replayPlaying ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                    {replayPlaying ? 'Pause' : 'Replay'}
+                  </Button>
+                  <input className="min-w-32 flex-1" type="range" min="0" max={replay.messages.length} value={replayCursor ?? replay.messages.length} onChange={(event) => { setReplayPlaying(false); setReplayCursor(Number(event.target.value)); }} aria-label="Timeline position" />
+                  <select className="h-8 rounded-md border border-border bg-background px-2 text-xs" value={replaySpeed} onChange={(event) => setReplaySpeed(Number(event.target.value))} aria-label="Replay speed">
+                    <option value={0.5}>0.5×</option><option value={1}>1×</option><option value={2}>2×</option><option value={4}>4×</option>
+                  </select>
+                  <span className="text-xs text-muted-foreground">{replayCursor ?? replay.messages.length}/{replay.messages.length}</span>
+                </div>
+              )}
               {replay?.tokenUsage !== undefined && <pre className="mb-3 overflow-auto rounded-md border border-border bg-muted/40 p-3 text-xs"><strong>{t('audit.tokenUsage')}</strong>{'\n'}{JSON.stringify(replay.tokenUsage, null, 2)}</pre>}
-              {replayLoading ? <div className="flex justify-center p-10"><Loader2 className="h-5 w-5 animate-spin" /></div> : visibleMessages.map((message, index) => (
+              {replayLoading ? <div className="flex justify-center p-10"><Loader2 className="h-5 w-5 animate-spin" /></div> : visibleMessages.slice(0, replayCursor ?? visibleMessages.length).map((message, index) => (
                 <article key={String(message.id || message.uuid || index)} className="relative mb-2 ml-2 rounded-md border border-border p-3 before:absolute before:-left-[9px] before:top-4 before:h-2 before:w-2 before:rounded-full before:bg-primary after:absolute after:-left-[6px] after:top-6 after:h-[calc(100%+0.5rem)] after:w-px after:bg-border last:after:hidden">
                   <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase text-muted-foreground">
                     <span>{String(message.role || message.type || t('audit.event'))}</span>
+                    {typeof message.seq === 'number' && <span className="font-mono font-normal normal-case">seq {message.seq}</span>}
                     {typeof message.timestamp === 'string' && <time className="ml-auto font-normal normal-case">{new Date(message.timestamp).toLocaleTimeString()}</time>}
                   </div>
                   <pre className="whitespace-pre-wrap break-words font-sans text-sm text-foreground">{messageText(message)}</pre>

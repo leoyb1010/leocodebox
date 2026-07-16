@@ -20,8 +20,8 @@ function readBearerToken(header: unknown): string | null {
   return match?.[1]?.trim() || null;
 }
 
-router.use((req, res, next) => {
-  const expected = browserUseService.getMcpToken();
+router.use(async (req, res, next) => {
+  const expected = await browserUseService.getMcpToken();
   const token = readBearerToken(req.headers.authorization) || String(req.headers['x-browser-use-mcp-token'] || '');
   if (!token || !expected || !tokensMatch(token, expected)) {
     res.status(401).json({ success: false, error: 'Invalid Browser MCP token.' });

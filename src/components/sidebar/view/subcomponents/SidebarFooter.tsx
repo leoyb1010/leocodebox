@@ -31,7 +31,7 @@ export default function SidebarFooter({
   return (
     <div className="flex-shrink-0 border-t border-border/60 p-2" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom, 0px))' }}>
       {restartRequired && (
-        <div className="mb-1.5 flex items-center gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-2.5 py-2 text-xs text-amber-700 dark:text-amber-300">
+        <div className="mb-1.5 flex items-center gap-2 rounded-md border border-warning/30 bg-warning/10 px-2.5 py-2 text-xs text-warning dark:text-warning">
           <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
           <span>{t('version.restartRequired')}</span>
         </div>
@@ -69,7 +69,7 @@ export default function SidebarFooter({
       </div>
       <div className="flex items-center justify-between px-2.5 pt-1 text-[10px] text-muted-foreground/50">
         <span>leocodebox v{currentVersion}</span>
-        <span className="hidden items-center gap-1 md:inline-flex"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />{t('localUi.localMode')}</span>
+        <span className="hidden items-center gap-1 md:inline-flex"><span className="h-1.5 w-1.5 rounded-full bg-success" />{t('localUi.localMode')}</span>
       </div>
     </div>
   );

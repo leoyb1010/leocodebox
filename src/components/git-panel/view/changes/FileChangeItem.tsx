@@ -44,7 +44,7 @@ export default function FileChangeItem({
           checked={isSelected}
           onChange={() => onToggleSelected(filePath)}
           onClick={(event) => event.stopPropagation()}
-          className={`rounded border-border bg-background text-primary checked:bg-primary focus:ring-primary/40 ${isMobile ? 'mr-1.5' : 'mr-2'}`}
+          className={`rounded-md border-border bg-background text-primary checked:bg-primary focus:ring-primary/40 ${isMobile ? 'mr-1.5' : 'mr-2'}`}
         />
 
         <div className="flex min-w-0 flex-1 items-center">
@@ -53,10 +53,10 @@ export default function FileChangeItem({
               event.stopPropagation();
               onToggleExpanded(filePath);
             }}
-            className={`cursor-pointer rounded p-0.5 hover:bg-accent ${isMobile ? 'mr-1' : 'mr-2'}`}
+            className={`cursor-pointer rounded-md p-0.5 hover:bg-accent ${isMobile ? 'mr-1' : 'mr-2'}`}
             title={isExpanded ? 'Collapse diff' : 'Expand diff'}
           >
-            <ChevronRight className={`h-3 w-3 transition-transform duration-200 ease-in-out ${isExpanded ? 'rotate-90' : 'rotate-0'}`} />
+            <ChevronRight className={`h-3 w-3 transition-transform duration-base ease-in-out ${isExpanded ? 'rotate-90' : 'rotate-0'}`} />
           </button>
 
           <span
@@ -77,7 +77,7 @@ export default function FileChangeItem({
                   event.stopPropagation();
                   onRequestFileAction(filePath, status);
                 }}
-                className={`${isMobile ? 'px-2 py-1 text-xs' : 'p-1'} flex items-center gap-1 rounded font-medium text-destructive hover:bg-destructive/10`}
+                className={`${isMobile ? 'px-2 py-1 text-xs' : 'p-1'} flex items-center gap-1 rounded-md font-medium text-destructive hover:bg-destructive/10`}
                 title={status === 'U' ? 'Delete untracked file' : 'Discard changes'}
               >
                 <Trash2 className="h-3 w-3" />
@@ -86,7 +86,7 @@ export default function FileChangeItem({
             )}
 
             <span
-              className={`inline-flex h-5 w-5 items-center justify-center rounded border text-[10px] font-bold ${badgeClass}`}
+              className={`inline-flex h-5 w-5 items-center justify-center rounded-md border text-[10px] font-bold ${badgeClass}`}
               title={statusLabel}
             >
               {status}
@@ -96,12 +96,12 @@ export default function FileChangeItem({
       </div>
 
       <div
-        className={`duration-400 overflow-hidden bg-muted/50 transition-all ease-in-out ${isExpanded && diff ? 'max-h-[600px] translate-y-0 opacity-100' : 'max-h-0 -translate-y-1 opacity-0'
+        className={`overflow-hidden bg-muted/50 transition-all duration-slow ease-in-out ${isExpanded && diff ? 'max-h-[600px] translate-y-0 opacity-100' : 'max-h-0 -translate-y-1 opacity-0'
           }`}
       >
         <div className="flex items-center justify-between border-b border-border p-2">
           <span className="flex items-center gap-2">
-            <span className={`inline-flex h-5 w-5 items-center justify-center rounded border text-[10px] font-bold ${badgeClass}`}>
+            <span className={`inline-flex h-5 w-5 items-center justify-center rounded-md border text-[10px] font-bold ${badgeClass}`}>
               {status}
             </span>
             <span className="text-sm font-medium text-foreground">{statusLabel}</span>
