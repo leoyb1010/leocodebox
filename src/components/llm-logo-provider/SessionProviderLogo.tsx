@@ -1,10 +1,11 @@
-import { Bot, Braces, Sparkles, TerminalSquare } from 'lucide-react';
+import { Bot, Sparkles, TerminalSquare } from 'lucide-react';
 
 import type { LLMProvider } from '../../types/app';
 
 import ClaudeLogo from './ClaudeLogo';
 import CodexLogo from './CodexLogo';
 import CursorLogo from './CursorLogo';
+import GrokLogo from './GrokLogo';
 import OpenCodeLogo from './OpenCodeLogo';
 
 type SessionProviderLogoProps = {
@@ -37,7 +38,7 @@ export default function SessionProviderLogo({
   }
 
   if (provider === 'grok') {
-    return <Braces aria-label="Grok Build" className={`${className} text-zinc-800 dark:text-zinc-100`} />;
+    return <GrokLogo className={className} />;
   }
 
   if (provider === 'antigravity') {

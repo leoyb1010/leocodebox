@@ -711,6 +711,10 @@
     "close": "Close update window",
     "updateTo": "Update to {{version}}",
     "localMode": "Local mode with no account or cloud sync dependency",
-    "viewVersion": "View version information"
-  }
+    "viewVersion": "View version information",
+    "recentUpdates": "Recent updates",
+    "releaseHistory": "Review detailed notes from recent releases.",
+    "currentRelease": "Current version",
+    "viewRelease": "View full release",
+    "noReleaseNotes": "No detailed release notes are available."  }
 }

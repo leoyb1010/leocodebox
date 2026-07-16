@@ -1,4 +1,4 @@
-import { Download, LoaderCircle, RefreshCw, RotateCcw, X } from 'lucide-react';
+import { Download, ExternalLink, LoaderCircle, RefreshCw, RotateCcw, X } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +16,7 @@ export function VersionUpgradeModal({ isOpen, onClose }: VersionUpgradeModalProp
     currentVersion,
     latestVersion,
     releaseInfo,
+    releaseHistory,
     desktopUpdate,
     checkForUpdates,
     downloadUpdate,
@@ -43,10 +44,33 @@ export function VersionUpgradeModal({ isOpen, onClose }: VersionUpgradeModalProp
           </button>
         </div>
 
-        {releaseInfo?.body && (
+        {releaseInfo?.body ? (
           <div className="prose prose-sm mt-5 max-w-none rounded-md border border-border bg-muted/30 p-4 dark:prose-invert">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>{releaseInfo.body}</ReactMarkdown>
           </div>
+        ) : (
+          <p className="mt-5 rounded-md border border-border bg-muted/30 p-4 text-sm text-muted-foreground">{t('about.noReleaseNotes')}</p>
+        )}
+
+        {releaseInfo?.htmlUrl && (
+          <a href={releaseInfo.htmlUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
+            {t('about.viewRelease')} <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        )}
+
+        {releaseHistory.length > 0 && (
+          <details className="mt-6 rounded-md border border-border p-4">
+            <summary className="cursor-pointer text-sm font-medium text-foreground">{t('about.recentUpdates')}</summary>
+            <div className="mt-4 space-y-4">
+              {releaseHistory.map((release) => (
+                <article key={release.version} className="border-t border-border pt-3 first:border-0 first:pt-0">
+                  <h3 className="text-sm font-medium text-foreground">{release.title}</h3>
+                  <p className="mt-1 text-xs text-muted-foreground">v{release.version}{release.version === currentVersion ? ` · ${t('about.currentRelease')}` : ''}</p>
+                  <div className="prose-xs prose mt-2 max-w-none dark:prose-invert"><ReactMarkdown remarkPlugins={[remarkGfm]}>{release.body}</ReactMarkdown></div>
+                </article>
+              ))}
+            </div>
+          </details>
         )}
 
         {status === 'downloading' && (

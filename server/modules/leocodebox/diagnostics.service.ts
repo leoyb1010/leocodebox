@@ -4,6 +4,35 @@ import path from 'node:path';
 
 import { readStore, sanitizeProvider } from './provider-store.service.js';
 
+const CLAUDE_ENV_KEYS = [
+  'ANTHROPIC_BASE_URL', 'ANTHROPIC_AUTH_TOKEN', 'ANTHROPIC_API_KEY', 'ANTHROPIC_MODEL',
+  'ANTHROPIC_DEFAULT_SONNET_MODEL', 'ANTHROPIC_DEFAULT_OPUS_MODEL', 'ANTHROPIC_DEFAULT_HAIKU_MODEL',
+];
+
+function runtimeConflictReport(activeByTarget: Record<string, string>, providers: ReturnType<typeof sanitizeProvider>[]) {
+  const result: Record<string, unknown> = {};
+  const claudeActive = activeByTarget.claude;
+  if (claudeActive) {
+    const present = CLAUDE_ENV_KEYS.filter((key) => Boolean(process.env[key]));
+    result.claude = {
+      activeProviderId: claudeActive,
+      inheritedVariablesPresent: present,
+      appRuntimeOverlay: 'active provider overrides inherited variables',
+      terminalNote: 'Already-open terminals and external switchers keep their own environment.',
+      ccSwitchDetected: fs.existsSync(path.join(os.homedir(), '.cc-switch', 'cc-switch.db')),
+    };
+  } else {
+    result.claude = {
+      activeProviderId: null,
+      inheritedVariablesPresent: CLAUDE_ENV_KEYS.filter((key) => Boolean(process.env[key])),
+      appRuntimeOverlay: 'disabled; inherited machine configuration remains active',
+      terminalNote: 'No Leoapi provider is active.',
+      ccSwitchDetected: fs.existsSync(path.join(os.homedir(), '.cc-switch', 'cc-switch.db')),
+    };
+  }
+  return result;
+}
+
 type DiagnosticsCliTool = Record<string, unknown>;
 
 type DiagnosticsInput = {
@@ -37,6 +66,7 @@ export function buildDiagnosticsReport(input: DiagnosticsInput, homeDir = os.hom
     leoapi: {
       activeByTarget: input.activeByTarget,
       providers: input.switchProviders,
+      runtime: runtimeConflictReport(input.activeByTarget, input.switchProviders),
     },
   }, homeDir);
 }

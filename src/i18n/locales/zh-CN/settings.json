@@ -684,6 +684,10 @@
     "close": "关闭更新窗口",
     "updateTo": "可更新到 {{version}}",
     "localMode": "本地模式，无账号和云端同步依赖",
-    "viewVersion": "查看版本信息"
-  }
+    "viewVersion": "查看版本信息",
+    "recentUpdates": "近期更新",
+    "releaseHistory": "查看近期版本的详细更新记录。",
+    "currentRelease": "当前版本",
+    "viewRelease": "查看完整更新",
+    "noReleaseNotes": "暂无详细更新说明。"  }
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
 import { version } from '../../package.json';
+import { releaseHistory } from '../data/releaseHistory';
 import type { ReleaseInfo } from '../types/sharedTypes';
 
 export type InstallMode = 'git' | 'npm';
@@ -82,8 +83,10 @@ export const useVersionCheck = (_owner?: string, _repo?: string) => {
   const latestVersion = desktopUpdate?.latestVersion || null;
   const releaseInfo: ReleaseInfo | null = desktopUpdate?.releaseNotes || desktopUpdate?.releaseName
     ? {
+        version: latestVersion || undefined,
         title: desktopUpdate.releaseName || (latestVersion ? `leocodebox v${latestVersion}` : 'leocodebox update'),
         body: desktopUpdate.releaseNotes || '',
+        summary: desktopUpdate.releaseNotes?.split('\n').find((line) => line.trim() && !line.trim().startsWith('#'))?.trim() || '',
         htmlUrl: latestVersion
           ? `https://github.com/leoyb1010/leocodebox/releases/tag/v${latestVersion}`
           : 'https://github.com/leoyb1010/leocodebox/releases',
@@ -96,6 +99,7 @@ export const useVersionCheck = (_owner?: string, _repo?: string) => {
     latestVersion,
     currentVersion: desktopUpdate?.currentVersion || version,
     releaseInfo,
+    releaseHistory,
     installMode,
     runningVersion,
     restartRequired,

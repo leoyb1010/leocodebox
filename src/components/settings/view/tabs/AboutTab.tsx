@@ -1,3 +1,5 @@
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -43,6 +45,7 @@ export default function AboutTab() {
     downloadUpdate,
     installUpdate,
     setGithubToken,
+    releaseHistory,
   } = useVersionCheck();
   const [token, setToken] = useState('');
   const [actionError, setActionError] = useState('');
@@ -230,6 +233,34 @@ export default function AboutTab() {
             )}
           </div>
         )}
+      </section>
+
+      <section className="border-b border-border/60 pb-5">
+        <div className="mb-3">
+          <h3 className="text-sm font-medium text-foreground">{t('about.recentUpdates')}</h3>
+          <p className="mt-1 text-xs text-muted-foreground">{t('about.releaseHistory')}</p>
+        </div>
+        <div className="space-y-2">
+          {releaseHistory.slice(0, 5).map((release) => (
+            <details key={release.version} className="rounded-md border border-border bg-muted/10 px-4 py-3">
+              <summary className="flex cursor-pointer list-none items-start justify-between gap-3">
+                <span>
+                  <span className="text-sm font-medium text-foreground">{release.title}</span>
+                  <span className="mt-0.5 block text-xs text-muted-foreground">{release.summary || t('about.noReleaseNotes')}</span>
+                </span>
+                <span className="shrink-0 rounded-md bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                  v{release.version}{release.version === currentVersion ? ` · ${t('about.currentRelease')}` : ''}
+                </span>
+              </summary>
+              <div className="prose prose-sm mt-4 max-w-none border-t border-border pt-4 dark:prose-invert">
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{release.body}</ReactMarkdown>
+              </div>
+              <a href={release.htmlUrl} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground">
+                {t('about.viewRelease')} <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            </details>
+          ))}
+        </div>
       </section>
 
       <RecoverySection />
