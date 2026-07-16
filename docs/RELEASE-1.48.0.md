@@ -38,6 +38,6 @@
 
 ## 下载校验
 
-- DMG SHA-256:`__DMG_SHA__`
-- ZIP SHA-256:`__ZIP_SHA__`
-- `latest-mac.yml` SHA-256:`__YML_SHA__`
+- DMG SHA-256:`ae6a0bbf14bc367bbb78150a9438b3e184a4a464b6f57ecb5631a1353b5c909d`
+- ZIP SHA-256:`6dbc04d6f0c2a96d3d4fd6da16c2d70bf4b989e4352f020628dea48c3dd6086f`
+- `latest-mac.yml` SHA-256:`9c7dbcef0b3869f4ec0803f670e4af9d52620c600f28388c4531f719d12b8fa9`
