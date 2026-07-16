@@ -32,7 +32,7 @@ const DEFAULT_APP_PREFERENCES = Object.freeze({
 
 const PREFERENCE_ENUMS = Object.freeze({
   language: new Set(['zh-CN', 'zh-TW', 'en', 'ja', 'ko', 'de', 'fr', 'it', 'ru', 'tr']),
-  defaultProvider: new Set(['claude', 'cursor', 'codex', 'opencode']),
+  defaultProvider: new Set(['claude', 'cursor', 'codex', 'opencode', 'grok']),
   permissionMode: new Set(['default', 'acceptEdits', 'bypassPermissions', 'plan', 'auto']),
   density: new Set(['compact', 'comfortable']),
   accent: new Set(['blue', 'green', 'amber']),

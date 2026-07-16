@@ -13,7 +13,7 @@ import { randomUUID } from 'node:crypto';
 import { getConnection } from '@/modules/database/connection.js';
 import type { LLMProvider } from '@/shared/types.js';
 
-const PROVIDERS: LLMProvider[] = ['claude', 'codex', 'cursor', 'opencode'];
+const PROVIDERS: LLMProvider[] = ['claude', 'codex', 'cursor', 'opencode', 'grok'];
 
 /** Editable payload of a profile (everything except server-owned id/timestamps). */
 export type AgentProfileData = {

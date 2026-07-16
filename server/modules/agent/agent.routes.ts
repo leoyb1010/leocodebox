@@ -16,6 +16,7 @@ import {
   queryCodex,
   spawnCursor,
   spawnOpenCode,
+  spawnGrok,
 } from '@/modules/providers/index.js';
 import { normalizeProjectPath, validateWorkspacePath } from '@/shared/utils.js';
 
@@ -383,8 +384,8 @@ router.post('/', validateExternalApiKey, async (req, res) => {
     return res.status(400).json({ error: 'message is required' });
   }
 
-  if (!['claude', 'cursor', 'codex', 'opencode'].includes(provider)) {
-    return res.status(400).json({ error: 'provider must be "claude", "cursor", "codex", or "opencode"' });
+  if (!['claude', 'cursor', 'codex', 'opencode', 'grok'].includes(provider)) {
+    return res.status(400).json({ error: 'provider must be "claude", "cursor", "codex", "opencode", or "grok"' });
   }
 
   // Validate GitHub branch/PR creation requirements
@@ -518,6 +519,17 @@ router.post('/', validateExternalApiKey, async (req, res) => {
         cwd: finalProjectPath!,
         sessionId: sessionId || null,
         model: model || opencodeModels.DEFAULT,
+        effort,
+        permissionMode // Defaults to bypassPermissions for headless; caller-overridable
+      }, writer);
+    } else if (provider === 'grok') {
+      console.log('Starting Grok Build CLI session');
+
+      await spawnGrok(message.trim(), {
+        projectPath: finalProjectPath,
+        cwd: finalProjectPath!,
+        sessionId: sessionId || null,
+        model: model || undefined,
         effort,
         permissionMode // Defaults to bypassPermissions for headless; caller-overridable
       }, writer);

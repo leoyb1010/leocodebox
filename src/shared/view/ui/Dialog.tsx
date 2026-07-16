@@ -172,7 +172,10 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
     if (!open) return null;
 
     return createPortal(
-      <div className={cn('fixed inset-0 z-50', wrapperClassName)}>
+      // z-[10000] keeps dialogs above the Settings modal (z-[9999]) so a dialog
+      // opened from inside Settings (e.g. the Agent Hub profile editor) is not
+      // painted behind it. Dialogs are the active interaction — always topmost.
+      <div className={cn('fixed inset-0 z-[10000]', wrapperClassName)}>
         {/* Overlay */}
         <div
           className="fixed inset-0 animate-dialog-overlay-show bg-black/50 backdrop-blur-sm"
@@ -192,7 +195,7 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
           role="dialog"
           aria-modal="true"
           className={cn(
-            'fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2',
+            'fixed left-1/2 top-1/2 z-[10000] w-full max-w-lg -translate-x-1/2 -translate-y-1/2',
             'rounded-xl border bg-popover text-popover-foreground shadow-lg',
             'animate-dialog-content-show',
             className

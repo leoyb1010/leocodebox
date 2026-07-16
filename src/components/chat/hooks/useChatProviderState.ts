@@ -215,15 +215,22 @@ export function useChatProviderState({ selectedSession, selectedProject: _select
     try {
       const results = await Promise.all(
         PROVIDERS.map(async (p) => {
-          const body = await apiClient.get<ProviderModelsApiResponse>(
-            `/api/providers/${p}/models`,
-            options.bypassCache ? { bypassCache: true } : undefined,
-          );
-          if (!body.success || !body.data?.models || !body.data?.cache) {
+          try {
+            const body = await apiClient.get<ProviderModelsApiResponse>(
+              `/api/providers/${p}/models`,
+              options.bypassCache ? { bypassCache: true } : undefined,
+            );
+            if (!body.success || !body.data?.models || !body.data?.cache) {
+              return null;
+            }
+
+            return body.data;
+          } catch (error) {
+            // One provider's endpoint failing (400/500/network) must never blank
+            // the whole catalog — isolate it and keep every other provider's models.
+            console.error(`Error loading models for provider "${p}":`, error);
             return null;
           }
-
-          return body.data;
         }),
       );
 

@@ -112,12 +112,18 @@ test('importProfiles bulk-creates with fresh ids, never clobbering', async () =>
 });
 
 test('normalizeAgentProfile clamps invalid provider and fills defaults', () => {
-  const normalized = normalizeAgentProfile({ provider: 'grok', name: '  x  ', extra: 'ignored' });
+  const normalized = normalizeAgentProfile({ provider: 'nonsense-cli', name: '  x  ', extra: 'ignored' });
   assert.equal(normalized.provider, 'claude');
   assert.equal(normalized.name, 'x');
   assert.equal(normalized.emoji, '🤖');
   assert.equal(normalized.model, 'default');
   assert.equal(normalized.permissionMode, 'default');
+});
+
+test('normalizeAgentProfile preserves grok as a first-class provider', () => {
+  // grok is a supported runtime provider — it must NOT be clamped to claude.
+  const normalized = normalizeAgentProfile({ provider: 'grok', name: 'g' });
+  assert.equal(normalized.provider, 'grok');
 });
 
 test('normalizeAgentProfile survives round-trip of malformed JSON blob', async () => {
