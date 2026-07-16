@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 
 import express from 'express';
@@ -300,16 +300,45 @@ export async function withCliMutation<T>(toolId: string, operation: () => Promis
 
 export function runCliCommand(cmd: string, args: string[], timeoutMs = 10_000, options: { env?: NodeJS.ProcessEnv } = {}): Promise<CliCommandResult> {
   return new Promise<CliCommandResult>((resolve) => {
-    const shell = process.platform === 'win32' && /\.(cmd|bat)$/i.test(cmd);
-    execFile(cmd, args, { timeout: timeoutMs, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024, shell, ...(options.env ? { env: options.env } : {}) }, (error, stdout, stderr) => {
-      resolve({
-        ok: !error,
-        code: error?.code ?? 0,
-        stdout: String(stdout || ''),
-        stderr: String(stderr || ''),
-        error: error ? error.message : null,
+    const useShell = process.platform === 'win32' && /\.(cmd|bat)$/i.test(cmd);
+    const MAX_OUTPUT = 4 * 1024 * 1024;
+    let stdout = '';
+    let stderr = '';
+    let settled = false;
+    const finish = (result: CliCommandResult): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(result);
+    };
+
+    let child: ReturnType<typeof spawn>;
+    try {
+      // stdin MUST be 'ignore' (/dev/null): a packaged GUI app (launched from
+      // Finder) has no real stdin, so creating the child's stdin pipe fails with
+      // `spawn EBADF` and every CLI probe dies ("无法读取本机智能体状态: spawn
+      // EBADF"). All the sibling probes already ignore stdin — this brings the
+      // shared CLI-command helper in line.
+      child = spawn(cmd, args, {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        shell: useShell,
+        ...(options.env ? { env: options.env } : {}),
       });
-    });
+    } catch (error) {
+      const err = error as NodeJS.ErrnoException;
+      resolve({ ok: false, code: err?.code ?? 1, stdout: '', stderr: '', error: err?.message ?? String(error) });
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      try { child.kill('SIGKILL'); } catch { /* already exited */ }
+      finish({ ok: false, code: 124, stdout, stderr, error: `Timed out after ${timeoutMs}ms` });
+    }, timeoutMs);
+
+    child.stdout?.on('data', (data: Buffer) => { if (stdout.length < MAX_OUTPUT) stdout += data.toString('utf8'); });
+    child.stderr?.on('data', (data: Buffer) => { if (stderr.length < MAX_OUTPUT) stderr += data.toString('utf8'); });
+    child.on('error', (error: NodeJS.ErrnoException) => finish({ ok: false, code: error.code ?? 1, stdout, stderr, error: error.message }));
+    child.on('close', (code) => finish({ ok: code === 0, code: code ?? 0, stdout, stderr, error: code === 0 ? null : `Exited with code ${code}` }));
   });
 }
 
