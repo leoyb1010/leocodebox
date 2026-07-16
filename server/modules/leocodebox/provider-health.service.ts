@@ -1,6 +1,7 @@
 import { applyProviderTransactionally } from './provider-apply.service.js';
 import { probeProviderHealth } from './provider-discovery.service.js';
 import type { ProviderHealthProbe } from './provider-discovery.service.js';
+import { adoptLiveProviderEdits } from './provider-import.service.js';
 import {
   readStore,
   upsertProviderInStore,
@@ -54,9 +55,18 @@ export type HealthSnapshot = {
 /** Consecutive failed polls before a target flips to degraded (≈2 intervals). */
 export const DEGRADE_THRESHOLD = 2;
 
+/**
+ * Minimum gap between AUTOMATIC failovers per target. Degrading takes 2 failed
+ * polls but a candidate is promoted on a single passing probe, so two
+ * half-broken nodes could otherwise ping-pong forever, rewriting the live CLI
+ * config every couple of intervals. Manual failover is never throttled.
+ */
+export const AUTO_FAILOVER_COOLDOWN_MS = 30 * 60 * 1000;
+
 type ProbeFn = (provider: SwitchProvider) => Promise<ProviderHealthProbe>;
 
 const healthByTarget = new Map<string, TargetHealth>();
+const lastAutoFailoverAt = new Map<string, number>();
 let lastRunAt: string | null = null;
 let tickInFlight = false;
 let schedulerTimer: NodeJS.Timeout | null = null;
@@ -102,22 +112,85 @@ async function findHealthyFailoverCandidate(
   return null;
 }
 
-async function autoFailover(target: string, from: SwitchProvider, probe: ProbeFn): Promise<TargetHealth['lastAutoFailover']> {
+/**
+ * Fail the target over to a live-probed healthy sibling.
+ *
+ * Concurrency contract:
+ * - Candidate probing happens OUTSIDE the switch mutation lock — with N dead
+ *   candidates at 8s timeout each, holding the lock would block every manual
+ *   apply/save for ~8s×N. The lock only wraps the validate-and-apply step.
+ * - Inside the lock we re-read the store and re-check (a) the target is still
+ *   on `from` (a manual switch may have raced us) and (b) for the automatic
+ *   path, that the user hasn't just disabled the monitor or this target's
+ *   opt-in mid-tick.
+ * - Before switching away we fold live hand edits back into the outgoing
+ *   provider record (same lean write-back semantics as a manual apply), so the
+ *   one-click undo restores what the user actually ran today.
+ * - Automatic runs are rate-limited by AUTO_FAILOVER_COOLDOWN_MS per target to
+ *   prevent half-broken siblings from ping-ponging the live config.
+ */
+async function failoverToHealthySibling(
+  target: string,
+  from: SwitchProvider,
+  probe: ProbeFn,
+  options: { manual: boolean },
+): Promise<TargetHealth['lastAutoFailover']> {
+  if (!options.manual) {
+    const lastAt = lastAutoFailoverAt.get(target) ?? 0;
+    if (Date.now() - lastAt < AUTO_FAILOVER_COOLDOWN_MS) return null;
+  }
+
+  // Probe outside the lock (see contract above).
+  const preStore = await readStore();
+  if (preStore.activeByTarget[target] !== from.id) return null;
+  const candidate = await findHealthyFailoverCandidate(preStore.providers, target, from.id, probe);
+  if (!candidate) return null;
+
   return withSwitchMutation(async () => {
     const store = await readStore();
-    // Re-check under the mutation lock: a manual switch may have raced us.
     if (store.activeByTarget[target] !== from.id) return null;
-    const candidate = await findHealthyFailoverCandidate(store.providers, target, from.id, probe);
-    if (!candidate) return null;
-    await applyProviderTransactionally(candidate, async () => {
-      store.activeByTarget[target] = candidate.id;
-      candidate.lastAppliedAt = nowIso();
-      candidate.updatedAt = nowIso();
-      upsertProviderInStore(store, candidate);
+    if (!options.manual
+      && (!store.healthMonitor.enabled || !store.healthMonitor.autoFailoverTargets.includes(target))) {
+      return null;
+    }
+    // Use the freshest record for the candidate; it may have been edited/deleted.
+    const liveCandidate = store.providers.find((item) => item.id === candidate.id);
+    if (!liveCandidate?.baseUrl) return null;
+    await adoptLiveProviderEdits(store, target);
+    await applyProviderTransactionally(liveCandidate, async () => {
+      store.activeByTarget[target] = liveCandidate.id;
+      liveCandidate.lastAppliedAt = nowIso();
+      liveCandidate.updatedAt = nowIso();
+      upsertProviderInStore(store, liveCandidate);
       await writeStore(store);
     });
-    return { fromId: from.id, fromName: from.name, toId: candidate.id, toName: candidate.name, at: nowIso() };
+    if (!options.manual) lastAutoFailoverAt.set(target, Date.now());
+    return { fromId: from.id, fromName: from.name, toId: liveCandidate.id, toName: liveCandidate.name, at: nowIso() };
   });
+}
+
+/**
+ * User-initiated "switch me to something that actually answers" (the degraded
+ * banner button). Live-probes candidates like the automatic path — never the
+ * stale model-discovery ranking — but skips the opt-in check and cooldown:
+ * an explicit click IS the consent.
+ */
+export async function runManualFailover(target: string, probe: ProbeFn = probeProviderHealth): Promise<TargetHealth['lastAutoFailover']> {
+  const store = await readStore();
+  const activeId = store.activeByTarget[target];
+  const from = activeId ? store.providers.find((item) => item.id === activeId) : null;
+  if (!from) return null;
+  const failover = await failoverToHealthySibling(target, from, probe, { manual: true });
+  if (failover) {
+    const entry = healthByTarget.get(target);
+    const next = baseHealth(target, { ...from, id: failover.toId, name: failover.toName } as SwitchProvider);
+    next.status = 'ok';
+    next.lastAutoFailover = failover;
+    next.lastCheckedAt = nowIso();
+    if (entry) next.lastLatencyMs = entry.lastLatencyMs;
+    healthByTarget.set(target, next);
+  }
+  return failover;
 }
 
 /**
@@ -126,7 +199,11 @@ async function autoFailover(target: string, from: SwitchProvider, probe: ProbeFn
  * can drive the state machine without network.
  */
 export async function runHealthTick(probe: ProbeFn = probeProviderHealth): Promise<HealthSnapshot> {
-  if (tickInFlight) return getHealthSnapshot();
+  if (tickInFlight) {
+    // Still report the PERSISTED settings — a bare snapshot would show defaults
+    // and the UI would render (or worse, re-save) wrong preferences.
+    return getHealthSnapshot((await readStore()).healthMonitor);
+  }
   tickInFlight = true;
   try {
     const store = await readStore();
@@ -147,7 +224,19 @@ export async function runHealthTick(probe: ProbeFn = probeProviderHealth): Promi
         ? { ...previous, providerName: provider.name }
         : baseHealth(target, provider);
 
-      const result = await probe(provider);
+      // A throwing probe (e.g. an invalid baseUrl on an imported provider) must
+      // count as a failed sample for THIS target, never kill the whole tick.
+      let result: ProviderHealthProbe;
+      try {
+        result = await probe(provider);
+      } catch (error) {
+        result = {
+          ok: false,
+          latencyMs: null,
+          httpStatus: null,
+          note: `探测异常：${error instanceof Error ? error.message : String(error)}`,
+        };
+      }
       entry.lastLatencyMs = result.latencyMs;
       entry.lastHttpStatus = result.httpStatus;
       entry.lastNote = result.note;
@@ -162,7 +251,7 @@ export async function runHealthTick(probe: ProbeFn = probeProviderHealth): Promi
         entry.status = entry.consecutiveFailures >= DEGRADE_THRESHOLD ? 'degraded' : entry.status === 'ok' ? 'ok' : 'unknown';
         if (entry.status === 'degraded' && !wasDegraded
           && store.healthMonitor.autoFailoverTargets.includes(target)) {
-          const failover = await autoFailover(target, provider, probe);
+          const failover = await failoverToHealthySibling(target, provider, probe, { manual: false });
           if (failover) {
             const next = baseHealth(target, { ...provider, id: failover.toId, name: failover.toName } as SwitchProvider);
             next.status = 'ok';
@@ -173,6 +262,13 @@ export async function runHealthTick(probe: ProbeFn = probeProviderHealth): Promi
           }
         }
       }
+      // Re-sync the breadcrumb from the LIVE map entry before writing back: a
+      // manual apply may have cleared it while we were awaiting the probe, and
+      // our pre-probe copy must not resurrect it.
+      const liveEntry = healthByTarget.get(target);
+      entry.lastAutoFailover = liveEntry && liveEntry.providerId === entry.providerId
+        ? liveEntry.lastAutoFailover
+        : null;
       healthByTarget.set(target, entry);
     }
 
@@ -234,6 +330,7 @@ export function stopHealthMonitor(): void {
 /** Test hook: reset all in-memory monitor state. */
 export function resetHealthStateForTests(): void {
   healthByTarget.clear();
+  lastAutoFailoverAt.clear();
   lastRunAt = null;
   lastPollAt = 0;
   tickInFlight = false;

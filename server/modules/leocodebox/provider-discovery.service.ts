@@ -517,10 +517,13 @@ async function probeProviderHealth(provider: SwitchProvider): Promise<ProviderHe
   if (!rawBase) {
     return { ok: false, latencyMs: null, httpStatus: null, note: '未配置 Base URL。' };
   }
-  const validatedBase = validateProviderBaseUrl(rawBase);
-  const probe = buildModelListProbe(provider, validatedBase);
   const startedAt = Date.now();
   try {
+    // Inside the try on purpose: imported providers can carry an invalid
+    // baseUrl, and a background poll must classify that as "unhealthy", not
+    // throw into the caller's loop.
+    const validatedBase = validateProviderBaseUrl(rawBase);
+    const probe = buildModelListProbe(provider, validatedBase);
     const response = await fetch(probe.url, {
       method: 'GET',
       headers: probe.headers,
@@ -528,6 +531,13 @@ async function probeProviderHealth(provider: SwitchProvider): Promise<ProviderHe
       redirect: 'manual',
       signal: AbortSignal.timeout(8000),
     });
+    // Release the connection: an unconsumed body pins its keep-alive socket,
+    // and this probe runs on a periodic schedule.
+    try {
+      await response.body?.cancel();
+    } catch {
+      // Best-effort cleanup only.
+    }
     const latencyMs = Date.now() - startedAt;
     if (response.status === 401 || response.status === 403) {
       return { ok: false, latencyMs, httpStatus: response.status, note: `凭据被拒绝（HTTP ${response.status}）。` };

@@ -9,6 +9,7 @@ import {
   getHealthSnapshot,
   resetHealthStateForTests,
   runHealthTick,
+  runManualFailover,
 } from '../provider-health.service.js';
 import type { ProviderHealthProbe } from '../provider-discovery.service.js';
 import { adoptLiveProviderEdits } from '../provider-import.service.js';
@@ -157,6 +158,117 @@ test('auto-failover stays put when no sibling passes the probe', async () => {
     const store = await readStore();
     assert.equal(store.activeByTarget.claude, 'p1');
     assert.equal(getHealthSnapshot().targets.claude?.status, 'degraded');
+  });
+});
+
+test('auto-failover folds live hand edits into the outgoing provider before switching', async () => {
+  await withIsolatedHome(async (home) => {
+    await seedStore((store) => {
+      store.providers.push(makeProvider({ id: 'p1', target: 'claude', apiKey: 'sk-stale', model: 'old-model' }));
+      store.providers.push(makeProvider({ id: 'p2', target: 'claude', baseUrl: 'https://backup.example.com/v1' }));
+      store.activeByTarget.claude = 'p1';
+      store.healthMonitor.autoFailoverTargets = ['claude'];
+    });
+    // User hand-rotated the key in the live config (same baseUrl → adoptable).
+    await fs.mkdir(path.join(home, '.claude'), { recursive: true });
+    await fs.writeFile(path.join(home, '.claude', 'settings.json'), JSON.stringify({
+      env: {
+        ANTHROPIC_BASE_URL: 'https://api.example.com/v1',
+        ANTHROPIC_AUTH_TOKEN: 'sk-hand-rotated',
+        ANTHROPIC_MODEL: 'hand-model',
+      },
+    }));
+    const probe = async (provider: SwitchProvider): Promise<ProviderHealthProbe> => (
+      provider.id === 'p1' ? failProbe() : okProbe()
+    );
+    await runHealthTick(probe);
+    await runHealthTick(probe);
+
+    const store = await readStore();
+    assert.equal(store.activeByTarget.claude, 'p2');
+    // The undo path (re-apply p1) must restore what the user actually ran.
+    const outgoing = store.providers.find((item) => item.id === 'p1');
+    assert.equal(outgoing?.apiKey, 'sk-hand-rotated');
+    assert.equal(outgoing?.model, 'hand-model');
+  });
+});
+
+test('automatic failover is cooldown-limited; manual failover bypasses it', async () => {
+  await withIsolatedHome(async () => {
+    await seedStore((store) => {
+      store.providers.push(makeProvider({ id: 'p1', target: 'claude' }));
+      store.providers.push(makeProvider({ id: 'p2', target: 'claude', baseUrl: 'https://b.example.com/v1' }));
+      store.providers.push(makeProvider({ id: 'p3', target: 'claude', baseUrl: 'https://c.example.com/v1' }));
+      store.activeByTarget.claude = 'p1';
+      store.healthMonitor.autoFailoverTargets = ['claude'];
+    });
+    // Round 1: p1 fails, p2 answers as candidate → auto-switch p1→p2.
+    let probe = async (provider: SwitchProvider): Promise<ProviderHealthProbe> => (
+      provider.id === 'p1' ? failProbe() : okProbe()
+    );
+    await runHealthTick(probe);
+    await runHealthTick(probe);
+    assert.equal((await readStore()).activeByTarget.claude, 'p2');
+
+    // Round 2: p2 fails as active and p1 is also down (half-broken pair);
+    // p3 is the only healthy sibling — but the cooldown suppresses a second
+    // AUTOMATIC switch (no ping-pong between half-broken nodes).
+    probe = async (provider: SwitchProvider): Promise<ProviderHealthProbe> => (
+      provider.id === 'p3' ? okProbe() : failProbe()
+    );
+    await runHealthTick(probe);
+    await runHealthTick(probe);
+    assert.equal((await readStore()).activeByTarget.claude, 'p2');
+    assert.equal(getHealthSnapshot().targets.claude?.status, 'degraded');
+
+    // The user's explicit click is consent: manual failover bypasses cooldown.
+    const failover = await runManualFailover('claude', probe);
+    assert.equal(failover?.toId, 'p3');
+    assert.equal((await readStore()).activeByTarget.claude, 'p3');
+  });
+});
+
+test('a throwing probe counts as a failed sample and never kills the tick', async () => {
+  await withIsolatedHome(async () => {
+    await seedStore((store) => {
+      store.providers.push(makeProvider({ id: 'bad', target: 'claude' }));
+      store.providers.push(makeProvider({ id: 'good', target: 'codex' }));
+      store.activeByTarget.claude = 'bad';
+      store.activeByTarget.codex = 'good';
+    });
+    const probe = async (provider: SwitchProvider): Promise<ProviderHealthProbe> => {
+      if (provider.id === 'bad') throw new Error('Invalid provider base URL');
+      return okProbe();
+    };
+    const snapshot = await runHealthTick(probe);
+    // The bad target got a failure sample with the thrown message…
+    assert.equal(snapshot.targets.claude?.consecutiveFailures, 1);
+    assert.match(snapshot.targets.claude?.lastNote ?? '', /探测异常/);
+    // …and the OTHER target was still polled in the same tick.
+    assert.equal(snapshot.targets.codex?.status, 'ok');
+  });
+});
+
+test('adoptLiveProviderEdits refuses codex adoption when the managed base_url was hand-changed', async () => {
+  await withIsolatedHome(async (home) => {
+    await seedStore((store) => {
+      store.providers.push(makeProvider({ id: 'cx', target: 'codex', baseUrl: 'https://endpoint-y.example.com/v1', apiKey: 'sk-y' }));
+      store.activeByTarget.codex = 'cx';
+    });
+    await fs.mkdir(path.join(home, '.codex'), { recursive: true });
+    await fs.writeFile(path.join(home, '.codex', 'auth.json'), JSON.stringify({ OPENAI_API_KEY: 'sk-key-for-x' }));
+    await fs.writeFile(path.join(home, '.codex', 'config.toml'), [
+      'model_provider = "leocodebox_cx"',
+      'model = "hand-model"',
+      '[model_providers.leocodebox_cx]',
+      'base_url = "https://endpoint-x.example.com/v1"',
+    ].join('\n'));
+    const store = await readStore();
+    const changed = await adoptLiveProviderEdits(store, 'codex');
+    // Live key belongs to endpoint-x; adopting it into the endpoint-y record
+    // would ship that key to the wrong host on re-apply.
+    assert.equal(changed, false);
+    assert.equal(store.providers.find((item) => item.id === 'cx')?.apiKey, 'sk-y');
   });
 });
 

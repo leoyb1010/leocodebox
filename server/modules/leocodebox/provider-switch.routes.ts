@@ -12,6 +12,7 @@ import {
   clearAutoFailoverRecord,
   getHealthSnapshot,
   runHealthTick,
+  runManualFailover,
 } from './provider-health.service.js';
 import {
   adoptLiveProviderEdits,
@@ -373,10 +374,40 @@ router.post('/switch/health/settings', async (req, res, next) => {
   try {
     await withSwitchMutation(async () => {
       const store = await readStore();
-      store.healthMonitor = normalizeHealthMonitorSettings({ ...store.healthMonitor, ...(req.body || {}) });
+      // Type-gated patch: a field of the wrong type is IGNORED (stored value
+      // kept) rather than silently normalized back to defaults — otherwise
+      // POST {"intervalMinutes":"abc"} would reset a stored 30 to 5.
+      const body = (req.body && typeof req.body === 'object' ? req.body : {}) as Record<string, unknown>;
+      const patch: Record<string, unknown> = {};
+      if (typeof body.enabled === 'boolean') patch.enabled = body.enabled;
+      if (typeof body.intervalMinutes === 'number' && Number.isFinite(body.intervalMinutes)) {
+        patch.intervalMinutes = body.intervalMinutes;
+      }
+      if (Array.isArray(body.autoFailoverTargets)) patch.autoFailoverTargets = body.autoFailoverTargets;
+      store.healthMonitor = normalizeHealthMonitorSettings({ ...store.healthMonitor, ...patch });
       await writeStore(store);
       res.json({ success: true, health: getHealthSnapshot(store.healthMonitor) });
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+// User-initiated failover: live-probe siblings of the target's active provider
+// and switch to the first one that answers. 409 when nothing passes.
+router.post('/switch/health/failover-now', async (req, res, next) => {
+  try {
+    const target = normalizeTarget(req.body?.target);
+    if (!target || !TARGETS[target].writable) {
+      res.status(400).json({ success: false, error: '不支持的智能体目标。' });
+      return;
+    }
+    const failover = await runManualFailover(target);
+    if (!failover) {
+      res.status(409).json({ success: false, error: '没有探测通过的备用节点，未切换。' });
+      return;
+    }
+    res.json({ success: true, failover, health: getHealthSnapshot((await readStore()).healthMonitor) });
   } catch (error) {
     next(error);
   }

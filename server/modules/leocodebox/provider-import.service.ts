@@ -465,8 +465,13 @@ async function adoptLiveProviderEdits(store: ProviderStore, target: string): Pro
         readJsonFile<StringRecord>(authPath, {}),
         fs.readFile(configPath, 'utf8').catch(() => ''),
       ]);
-      // Only adopt while our managed provider is still selected in config.toml.
+      // Only adopt while our managed provider is still selected in config.toml
+      // AND its base_url still matches the record — a hand-edited base_url
+      // means the live key belongs to a different destination, and adopting it
+      // would make a later re-apply send that key to the old host.
       if (!config.includes(`model_provider = "leocodebox_${sanitizeIdPart(provider.id)}"`)) return false;
+      const liveBase = (config.match(/^\s*base_url\s*=\s*["']([^"']+)["']/m)?.[1] || '').replace(/\/+$/, '');
+      if (liveBase && liveBase !== provider.baseUrl) return false;
       return adopt({
         apiKey: auth.OPENAI_API_KEY || '',
         model: config.match(/^\s*model\s*=\s*["']([^"']+)["']/m)?.[1] || '',

@@ -687,7 +687,13 @@
 
     // ---- 健康监控设置（服务端持久化，随 /switch/status 下发） ----
     function loadHealthSettings() {
-      const health = state?.health || {};
+      // 状态未加载时不渲染（also see saveHealthSettings 的守卫）：否则表单里是
+      // 默认值，任何 change 都会把默认值存回服务端，静默冲掉真实设置。
+      if (!state?.health) {
+        $("#healthAutoTargets").innerHTML = "";
+        return;
+      }
+      const health = state.health || {};
       $("#healthEnabled").checked = health.enabled !== false;
       $("#healthInterval").value = health.intervalMinutes || 5;
       const autoTargets = Array.isArray(health.autoFailoverTargets) ? health.autoFailoverTargets : [];
@@ -696,6 +702,11 @@
     }
 
     async function saveHealthSettings() {
+      // 状态未加载就保存 = 把表单默认值写回服务端,会静默清掉用户已存设置。
+      if (!state?.health) {
+        showToast("配置尚未加载，请稍后重试", "error");
+        return;
+      }
       const autoFailoverTargets = Array.from(document.querySelectorAll("[data-health-auto]"))
         .filter((input) => input.checked)
         .map((input) => input.dataset.healthAuto);
@@ -974,7 +985,23 @@
 
     function failoverCandidate(provider) {
       const alternatives = state.providers.filter((item) => item.target === provider.target && item.id !== provider.id);
-      return alternatives.find((item) => providerHealth(item).id === "healthy") || alternatives[0] || null;
+      // 只提议缓存排名 healthy 的候选;宁可返回 null 也不兜底到已知 failed 的节点。
+      return alternatives.find((item) => providerHealth(item).id === "healthy") || null;
+    }
+
+    // 降级横幅的「切换到健康备用」:让后端对候选逐个活体探测后切换,
+    // 而不是用前端可能过期数天的 modelDiscovery 缓存排名。
+    async function liveFailover(target) {
+      const label = state.targets[target]?.label || target;
+      if (!(await confirmDialog(`对 ${label} 的备用节点逐个实测,切换到第一个探测通过的节点?\n\n切换前会自动备份现有配置,可随时撤销。`))) return;
+      const result = await api("/api/leocodebox/switch/health/failover-now", {
+        method: "POST",
+        body: JSON.stringify({ target }),
+      });
+      if (result.health && state) state.health = result.health;
+      window.parent.dispatchEvent(new CustomEvent("leocodebox-provider:applied", { detail: { target, activeModel: null } }));
+      await refresh();
+      showToast(`已切换到「${result.failover?.toName || "备用节点"}」`, "ok");
     }
 
     async function suggestFailover(providerId) {
@@ -1002,10 +1029,14 @@
         overrideNote = ` · ⚠️ 检测到 shell 环境变量 ANTHROPIC_BASE_URL=${shellOverride.baseUrl}（可能来自 cc-switch 等），终端会话会优先走它；本应用内会话由 Leoapi 接管`;
       } else if (selectedTarget === "codex" && shellOverride?.apiKeyPresent && activeProviderForTarget) {
         overrideNote = " · ⚠️ 检测到 shell 环境变量 OPENAI_API_KEY，终端会话会优先使用它；本应用内会话由 Leoapi 接管";
-      } else if (selectedTarget === "gemini" && (shellOverride?.baseUrl || shellOverride?.apiKeyPresent) && activeProviderForTarget) {
+      } else if (selectedTarget === "gemini"
+        && ((shellOverride?.baseUrl && shellOverride.baseUrl !== activeProviderForTarget?.baseUrl) || shellOverride?.apiKeyPresent)
+        && activeProviderForTarget) {
         // Gemini has no in-app runtime, so terminal sessions are the ONLY
-        // sessions — a shell export silently defeating ~/.gemini/.env matters more here.
-        overrideNote = ` · ⚠️ 检测到 shell 环境变量${shellOverride.baseUrl ? ` GOOGLE_GEMINI_BASE_URL=${shellOverride.baseUrl}` : " GEMINI_API_KEY/GOOGLE_API_KEY"}，终端里的 Gemini CLI 会优先使用它而不是 Leoapi 写入的配置`;
+        // sessions — a shell export silently defeating ~/.gemini/.env matters
+        // more here. Same-URL exports are harmless and stay quiet (claude 同款守卫).
+        const differentBase = shellOverride.baseUrl && shellOverride.baseUrl !== activeProviderForTarget.baseUrl;
+        overrideNote = ` · ⚠️ 检测到 shell 环境变量${differentBase ? ` GOOGLE_GEMINI_BASE_URL=${shellOverride.baseUrl}` : " GEMINI_API_KEY/GOOGLE_API_KEY"}，终端里的 Gemini CLI 会优先使用它而不是 Leoapi 写入的配置`;
       }
       $("#currentTargetMeta").textContent = `${providers.length + 1} 个配置 · 选择需要使用的接口${overrideNote}`;
       if (nativeActive) {
@@ -1074,7 +1105,7 @@
       const liveHealth = state.health?.targets?.[selectedTarget];
       if (liveHealth?.status === "degraded" && activeProvider && liveHealth.providerId === activeProvider.id) {
         healthBanner = `<div class="health-banner warn">⚠️ 「${escapeHtml(liveHealth.providerName)}」连续 ${liveHealth.consecutiveFailures} 次后台探测失败${liveHealth.lastNote ? `：${escapeHtml(liveHealth.lastNote)}` : ""}
-          <button class="quiet-button" type="button" data-failover="${escapeHtml(activeProvider.id)}">切换到健康备用</button>
+          <button class="quiet-button" type="button" data-live-failover="${escapeHtml(selectedTarget)}">切换到健康备用</button>
           <button class="quiet-button" type="button" data-health-check>立即重测</button></div>`;
       } else if (liveHealth?.lastAutoFailover) {
         const failover = liveHealth.lastAutoFailover;
@@ -1653,6 +1684,8 @@
       if (failover) suggestFailover(failover.dataset.failover).catch((error) => showToast(error.message, "error"));
       const healthCheck = event.target.closest("[data-health-check]");
       if (healthCheck) healthCheckNow().catch((error) => showToast(error.message, "error"));
+      const liveFailoverButton = event.target.closest("[data-live-failover]");
+      if (liveFailoverButton) liveFailover(liveFailoverButton.dataset.liveFailover).catch((error) => showToast(error.message, "error"));
       const test = event.target.closest("[data-test]");
       if (test) openProviderTools(test.dataset.test);
       const copy = event.target.closest("[data-copy]");
