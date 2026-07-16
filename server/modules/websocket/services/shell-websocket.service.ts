@@ -1,10 +1,11 @@
-import fs from 'node:fs';
+import { promises as fsPromises } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
 import pty, { type IPty } from 'node-pty';
 import { WebSocket, type RawData } from 'ws';
 
+import { logger } from '@/modules/logging/index.js';
 import { parseIncomingJsonObject } from '@/shared/utils.js';
 
 type ShellIncomingMessage = {
@@ -25,6 +26,9 @@ type PtySessionEntry = {
   pty: IPty;
   ws: WebSocket | null;
   buffer: string[];
+  bufferBytes: number;
+  pendingOutput: string;
+  flushTimer: NodeJS.Timeout | null;
   timeoutId: NodeJS.Timeout | null;
   projectPath: string;
   sessionId: string | null;
@@ -33,6 +37,8 @@ type PtySessionEntry = {
 const ptySessionsMap = new Map<string, PtySessionEntry>();
 const PTY_SESSION_TIMEOUT = 30 * 60 * 1000;
 const SHELL_URL_PARSE_BUFFER_LIMIT = 32768;
+const PTY_OUTPUT_FRAME_MS = 16;
+const PTY_BUFFER_LIMIT_BYTES = 2 * 1024 * 1024;
 
 type ShellWebSocketDependencies = {
   resolveProviderSessionId: (
@@ -226,7 +232,7 @@ export function handleShellConnection(
   ws: WebSocket,
   dependencies: ShellWebSocketDependencies
 ): void {
-  console.log('[INFO] Shell websocket connected');
+  logger.info('[INFO] Shell websocket connected');
 
   let shellProcess: IPty | null = null;
   let ptySessionKey: string | null = null;
@@ -270,9 +276,8 @@ export function handleShellConnection(
         if (isLoginCommand || forceRestart) {
           const oldSession = ptySessionsMap.get(ptySessionKey);
           if (oldSession) {
-            if (oldSession.timeoutId) {
-              clearTimeout(oldSession.timeoutId);
-            }
+            if (oldSession.timeoutId) clearTimeout(oldSession.timeoutId);
+            if (oldSession.flushTimer) clearTimeout(oldSession.flushTimer);
             oldSession.pty.kill();
             ptySessionsMap.delete(ptySessionKey);
           }
@@ -310,7 +315,7 @@ export function handleShellConnection(
 
         const resolvedProjectPath = path.resolve(projectPath);
         try {
-          const stats = fs.statSync(resolvedProjectPath);
+          const stats = await fsPromises.stat(resolvedProjectPath);
           if (!stats.isDirectory()) {
             throw new Error('Not a directory');
           }
@@ -352,84 +357,67 @@ export function handleShellConnection(
           pty: shellProcess,
           ws,
           buffer: [],
+          bufferBytes: 0,
+          pendingOutput: '',
+          flushTimer: null,
           timeoutId: null,
           projectPath,
           sessionId,
         });
 
+        const flushOutput = (session: PtySessionEntry): void => {
+          session.flushTimer = null;
+          if (!session.pendingOutput) return;
+          const chunk = session.pendingOutput;
+          session.pendingOutput = '';
+
+          if (!session.ws || session.ws.readyState !== WebSocket.OPEN) return;
+          const cleanChunk = dependencies.stripAnsiSequences(chunk);
+          urlDetectionBuffer = `${urlDetectionBuffer}${cleanChunk}`.slice(-SHELL_URL_PARSE_BUFFER_LIMIT);
+          const outputData = chunk.replace(
+            /OPEN_URL:\s*(https?:\/\/[^\s\x1b\x07]+)/g,
+            '[INFO] Opening in browser: $1',
+          );
+
+          const emitAuthUrl = (detectedUrl: string, autoOpen = false) => {
+            const normalizedUrl = dependencies.normalizeDetectedUrl(detectedUrl);
+            if (!normalizedUrl || announcedAuthUrls.has(normalizedUrl)) return;
+            announcedAuthUrls.add(normalizedUrl);
+            session.ws?.send(JSON.stringify({ type: 'auth_url', url: normalizedUrl, autoOpen }));
+          };
+
+          const normalizedDetectedUrls = dependencies.extractUrlsFromText(urlDetectionBuffer)
+            .map((url) => dependencies.normalizeDetectedUrl(url))
+            .filter((url): url is string => Boolean(url));
+          const dedupedDetectedUrls = Array.from(new Set(normalizedDetectedUrls)).filter(
+            (url, _, urls) => !urls.some((otherUrl) => otherUrl !== url && otherUrl.startsWith(url)),
+          );
+          dedupedDetectedUrls.forEach((url) => emitAuthUrl(url));
+          if (dependencies.shouldAutoOpenUrlFromOutput(cleanChunk) && dedupedDetectedUrls.length > 0) {
+            const bestUrl = dedupedDetectedUrls.reduce((longest, current) => current.length > longest.length ? current : longest);
+            emitAuthUrl(bestUrl, true);
+          }
+
+          session.ws.send(JSON.stringify({ type: 'output', data: outputData }));
+        };
+
         shellProcess.onData((chunk) => {
-          if (!ptySessionKey) {
-            return;
-          }
-
+          if (!ptySessionKey) return;
           const session = ptySessionsMap.get(ptySessionKey);
-          if (!session) {
-            return;
+          if (!session) return;
+
+          // Keep a byte-capped reconnect buffer instead of retaining thousands
+          // of arbitrarily large PTY chunks.
+          session.buffer.push(chunk);
+          session.bufferBytes += Buffer.byteLength(chunk);
+          while (session.bufferBytes > PTY_BUFFER_LIMIT_BYTES && session.buffer.length > 1) {
+            const removed = session.buffer.shift() || '';
+            session.bufferBytes -= Buffer.byteLength(removed);
           }
 
-          if (session.buffer.length < 5000) {
-            session.buffer.push(chunk);
-          } else {
-            session.buffer.shift();
-            session.buffer.push(chunk);
-          }
-
-          if (session.ws && session.ws.readyState === WebSocket.OPEN) {
-            let outputData = chunk;
-            const cleanChunk = dependencies.stripAnsiSequences(chunk);
-            urlDetectionBuffer = `${urlDetectionBuffer}${cleanChunk}`.slice(-SHELL_URL_PARSE_BUFFER_LIMIT);
-
-            outputData = outputData.replace(
-              /OPEN_URL:\s*(https?:\/\/[^\s\x1b\x07]+)/g,
-              '[INFO] Opening in browser: $1'
-            );
-
-            const emitAuthUrl = (detectedUrl: string, autoOpen = false) => {
-              const normalizedUrl = dependencies.normalizeDetectedUrl(detectedUrl);
-              if (!normalizedUrl) {
-                return;
-              }
-
-              const isNewUrl = !announcedAuthUrls.has(normalizedUrl);
-              if (isNewUrl) {
-                announcedAuthUrls.add(normalizedUrl);
-                session.ws?.send(
-                  JSON.stringify({
-                    type: 'auth_url',
-                    url: normalizedUrl,
-                    autoOpen,
-                  })
-                );
-              }
-            };
-
-            const normalizedDetectedUrls = dependencies.extractUrlsFromText(urlDetectionBuffer)
-              .map((url) => dependencies.normalizeDetectedUrl(url))
-              .filter((url): url is string => Boolean(url));
-
-            const dedupedDetectedUrls = Array.from(new Set(normalizedDetectedUrls)).filter(
-              (url, _, urls) =>
-                !urls.some((otherUrl) => otherUrl !== url && otherUrl.startsWith(url))
-            );
-
-            dedupedDetectedUrls.forEach((url) => emitAuthUrl(url, false));
-
-            if (
-              dependencies.shouldAutoOpenUrlFromOutput(cleanChunk) &&
-              dedupedDetectedUrls.length > 0
-            ) {
-              const bestUrl = dedupedDetectedUrls.reduce((longest, current) =>
-                current.length > longest.length ? current : longest
-              );
-              emitAuthUrl(bestUrl, true);
-            }
-
-            session.ws.send(
-              JSON.stringify({
-                type: 'output',
-                data: outputData,
-              })
-            );
+          session.pendingOutput += chunk;
+          if (!session.flushTimer) {
+            session.flushTimer = setTimeout(() => flushOutput(session), PTY_OUTPUT_FRAME_MS);
           }
         });
 
@@ -441,6 +429,11 @@ export function handleShellConnection(
           const session = ptySessionsMap.get(ptySessionKey);
           if (session && session.pty !== shellProcess) {
             return;
+          }
+          if (session?.flushTimer) {
+            clearTimeout(session.flushTimer);
+            session.flushTimer = null;
+            flushOutput(session);
           }
 
           if (session && session.ws && session.ws.readyState === WebSocket.OPEN) {

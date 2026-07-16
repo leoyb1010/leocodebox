@@ -16,6 +16,7 @@ import { fileURLToPath } from 'url';
 
 import Database from 'better-sqlite3';
 
+import { logger } from '@/modules/logging/index.js';
 import { APP_CONFIG_TABLE_SCHEMA_SQL } from '@/modules/database/schema.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -56,7 +57,7 @@ function ensureDatabaseDirectory(dbPath: string): void {
   const dir = path.dirname(dbPath);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-    console.log('Created database directory:', dir);
+    logger.info('Created database directory:', dir);
   }
   fs.chmodSync(dir, 0o700);
 }
@@ -89,7 +90,7 @@ function migrateLegacyDatabase(targetPath: string): void {
 
   try {
     fs.copyFileSync(legacyPath, targetPath);
-    console.log('Migrated legacy database', { from: legacyPath, to: targetPath });
+    logger.info('Migrated legacy database', { from: legacyPath, to: targetPath });
 
 
     // copy the write-ahead log and shared memory files (auth.db-wal, auth.db-shm) if they exist, to preserve any uncommitted transactions
@@ -157,6 +158,6 @@ export function closeConnection(): void {
   if (instance) {
     instance.close();
     instance = null;
-    console.log('Database connection closed');
+    logger.info('Database connection closed');
   }
 }

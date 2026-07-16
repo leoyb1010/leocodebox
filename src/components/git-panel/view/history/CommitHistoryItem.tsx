@@ -30,7 +30,7 @@ function RefBadge({ refName, color }: { refName: string; color: string }) {
       style={{
         borderColor: color,
         color,
-        backgroundColor: isHead ? `${color}22` : 'transparent',
+        backgroundColor: isHead ? `color-mix(in srgb, ${color} 14%, transparent)` : 'transparent',
       }}
       title={refName}
     >
@@ -64,9 +64,7 @@ export default function CommitHistoryItem({
     return parseCommitFiles(diff);
   }, [diff]);
 
-  // Must stay a literal hex value: RefBadge derives its HEAD tint by
-  // appending an alpha byte (`${color}22`), which breaks for var() strings.
-  const badgeColor = graphRow ? laneColor(graphRow.nodeLane) : '#0ea5e9';
+  const badgeColor = graphRow ? laneColor(graphRow.nodeLane) : 'hsl(var(--primary))';
 
   return (
     <div className="flex border-b border-border last:border-0">

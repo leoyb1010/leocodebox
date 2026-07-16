@@ -36,13 +36,20 @@ type OpenCodeTokenTotals = {
   cacheWriteTokens: number;
 };
 
+let cachedOpenCodeDatabase: Database.Database | null = null;
+let cachedOpenCodeDatabasePath = '';
+
 const openOpenCodeDatabase = (): Database.Database | null => {
   const dbPath = getOpenCodeDatabasePath();
   if (!fsSync.existsSync(dbPath)) {
     return null;
   }
 
-  return new Database(dbPath, { readonly: true, fileMustExist: true });
+  const isTest = process.env.NODE_ENV === 'test' || Boolean(process.env.LEOCODEBOX_TEST_HOME);
+  if (!isTest && cachedOpenCodeDatabase && cachedOpenCodeDatabasePath === dbPath) return cachedOpenCodeDatabase;
+  const database = new Database(dbPath, { readonly: true, fileMustExist: true });
+  if (!isTest) { cachedOpenCodeDatabase = database; cachedOpenCodeDatabasePath = dbPath; }
+  return database;
 };
 
 const formatToolContent = (value: unknown): string => {
@@ -359,7 +366,7 @@ export class OpenCodeSessionsProvider implements IProviderSessions {
       console.warn(`[OpenCodeProvider] Failed to load session ${sessionId}:`, message);
       return { messages: [], total: 0, hasMore: false, offset: 0, limit: null };
     } finally {
-      db.close();
+      if (process.env.NODE_ENV === 'test' || process.env.LEOCODEBOX_TEST_HOME) db.close();
     }
   }
 

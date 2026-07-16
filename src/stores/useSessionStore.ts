@@ -183,10 +183,30 @@ function hasServerEchoForLocalUser(
 function compareMessagesChronologically(a: NormalizedMessage, b: NormalizedMessage): number {
   const timeA = readMessageTime(a) ?? 0;
   const timeB = readMessageTime(b) ?? 0;
-  if (timeA !== timeB) {
-    return timeA - timeB;
-  }
+  if (timeA !== timeB) return timeA - timeB;
   return 0;
+}
+
+/** Merge two already chronological transcript slices without sorting them. */
+function mergeChronologically(
+  first: NormalizedMessage[],
+  second: NormalizedMessage[],
+): NormalizedMessage[] {
+  const merged: NormalizedMessage[] = [];
+  let firstIndex = 0;
+  let secondIndex = 0;
+  while (firstIndex < first.length || secondIndex < second.length) {
+    const left = first[firstIndex];
+    const right = second[secondIndex];
+    if (!right || (left && compareMessagesChronologically(left, right) <= 0)) {
+      merged.push(left);
+      firstIndex += 1;
+    } else {
+      merged.push(right);
+      secondIndex += 1;
+    }
+  }
+  return merged;
 }
 
 /**
@@ -202,7 +222,7 @@ function getUserTurnOrdinalBefore(
   const messageTime = readMessageTime(message);
   let userCount = 0;
 
-  for (const candidate of [...serverMessages, ...realtimeMessages].sort(compareMessagesChronologically)) {
+  for (const candidate of mergeChronologically(serverMessages, realtimeMessages)) {
     if (candidate.id === message.id) {
       break;
     }
@@ -419,6 +439,22 @@ function recomputeMergedIfNeeded(slot: SessionSlot): boolean {
   slot._lastRealtimeRef = slot.realtimeMessages;
   slot.merged = computeMerged(slot.serverMessages, slot.realtimeMessages);
   return true;
+}
+
+/**
+ * Streaming deltas are monotonically appended to the active turn. Avoid the
+ * full merge/sort path on every 100ms flush; the normal merge remains the
+ * fallback for history refreshes and non-stream events.
+ */
+function patchMergedStreaming(slot: SessionSlot, message: NormalizedMessage): void {
+  const index = slot.merged.findIndex((candidate) => candidate.id === message.id);
+  if (index >= 0) {
+    slot.merged = [...slot.merged.slice(0, index), message, ...slot.merged.slice(index + 1)];
+  } else {
+    slot.merged = [...slot.merged, message];
+  }
+  slot._lastServerRef = slot.serverMessages;
+  slot._lastRealtimeRef = slot.realtimeMessages;
 }
 
 // ─── Stale threshold ─────────────────────────────────────────────────────────
@@ -679,12 +715,13 @@ export function useSessionStore() {
     };
     const idx = slot.realtimeMessages.findIndex(m => m.id === streamId);
     if (idx >= 0) {
-      slot.realtimeMessages = [...slot.realtimeMessages];
-      slot.realtimeMessages[idx] = msg;
+      const nextRealtime = slot.realtimeMessages.slice();
+      nextRealtime[idx] = msg;
+      slot.realtimeMessages = nextRealtime;
     } else {
       slot.realtimeMessages = [...slot.realtimeMessages, msg];
     }
-    recomputeMergedIfNeeded(slot);
+    patchMergedStreaming(slot, msg);
     notify(sessionId);
   }, [getSlot, notify]);
 

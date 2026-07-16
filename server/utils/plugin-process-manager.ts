@@ -4,6 +4,8 @@ import type { ChildProcess } from 'node:child_process';
 // cross-spawn: drop-in spawn with Windows .cmd/PATHEXT resolution.
 import spawn from 'cross-spawn';
 
+import { logger } from '@/modules/logging/index.js';
+
 import { scanPlugins, getPluginsConfig, getPluginDir } from './plugin-loader.js';
 
 // Map<pluginName, { process, port }>
@@ -100,7 +102,7 @@ export function startPluginServer(name: string, pluginDir: string, serverEntry: 
               runningPlugins.delete(name);
             });
 
-            console.log(`[Plugins] Server started for "${name}" on port ${msg.port}`);
+            logger.info(`[Plugins] Server started for "${name}" on port ${msg.port}`);
             resolve(msg.port);
           }
         } catch {
@@ -164,7 +166,7 @@ export function stopPluginServer(name: string): Promise<void> {
       }
     }, 5000);
 
-    console.log(`[Plugins] Server stopped for "${name}"`);
+    logger.info(`[Plugins] Server stopped for "${name}"`);
   });
 }
 

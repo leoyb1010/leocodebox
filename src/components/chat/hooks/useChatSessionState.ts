@@ -3,13 +3,14 @@ import type { MutableRefObject } from 'react';
 
 import { apiClient } from '../../../utils/apiClient';
 import { scrollBehavior } from '../../../utils/motion';
+import { startVisibleInterval } from '../../../utils/visibilityInterval';
 import type { MarkSessionIdle, SessionActivityMap } from '../../../hooks/useSessionProtection';
 import type { Project, ProjectSession, LLMProvider } from '../../../types/app';
 import type { SessionStore, NormalizedMessage } from '../../../stores/useSessionStore';
 import type { ChatMessage } from '../types/types';
 import { createCachedDiffCalculator, type DiffCalculator } from '../utils/messageTransforms';
 
-import { normalizedToChatMessages } from './useChatMessages';
+import { createChatMessageNormalizer } from './useChatMessages';
 
 const MESSAGES_PER_PAGE = 20;
 const INITIAL_VISIBLE_MESSAGES = 100;
@@ -271,8 +272,9 @@ export function useChatSessionState({
     if (viewHiddenCount > 0) setViewHiddenCount(0);
   }
 
+  const messageNormalizerRef = useRef(createChatMessageNormalizer());
   const chatMessages = useMemo(() => {
-    const all = normalizedToChatMessages(storeMessages);
+    const all = messageNormalizerRef.current(storeMessages);
     // Show pending user message when no session data exists yet (new session, pre-backend-response)
     if (pendingUserMessage && all.length === 0) {
       return [pendingUserMessage];
@@ -592,8 +594,8 @@ export function useChatSessionState({
       }
     };
     void hydrate();
-    const timer = window.setInterval(() => { if (!cancelled) void hydrate(); }, 750);
-    return () => { cancelled = true; window.clearInterval(timer); };
+    const stopVisibleInterval = startVisibleInterval(() => { if (!cancelled) void hydrate(); }, 5_000);
+    return () => { cancelled = true; stopVisibleInterval(); };
   }, [activeSessionId, chatMessages.length, isProcessing, sessionStore]);
 
   // External message update (e.g. WebSocket reconnect, background refresh)

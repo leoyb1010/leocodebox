@@ -15,6 +15,8 @@ type AuditSession = ProjectSession & {
   resolvedProvider: LLMProvider;
   timestamp: string | null;
 };
+type UsageSummaryRow = { sessionCount: number; inputTokens: number; outputTokens: number; cacheTokens: number; costUsd: number };
+
 type ReplayPayload = {
   messages: ReplayMessage[];
   total?: number;
@@ -71,6 +73,7 @@ export default function ConversationAuditPanel() {
   const { t } = useTranslation();
   const [projects, setProjects] = useState<Project[]>([]);
   const [sessions, setSessions] = useState<AuditSession[]>([]);
+  const [usageRows, setUsageRows] = useState<UsageSummaryRow[]>([]);
   const [selectedSession, setSelectedSession] = useState<AuditSession | null>(null);
   const [replay, setReplay] = useState<ReplayPayload | null>(null);
   const [projectFilter, setProjectFilter] = useState('all');
@@ -92,13 +95,17 @@ export default function ConversationAuditPanel() {
     setLoading(true);
     setError(null);
     try {
-      const nextProjects = await apiClient.get<Project[]>('/api/projects');
+      const [nextProjects, usage] = await Promise.all([
+        apiClient.get<Project[]>('/api/projects'),
+        apiClient.get<{ rows?: UsageSummaryRow[] }>('/api/usage/summary'),
+      ]);
       const sessionGroups = await mapWithConcurrency(
         nextProjects,
         4,
         (project) => loadProjectSessions(project, controller.signal),
       );
       setProjects(nextProjects);
+      setUsageRows(Array.isArray(usage.rows) ? usage.rows : []);
       setSessions(sessionGroups.flat().sort((left, right) => (
         Date.parse(right.timestamp || '') - Date.parse(left.timestamp || '')
       )));
@@ -171,6 +178,12 @@ export default function ConversationAuditPanel() {
     ));
   }, [category, query, replay?.messages]);
 
+  const usageTotals = useMemo(() => usageRows.reduce((totals, row) => ({
+    sessions: totals.sessions + Number(row.sessionCount || 0),
+    tokens: totals.tokens + Number(row.inputTokens || 0) + Number(row.outputTokens || 0) + Number(row.cacheTokens || 0),
+    costUsd: totals.costUsd + Number(row.costUsd || 0),
+  }), { sessions: 0, tokens: 0, costUsd: 0 }), [usageRows]);
+
   const exportAudit = useCallback(() => {
     const payload = selectedSession && replay
       ? { exportedAt: new Date().toISOString(), session: selectedSession, replay, filters: { category, query } }
@@ -200,6 +213,12 @@ export default function ConversationAuditPanel() {
           {t('audit.export')}
         </Button>
       </header>
+
+      <div className="grid grid-cols-3 gap-2 border-b border-border px-3 py-2">
+        <div className="rounded-lg bg-muted/50 px-3 py-2"><div className="text-[10px] uppercase text-muted-foreground">Sessions</div><div className="text-sm font-semibold">{usageTotals.sessions.toLocaleString()}</div></div>
+        <div className="rounded-lg bg-muted/50 px-3 py-2"><div className="text-[10px] uppercase text-muted-foreground">Tokens</div><div className="text-sm font-semibold">{usageTotals.tokens.toLocaleString()}</div></div>
+        <div className="rounded-lg bg-muted/50 px-3 py-2"><div className="text-[10px] uppercase text-muted-foreground">Estimated cost</div><div className="text-sm font-semibold">${usageTotals.costUsd.toFixed(2)}</div></div>
+      </div>
 
       <div className="grid gap-2 border-b border-border p-3 md:grid-cols-6">
         <label className="relative md:col-span-2">
@@ -243,8 +262,11 @@ export default function ConversationAuditPanel() {
               </div>
               {replay?.tokenUsage !== undefined && <pre className="mb-3 overflow-auto rounded-md border border-border bg-muted/40 p-3 text-xs"><strong>{t('audit.tokenUsage')}</strong>{'\n'}{JSON.stringify(replay.tokenUsage, null, 2)}</pre>}
               {replayLoading ? <div className="flex justify-center p-10"><Loader2 className="h-5 w-5 animate-spin" /></div> : visibleMessages.map((message, index) => (
-                <article key={String(message.id || message.uuid || index)} className="mb-2 rounded-md border border-border p-3">
-                  <div className="mb-1 text-[11px] font-semibold uppercase text-muted-foreground">{String(message.role || message.type || t('audit.event'))}</div>
+                <article key={String(message.id || message.uuid || index)} className="relative mb-2 ml-2 rounded-md border border-border p-3 before:absolute before:-left-[9px] before:top-4 before:h-2 before:w-2 before:rounded-full before:bg-primary after:absolute after:-left-[6px] after:top-6 after:h-[calc(100%+0.5rem)] after:w-px after:bg-border last:after:hidden">
+                  <div className="mb-1 flex items-center gap-2 text-[11px] font-semibold uppercase text-muted-foreground">
+                    <span>{String(message.role || message.type || t('audit.event'))}</span>
+                    {typeof message.timestamp === 'string' && <time className="ml-auto font-normal normal-case">{new Date(message.timestamp).toLocaleTimeString()}</time>}
+                  </div>
                   <pre className="whitespace-pre-wrap break-words font-sans text-sm text-foreground">{messageText(message)}</pre>
                 </article>
               ))}

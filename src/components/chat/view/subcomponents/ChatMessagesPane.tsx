@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { memo, useCallback, useMemo } from 'react';
-import type { Dispatch, RefObject, SetStateAction } from 'react';
+import { Virtualizer } from 'virtua';
+import type { Dispatch, ReactNode, RefObject, SetStateAction } from 'react';
 
 import type { ChatMessage } from '../../types/types';
 import type {
@@ -126,9 +127,9 @@ function ChatMessagesPane({
 
   // Stable, deterministic keys for the messages rendered this pass.
   //
-  // `normalizedToChatMessages` rebuilds fresh ChatMessage objects on every store
-  // update, so caching keys by object identity (or via a cross-render allocation
-  // Set) minted a brand-new key for the *same* logical message on each prepend —
+  // The normalizer preserves unchanged ChatMessage objects. Deriving keys from
+  // logical content still protects pagination boundaries and duplicate intrinsic
+  // ids, avoiding remounts when older pages are prepended —
   // remounting the whole list, which disconnects the scroll-restore anchor and
   // reflows heights, jumping the viewport to the bottom. Deriving keys purely
   // from this render's ordered messages (intrinsic key, disambiguated by
@@ -158,6 +159,62 @@ function ChatMessagesPane({
       messageKeyMap.get(message) ?? getIntrinsicMessageKey(message) ?? 'message-generated',
     [messageKeyMap],
   );
+
+
+  const getLastMessage = useCallback((item: (typeof groupedVisibleMessages)[number] | undefined) => {
+    if (!item) return null;
+    return isToolGroupItem(item) ? item.messages[item.messages.length - 1] ?? null : item;
+  }, []);
+
+  const renderMessageItem = useCallback((item: (typeof groupedVisibleMessages)[number], index: number): ReactNode => {
+    const prevMessage = getLastMessage(groupedVisibleMessages[index - 1]);
+    if (isToolGroupItem(item)) {
+      return (
+        <ToolGroupContainer
+          key={`tool-group-${getMessageKey(item.messages[0])}`}
+          group={item}
+          prevMessage={prevMessage}
+          createDiff={createDiff}
+          getMessageKey={getMessageKey}
+          onFileOpen={onFileOpen}
+          onShowSettings={onShowSettings}
+          onGrantToolPermission={onGrantToolPermission}
+          showRawParameters={showRawParameters}
+          showThinking={showThinking}
+          selectedProject={selectedProject}
+          provider={provider}
+        />
+      );
+    }
+
+    return (
+      <MessageComponent
+        key={getMessageKey(item)}
+        message={item}
+        prevMessage={prevMessage}
+        createDiff={createDiff}
+        onFileOpen={onFileOpen}
+        onShowSettings={onShowSettings}
+        onGrantToolPermission={onGrantToolPermission}
+        showRawParameters={showRawParameters}
+        showThinking={showThinking}
+        selectedProject={selectedProject}
+        provider={provider}
+      />
+    );
+  }, [
+    createDiff,
+    getLastMessage,
+    getMessageKey,
+    groupedVisibleMessages,
+    onFileOpen,
+    onGrantToolPermission,
+    onShowSettings,
+    provider,
+    selectedProject,
+    showRawParameters,
+    showThinking,
+  ]);
 
   return (
     <div
@@ -249,52 +306,18 @@ function ChatMessagesPane({
             </div>
           )}
 
-          {(() => {
-            let prevMessage: ChatMessage | null = null;
-
-            return groupedVisibleMessages.map((item) => {
-              if (isToolGroupItem(item)) {
-                const groupPrevMessage = prevMessage;
-                prevMessage = item.messages[item.messages.length - 1] || prevMessage;
-
-                return (
-                  <ToolGroupContainer
-                    key={`tool-group-${getMessageKey(item.messages[0])}`}
-                    group={item}
-                    prevMessage={groupPrevMessage}
-                    createDiff={createDiff}
-                    getMessageKey={getMessageKey}
-                    onFileOpen={onFileOpen}
-                    onShowSettings={onShowSettings}
-                    onGrantToolPermission={onGrantToolPermission}
-                    showRawParameters={showRawParameters}
-                    showThinking={showThinking}
-                    selectedProject={selectedProject}
-                    provider={provider}
-                  />
-                );
-              }
-
-              const messagePrevMessage = prevMessage;
-              prevMessage = item;
-
-              return (
-                <MessageComponent
-                  key={getMessageKey(item)}
-                  message={item}
-                  prevMessage={messagePrevMessage}
-                  createDiff={createDiff}
-                  onFileOpen={onFileOpen}
-                  onShowSettings={onShowSettings}
-                  onGrantToolPermission={onGrantToolPermission}
-                  showRawParameters={showRawParameters}
-                  showThinking={showThinking}
-                  selectedProject={selectedProject}
-                  provider={provider}
-                />
-              );
-            });
-          })()}
+          {groupedVisibleMessages.length >= 80 ? (
+            <Virtualizer
+              scrollRef={scrollContainerRef as RefObject<HTMLElement | null>}
+              overscan={8}
+              shift={isLoadingMoreMessages}
+              item={({ children }) => <div className="pb-3 sm:pb-4">{children}</div>}
+            >
+              {groupedVisibleMessages.map((item, index) => renderMessageItem(item, index))}
+            </Virtualizer>
+          ) : (
+            groupedVisibleMessages.map((item, index) => renderMessageItem(item, index))
+          )}
         </>
       )}
       </div>

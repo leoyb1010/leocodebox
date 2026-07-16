@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 
 import i18n from '../i18n/config.js';
 import type { LLMProvider } from '../types/app';
-import { apiRequest } from '../utils/api';
+import { apiRequest } from '../utils/apiClient';
 
 export type AppPreferences = {
   language: string;

@@ -2,6 +2,7 @@ import type { ChildProcess } from 'node:child_process';
 
 import crossSpawn from 'cross-spawn';
 
+import { logger } from '@/modules/logging/index.js';
 import { appendImagesInputTag } from '@/shared/image-attachments.js';
 import { notifyRunFailed, notifyRunStopped } from '@/services/notification-orchestrator.js';
 import { sessionsService } from '@/modules/providers/services/sessions.service.js';
@@ -332,7 +333,7 @@ async function spawnCursor(command: string, options: CursorRuntimeOptions = {}, 
 function abortCursorSession(sessionId: string): boolean {
   const process = activeCursorProcesses.get(sessionId);
   if (process) {
-    console.log(`Aborting Cursor session: ${sessionId}`);
+    logger.info(`Aborting Cursor session: ${sessionId}`);
     // The abort handler sends the terminal complete (aborted: true); flag the
     // process so its close handler does not emit a second one.
     process.aborted = true;

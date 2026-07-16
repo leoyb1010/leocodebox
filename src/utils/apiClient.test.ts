@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { ApiError, apiRequest } from './api';
+import { ApiError, apiRequest } from './apiClient';
 
 function installLocalStorage() {
   const values = new Map<string, string>();

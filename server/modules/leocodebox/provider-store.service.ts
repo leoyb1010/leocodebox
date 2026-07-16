@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 
+import { decryptProviderSecret, encryptProviderSecret } from './provider-secrets.service.js';
 import { providerStorePath, switchDir, TARGETS } from './provider-switch.config.js';
 import { ensureDir, nowIso, readJsonFile, safeText, writeJsonFile } from './provider-switch.storage.js';
 
@@ -262,18 +263,39 @@ export async function readStore(): Promise<ProviderStore> {
     healthMonitor: HEALTH_MONITOR_DEFAULTS,
   });
   return {
-    providers: Array.isArray(store.providers) ? store.providers : [],
+    providers: (Array.isArray(store.providers) ? store.providers : []).map((provider) => ({
+      ...provider,
+      apiKey: decryptProviderSecret(provider.apiKey),
+    })),
     activeByTarget: store.activeByTarget && typeof store.activeByTarget === 'object' ? store.activeByTarget : {},
     healthMonitor: normalizeHealthMonitorSettings(store.healthMonitor),
   };
 }
 
 export async function writeStore(store: ProviderStore): Promise<void> {
-  await writeJsonFile(providerStorePath(), store);
+  const persisted: ProviderStore = {
+    ...store,
+    providers: store.providers.map((provider) => ({
+      ...provider,
+      apiKey: encryptProviderSecret(provider.apiKey),
+    })),
+  };
+  await writeJsonFile(providerStorePath(), persisted);
 }
 
 export function upsertProviderInStore(store: ProviderStore, provider: SwitchProvider): void {
   const index = store.providers.findIndex((item) => item.id === provider.id);
   if (index === -1) store.providers.push(provider);
   else store.providers[index] = provider;
+}
+
+/** P95 latency from the rolling endpoint history used by smart routing. */
+export function endpointLatencyP95(stats: unknown): number {
+  const entry = stats && typeof stats === 'object' ? stats as { history?: unknown[]; latencyMs?: unknown } : {};
+  const values = (Array.isArray(entry.history) ? entry.history : [])
+    .map((sample) => sample && typeof sample === 'object' ? Number((sample as Record<string, unknown>).latencyMs) : NaN)
+    .filter((value) => Number.isFinite(value) && value >= 0)
+    .sort((a, b) => a - b);
+  if (values.length === 0) return Number(entry.latencyMs) || Number.MAX_SAFE_INTEGER;
+  return values[Math.min(values.length - 1, Math.ceil(values.length * 0.95) - 1)];
 }

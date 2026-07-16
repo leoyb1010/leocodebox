@@ -149,6 +149,37 @@ CREATE TABLE IF NOT EXISTS agent_profiles (
 );
 `;
 
+
+export const USAGE_DAILY_TABLE_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS usage_daily (
+    day TEXT NOT NULL,
+    project_path TEXT,
+    provider TEXT NOT NULL,
+    model TEXT,
+    session_count INTEGER NOT NULL DEFAULT 0,
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    cache_tokens INTEGER NOT NULL DEFAULT 0,
+    cost_usd REAL NOT NULL DEFAULT 0,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (day, project_path, provider, model)
+);
+`;
+
+
+export const SESSION_RUNTIME_STATE_TABLE_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS session_runtime_state (
+    session_id TEXT PRIMARY KEY NOT NULL,
+    status TEXT NOT NULL,
+    provider TEXT NOT NULL,
+    started_at INTEGER,
+    finished_at INTEGER,
+    aborted BOOLEAN DEFAULT 0,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (session_id) REFERENCES sessions(session_id) ON DELETE CASCADE
+);
+`;
+
 export const INIT_SCHEMA_SQL = `
 -- Initialize authentication database
 PRAGMA foreign_keys = ON;
@@ -194,5 +225,9 @@ ${LAST_SCANNED_AT_SQL}
 ${APP_CONFIG_TABLE_SCHEMA_SQL}
 
 ${AGENT_PROFILES_TABLE_SCHEMA_SQL}
+
+${USAGE_DAILY_TABLE_SCHEMA_SQL}
+
+${SESSION_RUNTIME_STATE_TABLE_SCHEMA_SQL}
 CREATE INDEX IF NOT EXISTS idx_agent_profiles_user_id ON agent_profiles(user_id);
 `;

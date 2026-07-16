@@ -2,8 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ArrowDownToLine, ArrowUpCircle, CheckCircle2, CircleHelp, Copy, FileDown, Loader2, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import { apiClient } from '../../../../../utils/apiClient';
-import { apiRequest } from '../../../../../utils/api';
+import { apiClient, apiRequest  } from '../../../../../utils/apiClient';
 import { cn } from '../../../../../lib/utils';
 import SessionProviderLogo from '../../../../llm-logo-provider/SessionProviderLogo';
 

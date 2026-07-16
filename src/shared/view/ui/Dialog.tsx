@@ -102,6 +102,16 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
     const { open, onOpenChange, triggerRef } = useDialog();
     const contentRef = React.useRef<HTMLDivElement | null>(null);
     const previousFocusRef = React.useRef<HTMLElement | null>(null);
+    const [present, setPresent] = React.useState(open);
+
+    React.useEffect(() => {
+      if (open) {
+        setPresent(true);
+        return undefined;
+      }
+      const timer = window.setTimeout(() => setPresent(false), 140);
+      return () => window.clearTimeout(timer);
+    }, [open]);
 
     // Save the element that had focus before opening, restore on close
     React.useEffect(() => {
@@ -169,16 +179,16 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
       }
     }, [open]);
 
-    if (!open) return null;
+    if (!present) return null;
 
     return createPortal(
       // z-[10000] keeps dialogs above the Settings modal (z-[9999]) so a dialog
       // opened from inside Settings (e.g. the Agent Hub profile editor) is not
       // painted behind it. Dialogs are the active interaction — always topmost.
-      <div className={cn('fixed inset-0 z-[10000]', wrapperClassName)}>
+      <div data-state={open ? 'open' : 'closed'} className={cn('fixed inset-0 z-[10000]', wrapperClassName)}>
         {/* Overlay */}
         <div
-          className="fixed inset-0 animate-dialog-overlay-show bg-black/50 backdrop-blur-sm"
+          className="dialog-overlay fixed inset-0 bg-black/50 backdrop-blur-sm"
           onClick={() => {
             onPointerDownOutside?.();
             onOpenChange(false);
@@ -197,7 +207,7 @@ const DialogContent = React.forwardRef<HTMLDivElement, DialogContentProps>(
           className={cn(
             'fixed left-1/2 top-1/2 z-[10000] w-full max-w-lg -translate-x-1/2 -translate-y-1/2',
             'rounded-xl border bg-popover text-popover-foreground shadow-lg',
-            'animate-dialog-content-show',
+            'dialog-content',
             className
           )}
           {...props}

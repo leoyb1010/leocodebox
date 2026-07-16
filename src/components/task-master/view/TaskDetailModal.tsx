@@ -10,6 +10,7 @@ import {
   Copy,
   Edit,
   Pause,
+  Play,
   Save,
   X,
 } from 'lucide-react';
@@ -82,6 +83,27 @@ export default function TaskDetailModal({
   if (!isOpen || !task || !editableTask) {
     return null;
   }
+
+  const handleDispatchToAgent = () => {
+    const prompt = [
+      `Implement task: ${task.title}`,
+      task.description?.trim() ? `
+
+Description:
+${task.description.trim()}` : '',
+      task.details?.trim() ? `
+
+Implementation details:
+${task.details.trim()}` : '',
+      task.testStrategy?.trim() ? `
+
+Test strategy:
+${task.testStrategy.trim()}` : '',
+    ].join('');
+    window.dispatchEvent(new CustomEvent('leocodebox:launch-new-chat'));
+    window.dispatchEvent(new CustomEvent('leocodebox:handoff-draft', { detail: { text: prompt } }));
+    onClose();
+  };
 
   const handleSaveChanges = async () => {
     if (!currentProject?.projectId) {
@@ -181,6 +203,17 @@ export default function TaskDetailModal({
           </div>
 
           <div className="flex items-center gap-2">
+            {!isEditMode && (
+              <button
+                type="button"
+                onClick={handleDispatchToAgent}
+                className="rounded-md p-2 text-primary hover:bg-primary/10"
+                title="Dispatch to agent"
+                aria-label="Dispatch task to agent"
+              >
+                <Play className="h-5 w-5" />
+              </button>
+            )}
             {isEditMode ? (
               <>
                 <button

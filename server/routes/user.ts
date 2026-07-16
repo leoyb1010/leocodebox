@@ -2,6 +2,8 @@ import express from 'express';
 // cross-spawn: drop-in spawn with Windows .cmd/PATHEXT resolution.
 import spawn from 'cross-spawn';
 
+import { logger } from '@/modules/logging/index.js';
+
 import { userDb } from '../modules/database/index.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { getSystemGitConfig } from '../utils/gitConfig.js';
@@ -44,7 +46,7 @@ router.get('/git-config', authenticateToken, async (req, res) => {
       if (systemConfig.git_name || systemConfig.git_email) {
         userDb.updateGitConfig(userId, systemConfig.git_name, systemConfig.git_email);
         gitConfig = systemConfig;
-        console.log(`Auto-populated git config from system for user ${userId}: ${systemConfig.git_name} <${systemConfig.git_email}>`);
+        logger.info(`Auto-populated git config from system for user ${userId}: ${systemConfig.git_name} <${systemConfig.git_email}>`);
       }
     }
 
@@ -80,7 +82,7 @@ router.post('/git-config', authenticateToken, async (req, res) => {
     try {
       await spawnAsync('git', ['config', '--global', 'user.name', gitName]);
       await spawnAsync('git', ['config', '--global', 'user.email', gitEmail]);
-      console.log(`Applied git config globally: ${gitName} <${gitEmail}>`);
+      logger.info(`Applied git config globally: ${gitName} <${gitEmail}>`);
     } catch (gitError) {
       console.error('Error applying git config:', gitError);
     }

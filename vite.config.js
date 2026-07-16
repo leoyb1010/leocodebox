@@ -53,6 +53,10 @@ export default defineConfig(({ mode }) => {
             if (id.includes('/node_modules/react/') || id.includes('/node_modules/react-dom/') || id.includes('/node_modules/react-router-dom/')) {
               return 'vendor-react'
             }
+            if (/node_modules\/(react-markdown|remark-|rehype-|unified|mdast-|hast-|micromark)/.test(id)) return 'vendor-markdown'
+            if (id.includes('/node_modules/katex/')) return 'vendor-katex'
+            if (id.includes('/node_modules/fuse.js/')) return 'vendor-search'
+            if (id.includes('/node_modules/virtua/')) return 'vendor-virtual-list'
             return undefined
           }
         }

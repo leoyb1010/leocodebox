@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { apiClient } from '../utils/apiClient';
+import { startVisibleInterval } from '../utils/visibilityInterval';
 
 type SwitchStatusProvider = {
   id: string;
@@ -62,18 +63,13 @@ export function useLeoapiStatus(): LeoapiActiveNodes {
     };
 
     void load();
-    const interval = setInterval(() => void load(), REFRESH_INTERVAL_MS);
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') void load();
-    };
+    const stopVisibleInterval = startVisibleInterval(() => void load(), REFRESH_INTERVAL_MS);
     const onSwitched = () => void load();
-    document.addEventListener('visibilitychange', onVisibilityChange);
     // Fired after a ⌘K node switch so the badge updates immediately.
     window.addEventListener('leocodebox:leoapi-switched', onSwitched);
     return () => {
       cancelled = true;
-      clearInterval(interval);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
+      stopVisibleInterval();
       window.removeEventListener('leocodebox:leoapi-switched', onSwitched);
     };
   }, []);

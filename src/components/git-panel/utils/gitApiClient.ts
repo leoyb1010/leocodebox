@@ -1,4 +1,4 @@
-import { apiRequest } from '../../../utils/api';
+import { apiRequest } from '../../../utils/apiClient';
 
 export function isAbortError(error: unknown): boolean {
   return error instanceof DOMException && error.name === 'AbortError';

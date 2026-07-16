@@ -1,5 +1,7 @@
 import express from 'express';
 
+import { logger } from '@/modules/logging/index.js';
+
 import {
   getActualProjectPath,
   getCurrentBranchName,
@@ -114,7 +116,7 @@ router.post('/fetch', async (req, res) => {
       remoteName = stdout.trim().split('/')[0]; // Extract remote name
     } catch (error) {
       // No upstream, try to fetch from origin anyway
-      console.log('No upstream configured, using origin as fallback');
+      logger.info('No upstream configured, using origin as fallback');
     }
 
     validateRemoteName(remoteName);
@@ -158,7 +160,7 @@ router.post('/pull', async (req, res) => {
       remoteBranch = tracking.split('/').slice(1).join('/'); // Extract branch name
     } catch (error) {
       // No upstream, use fallback
-      console.log('No upstream configured, using origin/branch as fallback');
+      logger.info('No upstream configured, using origin/branch as fallback');
     }
 
     validateRemoteName(remoteName);
@@ -226,7 +228,7 @@ router.post('/push', async (req, res) => {
       remoteBranch = tracking.split('/').slice(1).join('/'); // Extract branch name
     } catch (error) {
       // No upstream, use fallback
-      console.log('No upstream configured, using origin/branch as fallback');
+      logger.info('No upstream configured, using origin/branch as fallback');
     }
 
     validateRemoteName(remoteName);

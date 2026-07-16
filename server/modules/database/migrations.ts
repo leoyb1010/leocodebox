@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 
 import { Database } from 'better-sqlite3';
 
+import { logger } from '@/modules/logging/index.js';
 import {
   AGENT_PROFILES_TABLE_SCHEMA_SQL,
   APP_CONFIG_TABLE_SCHEMA_SQL,
@@ -11,6 +12,8 @@ import {
   PUSH_SUBSCRIPTIONS_TABLE_SCHEMA_SQL,
   SESSIONS_TABLE_SCHEMA_SQL,
   USER_NOTIFICATION_PREFERENCES_TABLE_SCHEMA_SQL,
+  USAGE_DAILY_TABLE_SCHEMA_SQL,
+  SESSION_RUNTIME_STATE_TABLE_SCHEMA_SQL,
   VAPID_KEYS_TABLE_SCHEMA_SQL,
 } from '@/modules/database/schema.js';
 
@@ -35,7 +38,7 @@ const addColumnToTableIfNotExists = (
   columnType: string
 ) => {
   if (!columnNames.includes(columnName)) {
-    console.log(`Running migration: Adding ${columnName} column to ${tableName} table`);
+    logger.info(`Running migration: Adding ${columnName} column to ${tableName} table`);
     db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${columnType}`);
   }
 };
@@ -59,7 +62,7 @@ const migrateLegacySessionNames = (db: Database): void => {
   }
 
   if (hasSessionsTable) {
-    console.log('Running migration: Merging session_names into sessions');
+    logger.info('Running migration: Merging session_names into sessions');
     db.exec(`
       INSERT INTO sessions (session_id, provider, custom_name, created_at, updated_at)
       SELECT
@@ -80,7 +83,7 @@ const migrateLegacySessionNames = (db: Database): void => {
     return;
   }
 
-  console.log('Running migration: Renaming session_names table to sessions');
+  logger.info('Running migration: Renaming session_names table to sessions');
   db.exec('ALTER TABLE session_names RENAME TO sessions');
 };
 
@@ -91,7 +94,7 @@ const migrateLegacyWorkspaceTableIntoProjects = (db: Database): void => {
     return;
   }
 
-  console.log('Running migration: Migrating workspace_original_paths data into projects');
+  logger.info('Running migration: Migrating workspace_original_paths data into projects');
   db.exec(`
     INSERT INTO projects (project_id, project_path, custom_project_name, isStarred, isArchived)
     SELECT
@@ -137,7 +140,7 @@ const rebuildProjectsTableWithPrimaryKeySchema = (db: Database): void => {
     return;
   }
 
-  console.log('Running migration: Rebuilding projects table to enforce project_id primary key');
+  logger.info('Running migration: Rebuilding projects table to enforce project_id primary key');
 
   const projectPathExpression = columnNames.includes('project_path')
     ? 'project_path'
@@ -270,7 +273,7 @@ const rebuildSessionsTableWithProjectSchema = (db: Database): void => {
     return;
   }
 
-  console.log('Running migration: Rebuilding sessions table to project-based schema');
+  logger.info('Running migration: Rebuilding sessions table to project-based schema');
 
   const projectPathExpression = columnNames.includes('project_path')
     ? 'project_path'
@@ -440,7 +443,7 @@ const migrateApiKeysToHashes = (db: Database): void => {
     .all() as { id: number; api_key: string }[];
   if (legacyRows.length === 0) return;
 
-  console.log(`Running migration: Hashing ${legacyRows.length} plaintext API key(s)`);
+  logger.info(`Running migration: Hashing ${legacyRows.length} plaintext API key(s)`);
   const update = db.prepare('UPDATE api_keys SET api_key = ?, key_prefix = ? WHERE id = ?');
   for (const row of legacyRows) {
     const digest = 'sha256:' + createHash('sha256').update(row.api_key).digest('hex');
@@ -464,6 +467,8 @@ export const runMigrations = (db: Database) => {
     );
 
     db.exec(APP_CONFIG_TABLE_SCHEMA_SQL);
+    db.exec(USAGE_DAILY_TABLE_SCHEMA_SQL);
+    db.exec(SESSION_RUNTIME_STATE_TABLE_SCHEMA_SQL);
     db.exec(USER_NOTIFICATION_PREFERENCES_TABLE_SCHEMA_SQL);
     db.exec(VAPID_KEYS_TABLE_SCHEMA_SQL);
     db.exec(PUSH_SUBSCRIPTIONS_TABLE_SCHEMA_SQL);
@@ -495,7 +500,7 @@ export const runMigrations = (db: Database) => {
     db.exec('DROP INDEX IF EXISTS idx_workspace_original_paths_workspace_id');
 
     if (tableExists(db, 'workspace_original_paths')) {
-      console.log('Running migration: Dropping legacy workspace_original_paths table');
+      logger.info('Running migration: Dropping legacy workspace_original_paths table');
       db.exec('DROP TABLE workspace_original_paths');
     }
 
@@ -505,7 +510,7 @@ export const runMigrations = (db: Database) => {
     db.exec(AGENT_PROFILES_TABLE_SCHEMA_SQL);
     db.exec('CREATE INDEX IF NOT EXISTS idx_agent_profiles_user_id ON agent_profiles(user_id)');
 
-    console.log('Database migrations completed successfully');
+    logger.info('Database migrations completed successfully');
   } catch (error: any) {
     console.error('Error running migrations:', error.message);
     throw error;

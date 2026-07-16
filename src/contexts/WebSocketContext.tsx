@@ -62,6 +62,7 @@ const useWebSocketProviderState = (): WebSocketContextType => {
    */
   const listenersRef = useRef(new Set<ServerEventListener>());
   const [isConnected, setIsConnected] = useState(false);
+  const [socket, setSocket] = useState<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   /**
    * Monotonic id for the current connection "generation". Bumped on every
@@ -107,6 +108,7 @@ const useWebSocketProviderState = (): WebSocketContextType => {
         }
         setIsConnected(true);
         wsRef.current = websocket;
+        setSocket(websocket);
         if (hasConnectedRef.current) {
           // This is a reconnect — signal so components can catch up on missed messages
           dispatch({ kind: 'websocket_reconnected', timestamp: Date.now() });
@@ -133,6 +135,7 @@ const useWebSocketProviderState = (): WebSocketContextType => {
 
         setIsConnected(false);
         wsRef.current = null;
+        setSocket(null);
 
         // Attempt to reconnect after 3 seconds
         reconnectTimeoutRef.current = setTimeout(() => {
@@ -174,6 +177,7 @@ const useWebSocketProviderState = (): WebSocketContextType => {
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
+        setSocket(null);
       }
     };
   }, [connect, token]); // every time token changes, reconnect
@@ -195,11 +199,11 @@ const useWebSocketProviderState = (): WebSocketContextType => {
 
   const value: WebSocketContextType = useMemo(() =>
   ({
-    ws: wsRef.current,
+    ws: socket,
     sendMessage,
     subscribe,
     isConnected
-  }), [sendMessage, subscribe, isConnected]);
+  }), [sendMessage, subscribe, isConnected, socket]);
 
   return value;
 };

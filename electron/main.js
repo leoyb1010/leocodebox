@@ -1,7 +1,8 @@
 import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, safeStorage, session, shell, webContents } from 'electron';
 import updaterPackage from 'electron-updater';
+import { randomBytes } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
-import { rm } from 'node:fs/promises';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -27,6 +28,23 @@ const APP_USER_MODEL_ID = 'com.leoyuan.leocodebox';
 const LOCAL_NOTIFICATIONS_DEVICE_ID = 'local-desktop';
 
 const tabs = new TabsController();
+
+async function configureProviderStoreEncryption() {
+  if (!safeStorage.isEncryptionAvailable()) return;
+  const keyPath = path.join(app.getPath('userData'), 'provider-store-key.enc');
+  try {
+    const encrypted = Buffer.from((await readFile(keyPath, 'utf8')).trim(), 'base64');
+    const secret = safeStorage.decryptString(encrypted);
+    if (secret) process.env.LEOCODEBOX_PROVIDER_KEY_SECRET = secret;
+    return;
+  } catch {
+    // First launch or unreadable legacy key: create a new keychain-protected key.
+  }
+  const secret = randomBytes(32).toString('hex');
+  const encrypted = safeStorage.encryptString(secret);
+  await writeFile(keyPath, encrypted.toString('base64'), { mode: 0o600 });
+  process.env.LEOCODEBOX_PROVIDER_KEY_SECRET = secret;
+}
 
 {
   const configuredProfilePath = String(process.env.LEOCODEBOX_USER_DATA_DIR || '').trim();
@@ -703,6 +721,8 @@ async function bootstrap() {
   });
 
   await clearLocalOnlyWebCaches();
+
+  await configureProviderStoreEncryption();
 
   const legacyMigration = await disableConflictingLegacyLaunchAgent();
   if (legacyMigration.migrated) {

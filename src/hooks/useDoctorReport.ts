@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { apiClient } from '../utils/apiClient';
+import { startVisibleInterval } from '../utils/visibilityInterval';
 
 export type DoctorCheck = {
   id: string;
@@ -43,18 +44,13 @@ export function useDoctorReport(): DoctorReport | null {
     };
 
     void load();
-    const interval = setInterval(() => void load(), REFRESH_INTERVAL_MS);
-    const onVisible = () => {
-      if (document.visibilityState === 'visible') void load();
-    };
+    const stopVisibleInterval = startVisibleInterval(() => void load(), REFRESH_INTERVAL_MS);
     const onRefresh = () => void load();
-    document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('leocodebox:leoapi-switched', onRefresh);
     window.addEventListener('leocodebox:doctor-refresh', onRefresh);
     return () => {
       cancelled = true;
-      clearInterval(interval);
-      document.removeEventListener('visibilitychange', onVisible);
+      stopVisibleInterval();
       window.removeEventListener('leocodebox:leoapi-switched', onRefresh);
       window.removeEventListener('leocodebox:doctor-refresh', onRefresh);
     };

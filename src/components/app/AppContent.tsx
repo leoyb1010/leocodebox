@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import type { NavigateFunction, NavigateOptions, To } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import Sidebar from '../sidebar/view/Sidebar';
@@ -13,6 +14,8 @@ import { useSessionProtection } from '../../hooks/useSessionProtection';
 import { useProjectsState } from '../../hooks/useProjectsState';
 import { useQueuedMessageAutoSend } from '../../hooks/useQueuedMessageAutoSend';
 import { apiClient } from '../../utils/apiClient';
+import { startVisibleInterval } from '../../utils/visibilityInterval';
+import { withViewTransition } from '../../utils/viewTransition';
 
 import DesktopAppRail from './DesktopAppRail';
 import WorkspaceStatusBar from './WorkspaceStatusBar';
@@ -53,6 +56,9 @@ export default function AppContent() {
 
 function AppContentInner() {
   const navigate = useNavigate();
+  const navigateWithTransition = useCallback<NavigateFunction>((to: To | number, options?: NavigateOptions) => {
+    withViewTransition(() => navigate(to as To, options));
+  }, [navigate]);
   const { sessionId } = useParams<{ sessionId?: string }>();
   const { t } = useTranslation('common');
   const { isMobile } = useDeviceSettings({ trackPWA: false });
@@ -85,7 +91,7 @@ function AppContentInner() {
     fetchProjects,
   } = useProjectsState({
     sessionId,
-    navigate,
+    navigate: navigateWithTransition,
     subscribe,
     isMobile,
     activeSessions: processingSessions,
@@ -139,11 +145,9 @@ function AppContentInner() {
   }, [refreshRunningSessions]);
 
   useEffect(() => {
-    const interval = window.setInterval(() => {
+    return startVisibleInterval(() => {
       void refreshRunningSessions();
-    }, 5000);
-
-    return () => window.clearInterval(interval);
+    }, 15_000);
   }, [refreshRunningSessions]);
 
   // Mirror the running count onto the macOS Dock badge so a long task can be
@@ -181,11 +185,11 @@ function AppContentInner() {
       void refreshProjectsSilently();
 
       if (typeof message.sessionId === 'string' && message.sessionId) {
-        navigate(`/session/${message.sessionId}`);
+        navigateWithTransition(`/session/${message.sessionId}`);
         return;
       }
 
-      navigate('/');
+      navigateWithTransition('/');
     };
 
     navigator.serviceWorker.addEventListener('message', handleServiceWorkerMessage);
@@ -193,7 +197,7 @@ function AppContentInner() {
     return () => {
       navigator.serviceWorker.removeEventListener('message', handleServiceWorkerMessage);
     };
-  }, [navigate, refreshProjectsSilently, setActiveTab, setSidebarOpen]);
+  }, [navigateWithTransition, refreshProjectsSilently, setActiveTab, setSidebarOpen]);
 
   // Pending tool permissions are recovered through the `chat.subscribe` flow:
   // the `chat_subscribed` ack carries them on session open and on reconnect,
@@ -240,8 +244,8 @@ function AppContentInner() {
 
   const handleNavigateToSession = useCallback(
     (targetSessionId: string, options?: SessionNavigationOptions) =>
-      navigate(`/session/${targetSessionId}`, { replace: Boolean(options?.replace) }),
-    [navigate],
+      navigateWithTransition(`/session/${targetSessionId}`, { replace: Boolean(options?.replace) }),
+    [navigateWithTransition],
   );
 
   const handleSessionEstablished = useCallback(

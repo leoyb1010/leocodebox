@@ -4,6 +4,8 @@ import os from 'os';
 
 import express from 'express';
 
+import { logger } from '@/modules/logging/index.js';
+
 import { CURSOR_FALLBACK_MODELS } from '../modules/providers/list/cursor/cursor-models.provider.js';
 
 function errorMessage(error: unknown): string {
@@ -28,7 +30,7 @@ router.get('/config', async (req, res) => {
       });
     } catch (error) {
       // Config doesn't exist or is invalid, so return the UI default shape.
-      console.log('Cursor config not found or invalid:', errorMessage(error));
+      logger.info('Cursor config not found or invalid:', errorMessage(error));
 
       res.json({
         success: true,

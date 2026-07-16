@@ -9,6 +9,7 @@ import express from 'express';
 import type { NextFunction, Request, Response } from 'express';
 import { Octokit } from '@octokit/rest';
 
+import { logger } from '@/modules/logging/index.js';
 import { userDb, apiKeysDb, githubTokensDb, projectsDb } from '@/modules/database/index.js';
 import {
   providerModelsService,
@@ -441,9 +442,9 @@ router.post('/', validateExternalApiKey, async (req, res) => {
     // Register project path in DB (or reuse existing active registration)
     const registrationResult = projectsDb.createProjectPath(finalProjectPath, null);
     if (registrationResult.outcome === 'active_conflict') {
-      console.log('Project registration already exists for:', finalProjectPath);
+      logger.info('Project registration already exists for:', finalProjectPath);
     } else {
-      console.log('Project registered:', registrationResult.project);
+      logger.info('Project registered:', registrationResult.project);
     }
 
     // Set up writer based on streaming mode
@@ -479,7 +480,7 @@ router.post('/', validateExternalApiKey, async (req, res) => {
 
     // Start the appropriate session
     if (provider === 'claude') {
-      console.log('🤖 Starting Claude SDK session');
+      logger.info('🤖 Starting Claude SDK session');
 
       await queryClaudeSDK(message.trim(), {
         projectPath: finalProjectPath,
@@ -491,7 +492,7 @@ router.post('/', validateExternalApiKey, async (req, res) => {
       }, writer);
 
     } else if (provider === 'cursor') {
-      console.log('🖱️ Starting Cursor CLI session');
+      logger.info('🖱️ Starting Cursor CLI session');
 
       await spawnCursor(message.trim(), {
         projectPath: finalProjectPath,
@@ -501,7 +502,7 @@ router.post('/', validateExternalApiKey, async (req, res) => {
         skipPermissions // Bypass permissions for Cursor unless caller chose a safer mode
       }, writer);
     } else if (provider === 'codex') {
-      console.log('🤖 Starting Codex SDK session');
+      logger.info('🤖 Starting Codex SDK session');
 
       await queryCodex(message.trim(), {
         projectPath: finalProjectPath,
@@ -512,7 +513,7 @@ router.post('/', validateExternalApiKey, async (req, res) => {
         permissionMode
       }, writer);
     } else if (provider === 'opencode') {
-      console.log('Starting OpenCode CLI session');
+      logger.info('Starting OpenCode CLI session');
 
       await spawnOpenCode(message.trim(), {
         projectPath: finalProjectPath,
@@ -523,7 +524,7 @@ router.post('/', validateExternalApiKey, async (req, res) => {
         permissionMode // Defaults to bypassPermissions for headless; caller-overridable
       }, writer);
     } else if (provider === 'grok') {
-      console.log('Starting Grok Build CLI session');
+      logger.info('Starting Grok Build CLI session');
 
       await spawnGrok(message.trim(), {
         projectPath: finalProjectPath,
@@ -541,7 +542,7 @@ router.post('/', validateExternalApiKey, async (req, res) => {
 
     if (createBranch || createPR) {
       try {
-        console.log('🔄 Starting GitHub branch/PR creation workflow...');
+        logger.info('🔄 Starting GitHub branch/PR creation workflow...');
 
         // Get GitHub token
         const tokenToUse = githubToken || githubTokensDb.getActiveGithubToken(req.user.id);
@@ -556,13 +557,13 @@ router.post('/', validateExternalApiKey, async (req, res) => {
         // Get GitHub URL - either from parameter or from git remote
         let repoUrl = githubUrl;
         if (!repoUrl) {
-          console.log('🔍 Getting GitHub URL from git remote...');
+          logger.info('🔍 Getting GitHub URL from git remote...');
           try {
             repoUrl = await getGitRemoteUrl(finalProjectPath);
             if (!repoUrl.includes('github.com')) {
               throw new Error('Project does not have a GitHub remote configured');
             }
-            console.log(`✅ Found GitHub remote: ${repoUrl}`);
+            logger.info(`✅ Found GitHub remote: ${repoUrl}`);
           } catch (error) {
             throw new Error(`Failed to get GitHub remote URL: ${errorMessage(error)}`);
           }
@@ -570,12 +571,12 @@ router.post('/', validateExternalApiKey, async (req, res) => {
 
         // Parse GitHub URL to get owner and repo
         const { owner, repo } = parseGitHubUrl(repoUrl);
-        console.log(`📦 Repository: ${owner}/${repo}`);
+        logger.info(`📦 Repository: ${owner}/${repo}`);
 
         // Use provided branch name or auto-generate from message
         const finalBranchName = branchName || autogenerateBranchName(message);
         if (branchName) {
-          console.log(`🌿 Using provided branch name: ${finalBranchName}`);
+          logger.info(`🌿 Using provided branch name: ${finalBranchName}`);
 
           // Validate custom branch name
           const validation = validateBranchName(finalBranchName);
@@ -583,12 +584,12 @@ router.post('/', validateExternalApiKey, async (req, res) => {
             throw new Error(`Invalid branch name: ${validation.error}`);
           }
         } else {
-          console.log(`🌿 Auto-generated branch name: ${finalBranchName}`);
+          logger.info(`🌿 Auto-generated branch name: ${finalBranchName}`);
         }
 
         if (createBranch) {
           // Create and checkout the new branch locally
-          console.log('🔄 Creating local branch...');
+          logger.info('🔄 Creating local branch...');
           const checkoutProcess = spawn('git', ['checkout', '-b', finalBranchName], {
             cwd: finalProjectPath!,
             stdio: 'pipe'
@@ -599,19 +600,19 @@ router.post('/', validateExternalApiKey, async (req, res) => {
             checkoutProcess.stderr?.on('data', (data) => { stderr += data.toString(); });
             checkoutProcess.on('close', (code) => {
               if (code === 0) {
-                console.log(`✅ Created and checked out local branch '${finalBranchName}'`);
+                logger.info(`✅ Created and checked out local branch '${finalBranchName}'`);
                 resolve();
               } else {
                 // Branch might already exist locally, try to checkout
                 if (stderr.includes('already exists')) {
-                  console.log(`ℹ️ Branch '${finalBranchName}' already exists locally, checking out...`);
+                  logger.info(`ℹ️ Branch '${finalBranchName}' already exists locally, checking out...`);
                   const checkoutExisting = spawn('git', ['checkout', finalBranchName], {
                     cwd: finalProjectPath!,
                     stdio: 'pipe'
                   });
                   checkoutExisting.on('close', (checkoutCode) => {
                     if (checkoutCode === 0) {
-                      console.log(`✅ Checked out existing branch '${finalBranchName}'`);
+                      logger.info(`✅ Checked out existing branch '${finalBranchName}'`);
                       resolve();
                     } else {
                       reject(new Error(`Failed to checkout existing branch: ${stderr}`));
@@ -625,7 +626,7 @@ router.post('/', validateExternalApiKey, async (req, res) => {
           });
 
           // Push the branch to remote
-          console.log('🔄 Pushing branch to remote...');
+          logger.info('🔄 Pushing branch to remote...');
           const pushProcess = spawn('git', ['push', '-u', 'origin', finalBranchName], {
             cwd: finalProjectPath!,
             stdio: 'pipe'
@@ -638,12 +639,12 @@ router.post('/', validateExternalApiKey, async (req, res) => {
             pushProcess.stderr?.on('data', (data) => { stderr += data.toString(); });
             pushProcess.on('close', (code) => {
               if (code === 0) {
-                console.log(`✅ Pushed branch '${finalBranchName}' to remote`);
+                logger.info(`✅ Pushed branch '${finalBranchName}' to remote`);
                 resolve();
               } else {
                 // Check if branch exists on remote but has different commits
                 if (stderr.includes('already exists') || stderr.includes('up-to-date')) {
-                  console.log(`ℹ️ Branch '${finalBranchName}' already exists on remote, using existing branch`);
+                  logger.info(`ℹ️ Branch '${finalBranchName}' already exists on remote, using existing branch`);
                   resolve();
                 } else {
                   reject(new Error(`Failed to push branch: ${stderr}`));
@@ -660,7 +661,7 @@ router.post('/', validateExternalApiKey, async (req, res) => {
 
         if (createPR) {
           // Get commit messages to generate PR description
-          console.log('🔄 Generating PR title and description...');
+          logger.info('🔄 Generating PR title and description...');
           const commitMessages = await getCommitMessages(finalProjectPath, 5);
 
           // Use the first commit message as the PR title, or fallback to the agent message
@@ -675,10 +676,10 @@ router.post('/', validateExternalApiKey, async (req, res) => {
           }
           prBody += '\n\n---\n*This pull request was automatically created by leocodebox Agent.*';
 
-          console.log(`📝 PR Title: ${prTitle}`);
+          logger.info(`📝 PR Title: ${prTitle}`);
 
           // Create the pull request
-          console.log('🔄 Creating pull request...');
+          logger.info('🔄 Creating pull request...');
           prInfo = await createGitHubPR(octokit, owner, repo, finalBranchName, prTitle, prBody, 'main');
         }
 

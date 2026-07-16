@@ -1,3 +1,4 @@
+import { logger } from '@/modules/logging/index.js';
 import { getConnection } from "@/modules/database/connection.js";
 import { runMigrations } from "@/modules/database/migrations.js";
 import { INIT_SCHEMA_SQL } from "@/modules/database/schema.js";
@@ -7,11 +8,11 @@ export const initializeDatabase = async () => {
     try {
         const db = getConnection();
         db.exec(INIT_SCHEMA_SQL);
-        console.log('Database schema applied');
+        logger.info('Database schema applied');
         runMigrations(db);
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        console.log('Database initialization failed', { error: message });
+        logger.info('Database initialization failed', { error: message });
         throw err;
     }
 };

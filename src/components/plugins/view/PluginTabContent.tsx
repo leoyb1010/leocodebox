@@ -124,7 +124,7 @@ export default function PluginTabContent({
         console.error(`[Plugin:${pluginName}] Failed to load:`, err);
         if (containerRef.current) {
           const errDiv = document.createElement('div');
-          errDiv.style.cssText = 'padding:16px;font-size:13px;color:#dc2626';
+          errDiv.style.cssText = 'padding:16px;font-size:13px;color:hsl(var(--destructive))';
           errDiv.textContent = `Plugin failed to load: ${String(err)}`;
           containerRef.current.replaceChildren(errDiv);
         }

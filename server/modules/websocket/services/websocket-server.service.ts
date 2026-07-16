@@ -2,6 +2,7 @@ import type { Server as HttpServer } from 'node:http';
 
 import { WebSocketServer, type VerifyClientCallbackSync } from 'ws';
 
+import { logger } from '@/modules/logging/index.js';
 import { handleChatConnection } from '@/modules/websocket/services/chat-websocket.service.js';
 import { verifyWebSocketClient } from '@/modules/websocket/services/websocket-auth.service.js';
 import { handlePluginWsProxy } from '@/modules/websocket/services/plugin-websocket-proxy.service.js';
@@ -74,7 +75,7 @@ export function createWebSocketServer(
       return;
     }
 
-    console.log('[WARN] Unknown WebSocket path:', pathname);
+    logger.info('[WARN] Unknown WebSocket path:', pathname);
     ws.close();
   });
 

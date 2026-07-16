@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import fsp from 'node:fs/promises';
 import path from 'node:path';
 
-import { projectsDb, sessionsDb } from '@/modules/database/index.js';
+import { projectsDb, sessionsDb, sessionRuntimeStateDb } from '@/modules/database/index.js';
 import { chatRunRegistry } from '@/modules/websocket/index.js';
 import { providerRegistry } from '@/modules/providers/provider.registry.js';
 import type {
@@ -97,7 +97,12 @@ export const sessionsService = {
     startedAt: number;
     lastSeq: number;
   }> {
-    return chatRunRegistry.listRunningRuns();
+    const active = chatRunRegistry.listRunningRuns();
+    const activeIds = new Set(active.map((entry) => entry.sessionId));
+    const recovered = sessionRuntimeStateDb.listRecoverable()
+      .filter((entry) => !activeIds.has(entry.session_id))
+      .map((entry) => ({ sessionId: entry.session_id, provider: entry.provider, startedAt: entry.started_at ?? Date.now(), lastSeq: 0 }));
+    return [...active, ...recovered];
   },
 
   /**

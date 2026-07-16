@@ -1,5 +1,6 @@
 import type { VerifyClientCallbackSync } from 'ws';
 
+import { logger } from '@/modules/logging/index.js';
 import type { AuthenticatedWebSocketRequest } from '@/shared/types.js';
 
 type WebSocketAuthDependencies = {
@@ -38,10 +39,10 @@ export function verifyWebSocketClient(
     loggedUrl.searchParams.set('token', 'REDACTED');
   }
 
-  console.log('WebSocket connection attempt to:', `${loggedUrl.pathname}${loggedUrl.search}`);
+  logger.info('WebSocket connection attempt to:', `${loggedUrl.pathname}${loggedUrl.search}`);
 
   if (dependencies.isLocalOnly && !isLoopbackOrigin(request.headers.origin)) {
-    console.log('[WARN] Local-only WebSocket rejected origin:', request.headers.origin || '(none)');
+    logger.info('[WARN] Local-only WebSocket rejected origin:', request.headers.origin || '(none)');
     return false;
   }
 
@@ -49,12 +50,12 @@ export function verifyWebSocketClient(
   if (dependencies.isPlatform) {
     const user = dependencies.authenticateWebSocket(null);
     if (!user) {
-      console.log('[WARN] Platform mode: No user found in database');
+      logger.info('[WARN] Platform mode: No user found in database');
       return false;
     }
 
     request.user = user;
-    console.log('[OK] Platform mode WebSocket authenticated for user:', user.username);
+    logger.info('[OK] Platform mode WebSocket authenticated for user:', user.username);
     return true;
   }
 
@@ -66,11 +67,11 @@ export function verifyWebSocketClient(
 
   const user = dependencies.authenticateWebSocket(token);
   if (!user) {
-    console.log('[WARN] WebSocket authentication failed');
+    logger.info('[WARN] WebSocket authentication failed');
     return false;
   }
 
   request.user = user;
-  console.log('[OK] WebSocket authenticated for user:', user.username);
+  logger.info('[OK] WebSocket authenticated for user:', user.username);
   return true;
 }

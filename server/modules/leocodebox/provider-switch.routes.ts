@@ -4,6 +4,8 @@ import crypto from 'node:crypto';
 
 import express from 'express';
 
+import { appConfigDb } from '@/modules/database/index.js';
+
 import { PROVIDER_TEMPLATES } from '../../shared/provider-templates.js';
 
 
@@ -38,6 +40,7 @@ import {
 } from './provider-discovery.service.js';
 import {
   appendEndpointSamples,
+  endpointLatencyP95,
   normalizeEndpointUrls,
   normalizeHealthMonitorSettings,
   normalizeModelMapping,
@@ -69,6 +72,17 @@ import {
 
 
 const router = express.Router();
+const SWITCH_PROFILES_KEY = 'provider_switch_profiles';
+type ProviderSwitchProfile = { name: string; providerId: string; target: string; modelMapping?: Record<string, string>; createdAt: string; updatedAt: string };
+function readSwitchProfiles(): ProviderSwitchProfile[] {
+  try {
+    const parsed = JSON.parse(appConfigDb.get(SWITCH_PROFILES_KEY) || '[]');
+    return Array.isArray(parsed) ? parsed : [];
+  } catch { return []; }
+}
+function writeSwitchProfiles(profiles: ProviderSwitchProfile[]): void {
+  appConfigDb.set(SWITCH_PROFILES_KEY, JSON.stringify(profiles.slice(-50)));
+}
 
 type StatusError = Error & { statusCode?: number };
 type BackupRecord = {
@@ -224,6 +238,49 @@ function scheduleProviderModelDiscovery(provider: SwitchProvider, timeoutMs: unk
   });
 }
 
+
+router.get('/switch/profiles', (_req, res) => {
+  res.json({ success: true, profiles: readSwitchProfiles() });
+});
+
+router.post('/switch/profiles', async (req, res, next) => {
+  try {
+    const name = safeText(req.body?.name, 80);
+    const providerId = safeText(req.body?.providerId, 120);
+    if (!name || !providerId) return res.status(400).json({ success: false, error: 'name and providerId are required.' });
+    const store = await readStore();
+    const provider = store.providers.find((item) => item.id === providerId);
+    if (!provider) return res.status(404).json({ success: false, error: 'Provider not found.' });
+    const profiles = readSwitchProfiles().filter((profile) => profile.name !== name);
+    profiles.push({ name, providerId, target: provider.target, modelMapping: provider.modelMapping, createdAt: nowIso(), updatedAt: nowIso() });
+    writeSwitchProfiles(profiles);
+    res.json({ success: true, profile: profiles.at(-1) });
+  } catch (error) { next(error); }
+});
+
+router.delete('/switch/profiles/:name', (req, res) => {
+  const name = safeText(req.params.name, 80);
+  writeSwitchProfiles(readSwitchProfiles().filter((profile) => profile.name !== name));
+  res.json({ success: true });
+});
+
+router.post('/switch/profiles/:name/apply', async (req, res, next) => {
+  try {
+    const profile = readSwitchProfiles().find((item) => item.name === safeText(req.params.name, 80));
+    if (!profile) return res.status(404).json({ success: false, error: 'Profile not found.' });
+    const store = await readStore();
+    const provider = store.providers.find((item) => item.id === profile.providerId);
+    if (!provider) return res.status(404).json({ success: false, error: 'Profile provider not found.' });
+    const changedFiles = await applyProviderTransactionally(provider, async () => {
+      store.activeByTarget[provider.target] = provider.id;
+      provider.lastAppliedAt = nowIso();
+      provider.updatedAt = nowIso();
+      await writeStore(store);
+    });
+    res.json({ success: true, profile, provider: sanitizeProvider(provider), changedFiles, activeByTarget: store.activeByTarget });
+  } catch (error) { next(error); }
+});
+
 router.post('/switch/providers', async (req, res, next) => {
   try {
     const { provider, reapplied, activeModel } = await withSwitchMutation(async () => {
@@ -277,6 +334,29 @@ router.post('/switch/providers', async (req, res, next) => {
   }
 });
 
+router.get('/switch/providers/:id/preview', async (req, res, next) => {
+  try {
+    const store = await readStore();
+    const provider = store.providers.find((item) => item.id === req.params.id);
+    if (!provider) return res.status(404).json({ success: false, error: 'Provider not found.' });
+    const paths = targetConfigPaths(provider.target).map((filePath) => displayConfigPath(filePath));
+    res.json({
+      success: true,
+      provider: sanitizeProvider(provider),
+      target: provider.target,
+      currentlyActive: store.activeByTarget[provider.target] === provider.id,
+      files: paths,
+      changes: {
+        model: provider.model || null,
+        modelMapping: provider.modelMapping,
+        endpoint: provider.baseUrl || null,
+        apiKey: provider.apiKey ? 'replace encrypted API key' : 'remove API key override',
+      },
+      note: 'Apply creates a backup and updates only the managed provider blocks in the listed files.',
+    });
+  } catch (error) { next(error); }
+});
+
 router.post('/switch/providers/:id/apply', async (req, res, next) => {
   try {
     await withSwitchMutation(async () => {
@@ -287,6 +367,16 @@ router.post('/switch/providers/:id/apply', async (req, res, next) => {
         return;
       }
 
+      const mappedModels = Object.values(provider.modelMapping || {}).filter((model): model is string => Boolean(model));
+      if (mappedModels.length > 0 && provider.discoveredModels.length > 0) {
+        const available = new Set(provider.discoveredModels);
+        const missing = mappedModels.filter((model) => !available.has(model));
+        if (missing.length > 0) {
+          const error: StatusError = new Error(`模型映射校验失败：网关未发现 ${missing.join(', ')}。`);
+          error.statusCode = 409;
+          throw error;
+        }
+      }
       await ensureDefaultSnapshot(provider.target, store);
       // Switching away? First fold any hand edits the user made to the live
       // config back into the outgoing provider record, so switching back later
@@ -618,12 +708,13 @@ router.post('/switch/providers/:id/endpoints/test', async (req, res, next) => {
       const autoSelectEndpoint = typeof req.body?.autoSelectEndpoint === 'boolean'
         ? req.body.autoSelectEndpoint
         : Boolean(provider.autoSelectEndpoint);
+      const nextStats = appendEndpointSamples(provider.endpointStats, results);
       const fastest = results
         .filter((result) => result.usable)
-        .sort((left, right) => left.latencyMs - right.latencyMs)[0] || null;
+        .sort((left, right) => endpointLatencyP95(nextStats[left.url]) - endpointLatencyP95(nextStats[right.url]))[0] || null;
       provider.endpoints = endpoints;
       provider.autoSelectEndpoint = autoSelectEndpoint;
-      provider.endpointStats = appendEndpointSamples(provider.endpointStats, results);
+      provider.endpointStats = nextStats;
       if (autoSelectEndpoint && fastest) provider.baseUrl = fastest.url;
       provider.updatedAt = nowIso();
       await writeStore(store);

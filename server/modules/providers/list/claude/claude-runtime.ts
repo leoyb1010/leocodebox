@@ -20,6 +20,7 @@ import path from 'path';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { EffortLevel, Options, PermissionMode, Query, SDKMessage, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
 
+import { logger } from '@/modules/logging/index.js';
 import { buildClaudeUserContent, normalizeImageDescriptors } from '@/shared/image-attachments.js';
 import { isMissingCliExecutableError } from '@/shared/provider-errors.js';
 import { providerModelsService } from '@/modules/providers/services/provider-models.service.js';
@@ -33,6 +34,8 @@ import {
 } from '@/services/notification-orchestrator.js';
 import { sessionsService } from '@/modules/providers/services/sessions.service.js';
 import { createCompleteMessage, createNormalizedMessage } from '@/shared/utils.js';
+
+import { getModelContextWindow } from '../../model-metadata.js';
 
 import { CLAUDE_FALLBACK_MODELS } from './claude-models.provider.js';
 
@@ -364,7 +367,8 @@ function extractTokenBudget(sdkMessage: SDKMessage) {
     const inputTokens = directInputTokens + cacheTokens;
     const outputTokens = readNumber(messageUsage.output_tokens ?? messageUsage.outputTokens);
     const totalUsed = inputTokens + outputTokens;
-    const contextWindow = parseInt(process.env.CONTEXT_WINDOW ?? '', 10) || 160000;
+    const model = typeof asRecord(sdkRecord.message).model === 'string' ? asRecord(sdkRecord.message).model as string : undefined;
+    const contextWindow = getModelContextWindow('claude', model);
 
     return {
       used: totalUsed,
@@ -397,7 +401,7 @@ function extractTokenBudget(sdkMessage: SDKMessage) {
   const inputTokens = readNumber(modelData.cumulativeInputTokens ?? modelData.inputTokens);
   const outputTokens = readNumber(modelData.cumulativeOutputTokens ?? modelData.outputTokens);
   const totalUsed = inputTokens + outputTokens;
-  const contextWindow = parseInt(process.env.CONTEXT_WINDOW ?? '', 10) || 160000;
+  const contextWindow = getModelContextWindow('claude', modelKey);
 
   return {
     used: totalUsed,
@@ -707,7 +711,7 @@ async function queryClaudeSDK(command: string, options: ClaudeRuntimeOptions = {
     abortSignal?.addEventListener('abort', abortFromGateway, { once: true });
 
     // Process streaming messages
-    console.log('Starting async generator loop for session:', capturedSessionId || 'NEW');
+    logger.info('Starting async generator loop for session:', capturedSessionId || 'NEW');
     for await (const message of queryInstance) {
       // Capture session ID from first message
       if (message.session_id && !capturedSessionId) {
@@ -824,12 +828,12 @@ async function abortClaudeSDKSession(sessionId: string): Promise<boolean> {
   const session = getSession(sessionId);
 
   if (!session) {
-    console.log(`Session ${sessionId} not found`);
+    logger.info(`Session ${sessionId} not found`);
     return false;
   }
 
   try {
-    console.log(`Aborting SDK session: ${sessionId}`);
+    logger.info(`Aborting SDK session: ${sessionId}`);
 
     // Mark before interrupting so the run loop knows not to emit its own
     // terminal complete (the abort handler sends the aborted one).
@@ -908,7 +912,7 @@ function reconnectSessionWriter(sessionId: string, newRawWs: unknown): boolean {
   const session = getSession(sessionId);
   if (!session?.writer?.updateWebSocket) return false;
   session.writer.updateWebSocket(newRawWs);
-  console.log(`[RECONNECT] Writer swapped for session ${sessionId}`);
+  logger.info(`[RECONNECT] Writer swapped for session ${sessionId}`);
   return true;
 }
 

@@ -1,4 +1,58 @@
-import { ApiError, apiRequest, authenticatedFetch } from './api';
+import { IS_PLATFORM } from '../constants/config';
+
+export class ApiError extends Error {
+  status: number;
+  payload: any;
+
+  constructor(message: string, { status = 0, payload = null }: { status?: number; payload?: any } = {}) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.payload = payload;
+  }
+}
+
+export function authenticatedFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  const token = localStorage.getItem('auth-token');
+  const defaultHeaders: Record<string, string> = {};
+  if (!(options.body instanceof FormData)) defaultHeaders['Content-Type'] = 'application/json';
+  if (!IS_PLATFORM && token) defaultHeaders.Authorization = `Bearer ${token}`;
+
+  return fetch(url, {
+    ...options,
+    headers: { ...defaultHeaders, ...options.headers },
+  }).then((response) => {
+    const refreshedToken = response.headers.get('X-Refreshed-Token');
+    if (refreshedToken) localStorage.setItem('auth-token', refreshedToken);
+    return response;
+  });
+}
+
+async function parseResponsePayload(response: Response): Promise<unknown> {
+  const contentType = response.headers.get('content-type') || '';
+  return contentType.includes('application/json')
+    ? response.json().catch(() => ({}))
+    : response.text().catch(() => '');
+}
+
+function resolveServerMessage(payload: unknown): unknown {
+  const record = payload && typeof payload === 'object' ? payload as Record<string, unknown> : null;
+  const error = record?.error;
+  if (error && typeof error === 'object') return (error as Record<string, unknown>).message;
+  return error || record?.message || record?.details || payload;
+}
+
+export async function apiRequest(url: string, options: RequestInit = {}): Promise<any> {
+  const response = await authenticatedFetch(url, options);
+  const payload = await parseResponsePayload(response);
+  if (!response.ok) {
+    const serverMessage = resolveServerMessage(payload);
+    throw new ApiError(typeof serverMessage === 'string' && serverMessage
+      ? serverMessage
+      : `Request failed (${response.status}).`, { status: response.status, payload });
+  }
+  return payload;
+}
 
 type QueryValue = string | number | boolean | null | undefined;
 
@@ -15,26 +69,11 @@ function withQuery(path: string, query?: Record<string, QueryValue>) {
 async function rawRequest(path: string, options: RequestInit = {}): Promise<Response> {
   const response = await authenticatedFetch(path, options);
   if (response.ok) return response;
-
-  const contentType = response.headers.get('content-type') || '';
-  const payload = contentType.includes('application/json')
-    ? await response.json().catch(() => ({}))
-    : await response.text().catch(() => '');
-  // Unwrap object-shaped `error` ({code,message,details}) to its message string;
-  // plain-string error fields pass through unchanged (avoids "[object Object]").
-  const errField = payload && typeof payload === 'object'
-    ? (payload as { error?: unknown }).error
-    : null;
-  const serverMessage = (errField && typeof errField === 'object'
-    ? (errField as { message?: string }).message
-    : errField)
-    || (payload && typeof payload === 'object'
-      ? (payload as { message?: string; details?: string }).message || (payload as { details?: string }).details
-      : payload);
-  throw new ApiError(serverMessage || `Request failed (${response.status}).`, {
-    status: response.status,
-    payload,
-  });
+  const payload = await parseResponsePayload(response);
+  const serverMessage = resolveServerMessage(payload);
+  throw new ApiError(typeof serverMessage === 'string' && serverMessage
+    ? serverMessage
+    : `Request failed (${response.status}).`, { status: response.status, payload });
 }
 
 async function streamConversationSearch(

@@ -2,6 +2,7 @@ import path from 'node:path';
 
 import type { WebSocket } from 'ws';
 
+import { logger } from '@/modules/logging/index.js';
 import { sessionsDb } from '@/modules/database/index.js';
 import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
 import { connectedClients, WS_OPEN_STATE } from '@/modules/websocket/services/websocket-state.service.js';
@@ -177,12 +178,13 @@ async function handleChatSend(
   });
 
   if (!run) {
-    sendProtocolError(
-      ws,
-      'RUN_IN_PROGRESS',
-      `Session "${sessionId}" already has a run in progress.`,
-      sessionId
-    );
+    const queuedCount = chatRunRegistry.enqueueRun(sessionId, () => handleChatSend(ws, userId, data, dependencies));
+    sendJson(ws, {
+      kind: 'chat_queued',
+      sessionId,
+      position: queuedCount,
+      timestamp: new Date().toISOString(),
+    });
     return;
   }
 
@@ -218,6 +220,10 @@ async function handleChatSend(
     // a queued message can start the session's next run before this promise
     // settles, and the session-keyed completeRun would kill that new run.
     chatRunRegistry.completeRunIfCurrent(run, { exitCode: 1 });
+    // FIFO prompt queue: start exactly one next turn after this run has
+    // reached its terminal event. The registry guard prevents races with a
+    // reconnect or an explicit new run.
+    void chatRunRegistry.drainQueuedRuns(sessionId).then(() => chatRunRegistry.drainAnyQueuedRun());
   }
 }
 
@@ -254,6 +260,10 @@ async function handleChatAbort(
     exitCode: success ? 0 : 1,
     aborted: true,
   });
+  const cleared = chatRunRegistry.clearQueuedRuns(sessionId);
+  if (cleared > 0) {
+    sendJson(ws, { kind: 'chat_queue_cleared', sessionId, cleared, timestamp: new Date().toISOString() });
+  }
 }
 
 /**
@@ -366,7 +376,7 @@ export function handleChatConnection(
   request: AuthenticatedWebSocketRequest,
   dependencies: ChatWebSocketDependencies
 ): void {
-  console.log('[INFO] Chat WebSocket connected');
+  logger.info('[INFO] Chat WebSocket connected');
   connectedClients.add(ws);
 
   const userId = readRequestUserId(request);
@@ -406,7 +416,7 @@ export function handleChatConnection(
   });
 
   ws.on('close', () => {
-    console.log('[INFO] Chat client disconnected');
+    logger.info('[INFO] Chat client disconnected');
     connectedClients.delete(ws);
   });
 }

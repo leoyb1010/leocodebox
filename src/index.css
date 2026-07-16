@@ -224,6 +224,10 @@
     --motion-base: 200ms;
     --motion-slow: 320ms;
     --motion-ease-out: cubic-bezier(0.2, 0, 0, 1);
+    --motion-ease-in: cubic-bezier(0.4, 0, 1, 1);
+    --radius-control: var(--radius);
+    --radius-card: calc(var(--radius) + 0.25rem);
+    --radius-overlay: calc(var(--radius) + 0.5rem);
     --motion-spring: cubic-bezier(0.16, 1, 0.3, 1);
     /* Entrance / positional easings shared with public/leocodebox-switch.html */
     --ease-out-quint: cubic-bezier(0.23, 1, 0.32, 1);
@@ -1063,15 +1067,6 @@
 
 /* Custom spinner animation for mobile compatibility */
 @layer utilities {
-  @keyframes spin {
-    from {
-      transform: rotate(0deg);
-    }
-    to {
-      transform: rotate(360deg);
-    }
-  }
-  
   .animate-spin {
     animation: spin 1s linear infinite;
   }
@@ -1313,3 +1308,37 @@
     }
   }
 }
+
+/* Unified panel/dialog transitions */
+.dialog-overlay {
+  animation: leocodebox-dialog-overlay-in var(--motion-fast) var(--motion-ease-out) both;
+}
+.dialog-content {
+  animation: leocodebox-dialog-content-in var(--motion-base) var(--motion-spring) both;
+}
+[data-state="closed"] > .dialog-overlay {
+  animation: leocodebox-dialog-overlay-out var(--motion-fast) var(--motion-ease-in) both;
+}
+[data-state="closed"] > .dialog-content {
+  animation: leocodebox-dialog-content-out var(--motion-fast) var(--motion-ease-in) both;
+  pointer-events: none;
+}
+.leocodebox-panel-enter {
+  animation: leocodebox-panel-enter var(--motion-fast) var(--motion-ease-out) both;
+}
+@keyframes leocodebox-dialog-overlay-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes leocodebox-dialog-overlay-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes leocodebox-dialog-content-in {
+  from { opacity: 0; transform: translate(-50%, -48%) scale(.96); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes leocodebox-dialog-content-out {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to { opacity: 0; transform: translate(-50%, -48%) scale(.96); }
+}
+@keyframes leocodebox-panel-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.leocodebox-motion-fast { transition-duration: var(--motion-fast); }

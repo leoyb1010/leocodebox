@@ -10,6 +10,7 @@ import type { ErrorRequestHandler } from 'express';
 
 import { AppError } from '@/shared/utils.js';
 import { getConnectableHost } from '@/shared/network-hosts.js';
+import { logger } from '@/modules/logging/index.js';
 
 import { findAppRoot, getModuleDir } from './utils/runtime-paths.js';
 import gitRoutes from './modules/git/index.js';
@@ -32,6 +33,7 @@ import browserUseRoutes from './modules/browser-use/browser-use.routes.js';
 import { assetsRoutes } from './modules/assets/index.js';
 import { filesRoutes } from './modules/files/index.js';
 import tokenUsageRoutes from './modules/usage/token-usage.routes.js';
+import usageRoutes from './modules/usage/usage.routes.js';
 import browserUseMcpRoutes from './modules/browser-use/browser-use-mcp.routes.js';
 import { browserUseService } from './modules/browser-use/browser-use.service.js';
 import { startServerLifecycle } from './runtime/server-lifecycle.js';
@@ -59,7 +61,7 @@ const RUNNING_VERSION = (() => {
     }
 })();
 
-console.log('SERVER_PORT from env:', process.env.SERVER_PORT);
+logger.info('SERVER_PORT from env:', process.env.SERVER_PORT);
 
 const app = express();
 const server = http.createServer(app);
@@ -195,6 +197,7 @@ app.use('/api', authenticateToken, filesRoutes);
 // Get token usage for a specific session. `projectId` is the DB primary key;
 // the Claude branch below resolves it to an absolute path via the DB.
 app.use('/api/projects', authenticateToken, tokenUsageRoutes);
+app.use('/api/usage', authenticateToken, usageRoutes);
 
 // Serve React app for all other routes (excluding static files)
 app.get('*', (req, res) => {

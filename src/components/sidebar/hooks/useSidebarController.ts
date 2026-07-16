@@ -160,15 +160,8 @@ export function useSidebarController({
 
     window.addEventListener('storage', handleStorageChange);
 
-    const interval = setInterval(() => {
-      if (document.hasFocus()) {
-        loadSortOrder();
-      }
-    }, 1000);
-
     return () => {
       window.removeEventListener('storage', handleStorageChange);
-      clearInterval(interval);
     };
   }, []);
 

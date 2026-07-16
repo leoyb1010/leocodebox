@@ -6,6 +6,8 @@ import spawn from 'cross-spawn';
 import type { Response } from 'express';
 import type { Octokit } from '@octokit/rest';
 
+import { logger } from '@/modules/logging/index.js';
+
 type GitHubApiError = Error & { status?: number };
 type MessageRecord = Record<string, unknown>;
 
@@ -236,11 +238,11 @@ async function createGitHubBranch(octokit: Octokit, owner: string, repo: string,
       sha: baseSha
     });
 
-    console.log(`✅ Created branch '${branchName}' on GitHub`);
+    logger.info(`✅ Created branch '${branchName}' on GitHub`);
   } catch (error) {
     const apiError = error as GitHubApiError;
     if (apiError.status === 422 && apiError.message.includes('Reference already exists')) {
-      console.log(`ℹ️ Branch '${branchName}' already exists on GitHub`);
+      logger.info(`ℹ️ Branch '${branchName}' already exists on GitHub`);
     } else {
       throw error;
     }
@@ -268,7 +270,7 @@ async function createGitHubPR(octokit: Octokit, owner: string, repo: string, bra
     body
   });
 
-  console.log(`✅ Created pull request #${pr.number}: ${pr.html_url}`);
+  logger.info(`✅ Created pull request #${pr.number}: ${pr.html_url}`);
 
   return {
     number: pr.number,
@@ -303,7 +305,7 @@ async function cloneGitHubRepo(githubUrl: string, githubToken: string | null = n
           const normalizedRequested = normalizeGitHubUrl(githubUrl);
 
           if (normalizedExisting === normalizedRequested) {
-            console.log('✅ Repository already exists at path with correct URL');
+            logger.info('✅ Repository already exists at path with correct URL');
             return resolve(cloneDir);
           } else {
             throw new Error(`Directory ${cloneDir} already exists with a different repository (${existingUrl}). Expected: ${githubUrl}`);
@@ -326,8 +328,8 @@ async function cloneGitHubRepo(githubUrl: string, githubToken: string | null = n
         cloneUrl = githubUrl.replace('https://github.com', `https://${githubToken}@github.com`);
       }
 
-      console.log('🔄 Cloning repository:', githubUrl);
-      console.log('📁 Destination:', cloneDir);
+      logger.info('🔄 Cloning repository:', githubUrl);
+      logger.info('📁 Destination:', cloneDir);
 
       // Execute git clone
       const gitProcess = spawn('git', ['clone', '--depth', '1', cloneUrl, cloneDir], {
@@ -343,12 +345,12 @@ async function cloneGitHubRepo(githubUrl: string, githubToken: string | null = n
 
       gitProcess.stderr?.on('data', (data) => {
         stderr += data.toString();
-        console.log('Git stderr:', data.toString());
+        logger.info('Git stderr:', data.toString());
       });
 
       gitProcess.on('close', (code) => {
         if (code === 0) {
-          console.log('✅ Repository cloned successfully');
+          logger.info('✅ Repository cloned successfully');
           resolve(cloneDir);
         } else {
           console.error('❌ Git clone failed:', stderr);
@@ -378,17 +380,17 @@ async function cleanupProject(projectPath: string, sessionId: string | null = nu
       return;
     }
 
-    console.log('🧹 Cleaning up project:', projectPath);
+    logger.info('🧹 Cleaning up project:', projectPath);
     await fs.rm(projectPath, { recursive: true, force: true });
-    console.log('✅ Project cleaned up');
+    logger.info('✅ Project cleaned up');
 
     // Also clean up the Claude session directory if sessionId provided
     if (sessionId) {
       try {
         const sessionPath = path.join(os.homedir(), '.claude', 'sessions', sessionId);
-        console.log('🧹 Cleaning up session directory:', sessionPath);
+        logger.info('🧹 Cleaning up session directory:', sessionPath);
         await fs.rm(sessionPath, { recursive: true, force: true });
-        console.log('✅ Session directory cleaned up');
+        logger.info('✅ Session directory cleaned up');
       } catch (error) {
         console.error('⚠️ Failed to clean up session directory:', errorMessage(error));
       }

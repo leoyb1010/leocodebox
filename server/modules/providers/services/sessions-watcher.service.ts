@@ -4,6 +4,7 @@ import { promises as fsPromises } from 'node:fs';
 
 import chokidar, { type FSWatcher } from 'chokidar';
 
+import { logger } from '@/modules/logging/index.js';
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
 import { sessionSynchronizerService } from '@/modules/providers/services/session-synchronizer.service.js';
 import { WS_OPEN_STATE, connectedClients } from '@/modules/websocket/index.js';
@@ -244,7 +245,7 @@ async function onUpdate(
       return;
     }
 
-    console.log(`Session synchronization triggered by ${eventType} event for provider "${provider}"`, {
+    logger.info(`Session synchronization triggered by ${eventType} event for provider "${provider}"`, {
       filePath,
       sessionId: result.sessionId,
     });
@@ -263,10 +264,10 @@ async function onUpdate(
  * Starts provider filesystem watchers and performs initial DB synchronization.
  */
 export async function initializeSessionsWatcher(): Promise<void> {
-  console.log('Setting up session watchers');
+  logger.info('Setting up session watchers');
 
   const initialSync = await sessionSynchronizerService.synchronizeSessions();
-  console.log('Initial session synchronization complete', {
+  logger.info('Initial session synchronization complete', {
     processedByProvider: initialSync.processedByProvider,
     failures: initialSync.failures,
   });
@@ -280,10 +281,12 @@ export async function initializeSessionsWatcher(): Promise<void> {
         persistent: true,
         ignoreInitial: true,
         followSymlinks: false,
-        depth: 6,
-        usePolling: true,
-        interval: 6_000,
-        binaryInterval: 6_000,
+        // chokidar uses native FSEvents/inotify by default. Polling is a costly
+        // fallback for network mounts, not the normal local desktop path.
+        depth: 4,
+        usePolling: process.env.LEOCODEBOX_WATCH_POLLING === 'true',
+        interval: 10_000,
+        binaryInterval: 10_000,
       });
 
       watcher

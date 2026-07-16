@@ -1,6 +1,7 @@
 import path from 'node:path';
 
-import { projectsDb, sessionsDb } from '@/modules/database/index.js';
+import { projectsDb, sessionsDb, sessionRuntimeStateDb } from '@/modules/database/index.js';
+import { usageDb, estimateUsageCostUsd } from '@/modules/usage/index.js';
 import { generateDisplayName } from '@/modules/projects/index.js';
 import { ChatSessionWriter } from '@/modules/websocket/services/chat-session-writer.service.js';
 import { connectedClients, WS_OPEN_STATE } from '@/modules/websocket/services/websocket-state.service.js';
@@ -37,6 +38,7 @@ type ChatRun = {
   startedAt: number;
   completedAt: number | null;
   abortController: AbortController;
+  tokenBudget: Record<string, unknown> | null;
 };
 
 /**
@@ -53,6 +55,7 @@ const COMPLETED_RUN_RETENTION_MS = 5 * 60 * 1000;
  * REST history refresh, which is always the authoritative source.
  */
 const MAX_BUFFERED_EVENTS_PER_RUN = 5000;
+const MAX_CONCURRENT_RUNS = Math.max(1, Number.parseInt(process.env.LEOCODEBOX_MAX_CONCURRENT_SESSIONS || '4', 10) || 4);
 
 /**
  * Active and recently-completed runs keyed by app session id.
@@ -62,6 +65,7 @@ const MAX_BUFFERED_EVENTS_PER_RUN = 5000;
  * path all consult it instead of asking each provider runtime individually.
  */
 const runs = new Map<string, ChatRun>();
+const queuedRuns = new Map<string, Array<() => Promise<void> | void>>();
 
 async function broadcastCanonicalSessionUpsert(appSessionId: string): Promise<void> {
   const row = sessionsDb.getSessionById(appSessionId);
@@ -144,12 +148,32 @@ function decorateAndRecordEvent(run: ChatRun, message: NormalizedMessage): Norma
     seq: run.lastSeq,
   };
 
+  if (message.kind === 'status' && message.tokenBudget && typeof message.tokenBudget === 'object') {
+    run.tokenBudget = message.tokenBudget as Record<string, unknown>;
+  }
+
   if (message.kind === 'complete') {
     // The provider may report its own id here; the frontend only ever knows
     // the app id, so the "actual" id is by definition the app id as well.
     outbound.actualSessionId = run.appSessionId;
-    run.status = 'completed';
+    run.status = message.aborted ? 'completed' : 'completed';
     run.completedAt = Date.now();
+    try { sessionRuntimeStateDb.markFinished(run.appSessionId, message.aborted ? 'aborted' : 'completed', run.completedAt); } catch { /* tests and early boot may not have a database yet */ }
+    if (run.tokenBudget) {
+      const session = sessionsDb.getSessionById(run.appSessionId);
+      const inputTokens = Number(run.tokenBudget.inputTokens ?? 0) || 0;
+      const outputTokens = Number(run.tokenBudget.outputTokens ?? 0) || 0;
+      const cacheTokens = Number(run.tokenBudget.cacheTokens ?? run.tokenBudget.cacheReadTokens ?? 0) || 0;
+      usageDb.record({
+        projectPath: session?.project_path,
+        provider: run.provider,
+        model: typeof run.tokenBudget.model === 'string' ? run.tokenBudget.model : null,
+        inputTokens,
+        outputTokens,
+        cacheTokens,
+        costUsd: estimateUsageCostUsd(run.provider, typeof run.tokenBudget.model === 'string' ? run.tokenBudget.model : null, inputTokens, outputTokens),
+      });
+    }
     evictRunLater(run.appSessionId);
   }
 
@@ -218,9 +242,9 @@ export const chatRunRegistry = {
     userId: string | number | null;
   }): ChatRun | null {
     const existing = runs.get(input.appSessionId);
-    if (existing && existing.status === 'running') {
-      return null;
-    }
+    if (existing && existing.status === 'running') return null;
+    const activeRuns = Array.from(runs.values()).filter((run) => run.status === 'running').length;
+    if (activeRuns >= MAX_CONCURRENT_RUNS) return null;
 
     const run: ChatRun = {
       appSessionId: input.appSessionId,
@@ -233,6 +257,7 @@ export const chatRunRegistry = {
       startedAt: Date.now(),
       completedAt: null,
       abortController: new AbortController(),
+      tokenBudget: null,
     };
 
     run.writer = new ChatSessionWriter({
@@ -247,7 +272,33 @@ export const chatRunRegistry = {
     });
 
     runs.set(input.appSessionId, run);
+    try { sessionRuntimeStateDb.markRunning(input.appSessionId, input.provider, run.startedAt); } catch { /* runtime state is best-effort */ }
     return run;
+  },
+
+  enqueueRun(appSessionId: string, start: () => Promise<void> | void): number {
+    const queue = queuedRuns.get(appSessionId) ?? [];
+    queue.push(start);
+    queuedRuns.set(appSessionId, queue);
+    return queue.length;
+  },
+
+  queuedRunCount(appSessionId: string): number {
+    return queuedRuns.get(appSessionId)?.length ?? 0;
+  },
+
+  async drainQueuedRuns(appSessionId: string): Promise<void> {
+    if (runs.get(appSessionId)?.status === 'running') return;
+    const queue = queuedRuns.get(appSessionId);
+    const next = queue?.shift();
+    if (!queue || queue.length === 0) queuedRuns.delete(appSessionId);
+    if (next) await next();
+  },
+
+  clearQueuedRuns(appSessionId: string): number {
+    const count = queuedRuns.get(appSessionId)?.length ?? 0;
+    queuedRuns.delete(appSessionId);
+    return count;
   },
 
   getRun(appSessionId: string): ChatRun | undefined {
@@ -336,10 +387,21 @@ export const chatRunRegistry = {
     run.writer.sendComplete(opts);
   },
 
+  async drainAnyQueuedRun(): Promise<void> {
+    if (Array.from(runs.values()).filter((run) => run.status === 'running').length >= MAX_CONCURRENT_RUNS) return;
+    for (const [sessionId, queue] of queuedRuns) {
+      if (queue.length > 0 && runs.get(sessionId)?.status !== 'running') {
+        await this.drainQueuedRuns(sessionId);
+        return;
+      }
+    }
+  },
+
   /**
    * Test-only escape hatch: clears every tracked run.
    */
   clearAll(): void {
     runs.clear();
+    queuedRuns.clear();
   },
 };

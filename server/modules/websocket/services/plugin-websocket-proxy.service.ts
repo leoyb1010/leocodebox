@@ -1,5 +1,7 @@
 import { WebSocket } from 'ws';
 
+import { logger } from '@/modules/logging/index.js';
+
 /**
  * Proxies an authenticated client websocket to a plugin websocket endpoint.
  */
@@ -23,7 +25,7 @@ export function handlePluginWsProxy(
   const upstream = new WebSocket(`ws://127.0.0.1:${port}/ws`);
 
   upstream.on('open', () => {
-    console.log(`[Plugins] WS proxy connected to "${pluginName}" on port ${port}`);
+    logger.info(`[Plugins] WS proxy connected to "${pluginName}" on port ${port}`);
   });
 
   upstream.on('message', (data, isBinary) => {

@@ -154,6 +154,8 @@ export type ProviderModelOption = {
   value: string;
   label: string;
   description?: string;
+  /** Provider-reported context capacity for this model. */
+  contextWindow?: number;
   effort?: {
     default?: string;
     values: {

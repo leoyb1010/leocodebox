@@ -7,6 +7,7 @@ import express from 'express';
 
 import { getOpenCodeDatabasePath } from '@/shared/utils.js';
 import { projectsDb, sessionsDb } from '@/modules/database/index.js';
+import { getModelContextWindow } from '@/modules/providers/index.js';
 
 const router = express.Router();
 
@@ -242,8 +243,8 @@ router.get('/:projectId/sessions/:sessionId/token-usage', async (req, res) => {
         }
         const lines = fileContent.trim().split('\n');
 
-        const parsedContextWindow = parseInt(process.env.CONTEXT_WINDOW ?? '', 10);
-        const contextWindow = Number.isFinite(parsedContextWindow) ? parsedContextWindow : 160000;
+        let contextWindow = getModelContextWindow(provider);
+        let modelName: string | undefined;
         let inputTokens = 0;
         let outputTokens = 0;
         let cacheReadTokens = 0;
@@ -257,6 +258,8 @@ router.get('/:projectId/sessions/:sessionId/token-usage', async (req, res) => {
                 // Only count assistant messages which have usage data
                 if (entry.type === 'assistant' && entry.message?.usage) {
                     const usage = entry.message.usage;
+                    modelName = typeof entry.message.model === 'string' ? entry.message.model : undefined;
+                    contextWindow = getModelContextWindow(provider, modelName);
 
                     // Use token counts from latest assistant message only
                     const directInputTokens = readUsageNumber(usage.input_tokens ?? usage.inputTokens);

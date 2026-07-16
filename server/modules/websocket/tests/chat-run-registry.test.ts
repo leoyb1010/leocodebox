@@ -280,3 +280,23 @@ test('startRun rejects a second concurrent run for the same session', async () =
     assert.ok(third);
   });
 });
+
+test('queued runs drain in FIFO order after the active run completes', async () => {
+  await withIsolatedDatabase(async () => {
+    sessionsDb.createAppSession('app-run-queue', 'codex', '/workspace/demo');
+    const connection = new FakeConnection();
+    const run = chatRunRegistry.startRun({
+      appSessionId: 'app-run-queue', provider: 'codex', providerSessionId: null, connection, userId: null,
+    });
+    assert.ok(run);
+    const order: number[] = [];
+    assert.equal(chatRunRegistry.enqueueRun('app-run-queue', () => { order.push(1); }), 1);
+    assert.equal(chatRunRegistry.enqueueRun('app-run-queue', () => { order.push(2); }), 2);
+    await chatRunRegistry.drainQueuedRuns('app-run-queue');
+    assert.deepEqual(order, []);
+    run.writer.send({ kind: 'complete', provider: 'codex', sessionId: 'native', exitCode: 0 });
+    await chatRunRegistry.drainQueuedRuns('app-run-queue');
+    await chatRunRegistry.drainQueuedRuns('app-run-queue');
+    assert.deepEqual(order, [1, 2]);
+  });
+});

@@ -1,8 +1,11 @@
+import { appConfigDb } from '@/modules/database/index.js';
+
 import { applyProviderTransactionally } from './provider-apply.service.js';
 import { probeProviderHealth } from './provider-discovery.service.js';
 import type { ProviderHealthProbe } from './provider-discovery.service.js';
 import { adoptLiveProviderEdits } from './provider-import.service.js';
 import {
+  endpointLatencyP95,
   readStore,
   upsertProviderInStore,
   withSwitchMutation,
@@ -24,8 +27,8 @@ import { nowIso } from './provider-switch.storage.js';
  *   fires on the ok→degraded transition, applies through the same transactional
  *   apply path as a manual switch, and records what it did so the UI can offer
  *   a one-click undo (undo = plain re-apply of the previous provider).
- * - State lives in memory: a restart starts from a clean "unknown" slate, which
- *   is the honest reading — we have no fresh probe yet.
+ * - The last snapshot is persisted for diagnostics/trend continuity; the next
+ *   live probe still remains authoritative.
  */
 
 export type TargetHealthStatus = 'ok' | 'degraded' | 'unknown';
@@ -71,6 +74,24 @@ let lastRunAt: string | null = null;
 let tickInFlight = false;
 let schedulerTimer: NodeJS.Timeout | null = null;
 let lastPollAt = 0;
+const HEALTH_STATE_KEY = 'leoapi_health_state';
+let healthHydrated = false;
+
+function hydrateHealthState(): void {
+  if (healthHydrated) return;
+  healthHydrated = true;
+  try {
+    const raw = appConfigDb.get(HEALTH_STATE_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw) as { lastRunAt?: string | null; targets?: Record<string, TargetHealth> };
+    lastRunAt = parsed.lastRunAt ?? null;
+    for (const [target, value] of Object.entries(parsed.targets || {})) healthByTarget.set(target, value);
+  } catch { /* corrupt snapshots are replaced after the next probe */ }
+}
+
+function persistHealthState(): void {
+  appConfigDb.set(HEALTH_STATE_KEY, JSON.stringify({ lastRunAt, targets: Object.fromEntries(healthByTarget) }));
+}
 
 function baseHealth(target: string, provider: SwitchProvider): TargetHealth {
   return {
@@ -97,8 +118,8 @@ async function findHealthyFailoverCandidate(
   const candidates = providers
     .filter((provider) => provider.target === target && provider.id !== excludeId && provider.baseUrl)
     .sort((left, right) => {
-      const leftStat = (left.endpointStats?.[left.baseUrl] as { latencyMs?: number } | undefined)?.latencyMs ?? Number.MAX_SAFE_INTEGER;
-      const rightStat = (right.endpointStats?.[right.baseUrl] as { latencyMs?: number } | undefined)?.latencyMs ?? Number.MAX_SAFE_INTEGER;
+      const leftStat = endpointLatencyP95(left.endpointStats?.[left.baseUrl]);
+      const rightStat = endpointLatencyP95(right.endpointStats?.[right.baseUrl]);
       return leftStat - rightStat;
     });
   for (const candidate of candidates) {
@@ -276,6 +297,7 @@ export async function runHealthTick(probe: ProbeFn = probeProviderHealth): Promi
     for (const target of [...healthByTarget.keys()]) {
       if (!seenTargets.has(target)) healthByTarget.delete(target);
     }
+    persistHealthState();
     return getHealthSnapshot(store.healthMonitor);
   } finally {
     tickInFlight = false;
@@ -283,6 +305,7 @@ export async function runHealthTick(probe: ProbeFn = probeProviderHealth): Promi
 }
 
 export function getHealthSnapshot(settings?: { enabled: boolean; intervalMinutes: number; autoFailoverTargets: string[] }): HealthSnapshot {
+  hydrateHealthState();
   return {
     enabled: settings?.enabled ?? true,
     intervalMinutes: settings?.intervalMinutes ?? 5,
@@ -304,6 +327,7 @@ export function clearAutoFailoverRecord(target: string): void {
  * timer juggling. unref() keeps the timer from blocking process exit.
  */
 export function startHealthMonitor(): void {
+  hydrateHealthState();
   if (schedulerTimer) return;
   schedulerTimer = setInterval(() => {
     void (async () => {
