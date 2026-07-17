@@ -322,6 +322,18 @@ function releaseProbeSlot(): void {
   else probeSpawnBusy = false;
 }
 
+// `spawn EBADF` is a TRANSIENT libuv fd race in the packaged GUI app — worst
+// during the first seconds after launch (Electron is still wiring the process
+// up), where even fully-serialised spawns fail. Reproduced: cold boot → several
+// probes EBADF; 10s later the same probes all pass. So an EBADF result is never
+// "not installed" — it's "try again in a moment". Without the retry, a launch-
+// time status fetch showed every CLI as 未安装 even though all were installed.
+const EBADF_RETRY_LIMIT = 5;
+const EBADF_RETRY_DELAY_MS = 300;
+function isTransientSpawnFailure(result: CliCommandResult): boolean {
+  return !result.ok && /EBADF/i.test(result.error || '');
+}
+
 export async function runCliCommand(cmd: string, args: string[], timeoutMs = 10_000, options: { env?: NodeJS.ProcessEnv } = {}): Promise<CliCommandResult> {
   // Long mutations (install/update) run outside the probe gate so they never
   // block — and hold — the single probe slot for minutes.
@@ -330,7 +342,12 @@ export async function runCliCommand(cmd: string, args: string[], timeoutMs = 10_
   }
   await acquireProbeSlot();
   try {
-    return await runCliCommandUnthrottled(cmd, args, timeoutMs, options);
+    let result = await runCliCommandUnthrottled(cmd, args, timeoutMs, options);
+    for (let attempt = 0; attempt < EBADF_RETRY_LIMIT && isTransientSpawnFailure(result); attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, EBADF_RETRY_DELAY_MS * (attempt + 1)));
+      result = await runCliCommandUnthrottled(cmd, args, timeoutMs, options);
+    }
+    return result;
   } finally {
     releaseProbeSlot();
   }
