@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ArrowDownToLine, ArrowUpCircle, CheckCircle2, CircleHelp, Copy, FileDown, Loader2, RefreshCw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -47,6 +47,8 @@ type CliStatusResponse = {
   tools: CliToolStatus[];
   checkedAt?: string;
   mutationsAllowed?: boolean;
+  /** true = served from the on-disk snapshot while a live probe refreshes it. */
+  stale?: boolean;
 };
 
 type CliActionResponse = {
@@ -74,6 +76,8 @@ export default function CliToolsSection({ onToolsChange }: CliToolsSectionProps)
   const [mutationsAllowed, setMutationsAllowed] = useState(false);
   const [detail, setDetail] = useState<string | null>(null);
 
+  const staleRefetchTimer = useRef<number | null>(null);
+
   const load = useCallback(async (forceLatest = false) => {
     setLoading(true);
     setLoadError(null);
@@ -84,6 +88,21 @@ export default function CliToolsSection({ onToolsChange }: CliToolsSectionProps)
         onToolsChange?.(data.tools);
         setCheckedAt(data.checkedAt || new Date().toISOString());
         setMutationsAllowed(Boolean(data.mutationsAllowed));
+        // Snapshot responses (stale:true) render instantly while the server
+        // re-probes in the background; silently pick up the fresh result once.
+        if (data.stale && staleRefetchTimer.current === null) {
+          staleRefetchTimer.current = window.setTimeout(async () => {
+            staleRefetchTimer.current = null;
+            try {
+              const fresh = await apiRequest('/api/leocodebox/cli/status') as CliStatusResponse;
+              if (fresh?.success && Array.isArray(fresh.tools)) {
+                setTools(fresh.tools);
+                onToolsChange?.(fresh.tools);
+                setCheckedAt(fresh.checkedAt || new Date().toISOString());
+              }
+            } catch { /* the visible snapshot stays; manual refresh still works */ }
+          }, 8000);
+        }
       }
     } catch (error) {
       console.error('Failed to load CLI status:', error);
@@ -92,6 +111,10 @@ export default function CliToolsSection({ onToolsChange }: CliToolsSectionProps)
       setLoading(false);
     }
   }, [onToolsChange, t]);
+
+  useEffect(() => () => {
+    if (staleRefetchTimer.current !== null) window.clearTimeout(staleRefetchTimer.current);
+  }, []);
 
   useEffect(() => {
     void load(false);

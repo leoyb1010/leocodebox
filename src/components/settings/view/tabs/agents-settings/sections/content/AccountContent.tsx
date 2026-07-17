@@ -13,57 +13,26 @@ type AccountContentProps = {
 
 type AgentVisualConfig = {
   name: string;
-  bgClass: string;
-  borderClass: string;
-  textClass: string;
-  subtextClass: string;
-  buttonClass: string;
   description?: string;
 };
 
 const agentConfig: Record<AgentProvider, AgentVisualConfig> = {
-  claude: {
-    name: 'Claude',
-    bgClass: 'bg-info dark:bg-info/20',
-    borderClass: 'border-info dark:border-info',
-    textClass: 'text-info dark:text-info',
-    subtextClass: 'text-info dark:text-info',
-    buttonClass: 'bg-info hover:bg-info active:bg-info',
-  },
-  cursor: {
-    name: 'Cursor',
-    bgClass: 'bg-purple-50 dark:bg-purple-900/20',
-    borderClass: 'border-purple-200 dark:border-purple-800',
-    textClass: 'text-purple-900 dark:text-purple-100',
-    subtextClass: 'text-purple-700 dark:text-purple-300',
-    buttonClass: 'bg-purple-600 hover:bg-purple-700 active:bg-purple-800',
-  },
-  codex: {
-    name: 'Codex',
-    bgClass: 'bg-muted/50',
-    borderClass: 'border-border dark:border-border',
-    textClass: 'text-muted-foreground dark:text-muted-foreground',
-    subtextClass: 'text-muted-foreground dark:text-muted-foreground',
-    buttonClass: 'bg-muted hover:bg-muted active:bg-muted dark:bg-muted dark:hover:bg-muted dark:active:bg-muted',
-  },
-  opencode: {
-    name: 'OpenCode',
-    description: 'OpenCode CLI assistant',
-    bgClass: 'bg-zinc-50 dark:bg-zinc-900/20',
-    borderClass: 'border-zinc-200 dark:border-zinc-700',
-    textClass: 'text-zinc-900 dark:text-zinc-100',
-    subtextClass: 'text-zinc-700 dark:text-zinc-300',
-    buttonClass: 'bg-zinc-900 hover:bg-zinc-800 active:bg-zinc-950 dark:bg-zinc-700 dark:hover:bg-zinc-600',
-  },
-  grok: {
-    name: 'Grok',
-    description: 'xAI Grok agent',
-    bgClass: 'bg-muted dark:bg-muted/30',
-    borderClass: 'border-border dark:border-border',
-    textClass: 'text-muted-foreground dark:text-muted-foreground',
-    subtextClass: 'text-muted-foreground dark:text-muted-foreground',
-    buttonClass: 'bg-muted hover:bg-muted active:bg-muted dark:bg-muted dark:hover:bg-muted',
-  },
+  claude: { name: 'Claude' },
+  cursor: { name: 'Cursor' },
+  codex: { name: 'Codex' },
+  opencode: { name: 'OpenCode', description: 'OpenCode CLI assistant' },
+  grok: { name: 'Grok', description: 'xAI Grok agent' },
+};
+
+// One neutral scheme for every provider. The per-provider solid color cards
+// (bright blue Claude / purple Cursor) read as giant banners and clashed with
+// the rest of Settings — the provider identity already comes from the logo.
+const cardVisual = {
+  bgClass: 'bg-muted/30',
+  borderClass: 'border-border',
+  textClass: 'text-foreground',
+  subtextClass: 'text-muted-foreground',
+  buttonClass: 'bg-primary hover:bg-primary/90 active:bg-primary/80',
 };
 
 function authErrorKey(error: string): string {
@@ -100,14 +69,14 @@ export default function AccountContent({ agent, authStatus, onLogin }: AccountCo
         </div>
       </div>
 
-      <div className={`${config.bgClass} border ${config.borderClass} rounded-lg p-4`}>
+      <div className={`${cardVisual.bgClass} border ${cardVisual.borderClass} rounded-lg p-4`}>
         <div className="space-y-4">
           <div className="flex items-center gap-3">
             <div className="flex-1">
-              <div className={`font-medium ${config.textClass}`}>
+              <div className={`font-medium ${cardVisual.textClass}`}>
                 {t('agents.connectionStatus')}
               </div>
-              <div className={`text-sm ${config.subtextClass}`}>
+              <div className={`text-sm ${cardVisual.subtextClass}`}>
                 {authStatus.loading ? (
                   t('agents.authStatus.checkingAuth')
                 ) : authStatus.installed === false ? (
@@ -127,11 +96,11 @@ export default function AccountContent({ agent, authStatus, onLogin }: AccountCo
                   {t('agents.authStatus.checking')}
                 </Badge>
               ) : authStatus.authenticated ? (
-                <Badge variant="secondary" className="bg-success text-success dark:bg-success/30 dark:text-success">
+                <Badge variant="secondary" className="bg-success/15 text-success dark:bg-success/25 dark:text-success">
                   {t('agents.authStatus.connected')}
                 </Badge>
               ) : authStatus.installed === false ? (
-                <Badge variant="secondary" className="bg-warning text-warning dark:bg-warning/30 dark:text-warning">
+                <Badge variant="secondary" className="bg-warning/15 text-warning dark:bg-warning/25 dark:text-warning">
                   {t('agents.authStatus.missing')}
                 </Badge>
               ) : (
@@ -146,10 +115,10 @@ export default function AccountContent({ agent, authStatus, onLogin }: AccountCo
             <div className="border-t border-border/50 pt-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className={`font-medium ${config.textClass}`}>
+                  <div className={`font-medium ${cardVisual.textClass}`}>
                     {authStatus.authenticated ? t('agents.login.reAuthenticate') : t('agents.login.title')}
                   </div>
-                  <div className={`text-sm ${config.subtextClass}`}>
+                  <div className={`text-sm ${cardVisual.subtextClass}`}>
                     {authStatus.authenticated
                       ? t('agents.login.reAuthDescription')
                       : t('agents.login.description', { agent: config.name })}
@@ -157,7 +126,7 @@ export default function AccountContent({ agent, authStatus, onLogin }: AccountCo
                 </div>
                 <Button
                   onClick={onLogin}
-                  className={`${config.buttonClass} text-primary-foreground`}
+                  className={`${cardVisual.buttonClass} text-primary-foreground`}
                   size="sm"
                 >
                   <LogIn className="mr-2 h-4 w-4" />

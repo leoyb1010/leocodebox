@@ -62,7 +62,7 @@ export default function CodeEditorHeader({
           <div className="flex min-w-0 items-center gap-2">
             <h3 className="truncate text-sm font-medium text-muted-foreground dark:text-primary-foreground">{file.name}</h3>
             {file.diffInfo && (
-              <span className="shrink-0 whitespace-nowrap rounded-md bg-info px-1.5 py-0.5 text-[10px] text-info dark:bg-info dark:text-info">
+              <span className="shrink-0 whitespace-nowrap rounded-md bg-info px-1.5 py-0.5 text-[10px] text-info dark:bg-info/25 dark:text-info">
                 {labels.showingChanges}
               </span>
             )}
@@ -79,7 +79,7 @@ export default function CodeEditorHeader({
             onClick={onToggleMarkdownPreview}
             className={`flex items-center justify-center rounded-md p-1.5 transition-colors ${
               markdownPreview
-                ? 'bg-info text-info dark:bg-info/30 dark:text-info'
+                ? 'bg-info/15 text-info dark:bg-info/25 dark:text-info'
                 : 'text-muted-foreground hover:bg-muted hover:text-muted-foreground dark:text-muted-foreground dark:hover:bg-muted dark:hover:text-primary-foreground'
             }`}
             title={markdownPreview ? labels.editMarkdown : labels.previewMarkdown}
@@ -123,7 +123,7 @@ export default function CodeEditorHeader({
           disabled={saving}
           className={`flex items-center justify-center rounded-md p-1.5 transition-colors disabled:opacity-50 ${
             saveSuccess
-              ? 'bg-success text-success dark:bg-success/30 dark:text-success'
+              ? 'bg-success/15 text-success dark:bg-success/25 dark:text-success'
               : 'text-muted-foreground hover:bg-muted hover:text-muted-foreground dark:text-muted-foreground dark:hover:bg-muted dark:hover:text-primary-foreground'
           }`}
           title={saveTitle}

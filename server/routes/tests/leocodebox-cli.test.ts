@@ -19,6 +19,8 @@ import {
   resolveCliUpdateCommand,
   withCliMutation,
   default as cliToolsRoutes,
+  mergeToolWithLastGood,
+  toolLooksTransient,
 } from '../../modules/leocodebox/cli-tools.routes.js';
 import { compareSemver } from '../../modules/leocodebox/version-network.utils.js';
 
@@ -285,4 +287,18 @@ test('CLI mutation routes enforce local mode and reject unsafe or unsupported id
   process.env.LEOCODEBOX_LOCAL_ONLY = '1';
   assert.equal((await fetch(`${base}/__proto__/update`, { method: 'POST' })).status, 404);
   assert.equal((await fetch(`${base}/cursor/install`, { method: 'POST' })).status, 409);
+});
+
+test('transient EBADF results never replace last-good tool state', () => {
+  const good = { id: 'claude', installed: true, runnable: true, error: null } as never;
+  const ebadf = { id: 'claude', installed: false, runnable: false, error: 'spawn EBADF' } as never;
+  const missing = { id: 'claude', installed: false, runnable: false, error: 'claude executable was not found' } as never;
+  // EBADF 只能算"未知":有旧好状态时必须保留旧的。
+  assert.equal(mergeToolWithLastGood(ebadf, good), good);
+  // 真实的"未找到"不是瞬态,必须如实替换。
+  assert.equal(mergeToolWithLastGood(missing, good), missing);
+  // 没有旧状态时,如实返回(不伪造)。
+  assert.equal(mergeToolWithLastGood(ebadf, null), ebadf);
+  assert.equal(toolLooksTransient(ebadf as { error?: string | null }), true);
+  assert.equal(toolLooksTransient(missing as { error?: string | null }), false);
 });

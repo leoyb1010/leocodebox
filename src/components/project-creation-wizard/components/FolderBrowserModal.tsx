@@ -113,7 +113,7 @@ export default function FolderBrowserModal({
               onClick={() => setShowHiddenFolders((previous) => !previous)}
               className={`rounded-md p-2 transition-colors ${
                 showHiddenFolders
-                  ? 'bg-info text-info dark:bg-info/30 dark:text-info'
+                  ? 'bg-info/15 text-info dark:bg-info/25 dark:text-info'
                   : 'text-muted-foreground hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted dark:hover:text-muted-foreground'
               }`}
               title={showHiddenFolders ? 'Hide hidden folders' : 'Show hidden folders'}
@@ -124,7 +124,7 @@ export default function FolderBrowserModal({
               onClick={() => setShowNewFolderInput((previous) => !previous)}
               className={`rounded-md p-2 transition-colors ${
                 showNewFolderInput
-                  ? 'bg-info text-info dark:bg-info/30 dark:text-info'
+                  ? 'bg-info/15 text-info dark:bg-info/25 dark:text-info'
                   : 'text-muted-foreground hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted dark:hover:text-muted-foreground'
               }`}
               title="Create new folder"

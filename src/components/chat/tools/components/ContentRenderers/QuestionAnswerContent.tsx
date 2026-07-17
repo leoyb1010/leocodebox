@@ -74,7 +74,7 @@ export const QuestionAnswerContent: React.FC<QuestionAnswerContentProps> = ({
               <div className="min-w-0 flex-1">
                 <div className="flex flex-wrap items-center gap-2">
                   {q.header && (
-                    <span className="inline-flex items-center rounded-md border border-info/80 bg-info px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-info dark:border-info/40 dark:bg-info/30 dark:text-info">
+                    <span className="inline-flex items-center rounded-md border border-info/80 bg-info px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-info dark:border-info/40 dark:bg-info/25 dark:text-info">
                       {q.header}
                     </span>
                   )}
@@ -95,7 +95,7 @@ export const QuestionAnswerContent: React.FC<QuestionAnswerContentProps> = ({
                       return (
                         <span
                           key={lbl}
-                          className="inline-flex items-center gap-1 rounded-md bg-info px-1.5 py-0.5 text-[11px] font-medium text-info dark:bg-info/30 dark:text-info"
+                          className="inline-flex items-center gap-1 rounded-md bg-info px-1.5 py-0.5 text-[11px] font-medium text-info dark:bg-info/25 dark:text-info"
                         >
                           {lbl}
                           {isCustom && (

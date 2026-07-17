@@ -682,7 +682,7 @@ export default function ProviderSkills({ selectedProvider, currentProjects }: Pr
               'flex-shrink-0 border-t px-4 py-2 text-xs',
               resolveSafetyGate(safetyReport).blocking
                 ? 'border-destructive bg-destructive text-destructive dark:border-destructive/60 dark:bg-destructive/20 dark:text-destructive'
-                : 'border-warning/60 bg-warning text-warning dark:border-warning/50 dark:bg-warning/20 dark:text-warning',
+                : 'border-warning/60 bg-warning/15 text-warning dark:border-warning/50 dark:bg-warning/20 dark:text-warning',
             )}>
               <div className="mb-1 flex items-center gap-1.5 font-medium">
                 <ShieldAlert className="h-3.5 w-3.5 flex-shrink-0" />

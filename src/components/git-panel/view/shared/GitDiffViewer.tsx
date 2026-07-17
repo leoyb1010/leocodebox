@@ -50,7 +50,7 @@ export default function GitDiffViewer({ diff, isMobile, wrapText }: GitDiffViewe
       <div
         key={index}
         className={`px-3 py-0.5 font-mono text-xs ${isMobile && wrapText ? 'whitespace-pre-wrap break-all' : 'overflow-x-auto whitespace-pre'
-          } ${isAddition ? 'bg-success text-success dark:bg-success/50 dark:text-success' :
+          } ${isAddition ? 'bg-success/15 text-success dark:bg-success/50 dark:text-success' :
             isDeletion ? 'bg-destructive text-destructive dark:bg-destructive/50 dark:text-destructive' :
               isHeader ? 'bg-primary/5 text-primary' :
                 'text-muted-foreground/70'

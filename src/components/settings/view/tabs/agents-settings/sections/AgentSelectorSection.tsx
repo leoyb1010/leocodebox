@@ -48,7 +48,18 @@ export default function AgentSelectorSection({
           <Pill
             key={tool.id}
             isActive={false}
-            onClick={() => document.getElementById(`cli-tool-${tool.id}`)?.scrollIntoView({ behavior: scrollBehavior(), block: 'center' })}
+            onClick={() => {
+              // These CLIs have no account pane — the pill jumps to their card
+              // in 本机智能体 above. The card is often already on screen, so a
+              // brief highlight ring makes the click visibly land somewhere.
+              const card = document.getElementById(`cli-tool-${tool.id}`);
+              if (!card) return;
+              card.scrollIntoView({ behavior: scrollBehavior(), block: 'center' });
+              card.classList.add('ring-2', 'ring-primary', 'ring-offset-2', 'ring-offset-background', 'transition-shadow');
+              window.setTimeout(() => {
+                card.classList.remove('ring-2', 'ring-primary', 'ring-offset-2', 'ring-offset-background', 'transition-shadow');
+              }, 1600);
+            }}
             className="flex-none justify-center"
           >
             <SessionProviderLogo provider={tool.id} className="h-4 w-4 flex-shrink-0" />

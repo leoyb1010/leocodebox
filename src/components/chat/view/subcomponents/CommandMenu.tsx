@@ -70,9 +70,9 @@ const namespaceIcons: Record<string, LucideIcon> = {
 };
 
 const namespaceAccentClasses: Record<string, string> = {
-  frequent: 'border-warning bg-warning text-warning dark:border-warning/20 dark:bg-warning/10 dark:text-warning',
-  builtin: 'border-info bg-info text-info dark:border-info/20 dark:bg-info/10 dark:text-info',
-  skill: 'border-success bg-success text-success dark:border-success/20 dark:bg-success/10 dark:text-success',
+  frequent: 'border-warning bg-warning/15 text-warning dark:border-warning/20 dark:bg-warning/10 dark:text-warning',
+  builtin: 'border-info bg-info/15 text-info dark:border-info/20 dark:bg-info/10 dark:text-info',
+  skill: 'border-success bg-success/15 text-success dark:border-success/20 dark:bg-success/10 dark:text-success',
   project: 'border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-400/20 dark:bg-indigo-400/10 dark:text-indigo-200',
   user: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-400/20 dark:bg-rose-400/10 dark:text-rose-200',
   other: 'border-border bg-muted text-muted-foreground dark:border-border dark:bg-muted/10 dark:text-muted-foreground',

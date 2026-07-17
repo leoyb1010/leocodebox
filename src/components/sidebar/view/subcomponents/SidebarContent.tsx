@@ -411,7 +411,7 @@ export default function SidebarContent({
                         </p>
                       </div>
                       <button
-                        className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-success text-success transition-colors hover:bg-success dark:bg-success/20 dark:text-success dark:hover:bg-success/30"
+                        className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-success/15 text-success transition-colors hover:bg-success dark:bg-success/20 dark:text-success dark:hover:bg-success/30"
                         onClick={() => onRestoreArchivedProject(project.projectId)}
                         title={t('archived.restoreProject', 'Restore workspace')}
                       >
@@ -532,7 +532,7 @@ export default function SidebarContent({
                           </div>
                         </button>
                         <button
-                          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-success text-success transition-colors hover:bg-success dark:bg-success/20 dark:text-success dark:hover:bg-success/30"
+                          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-lg bg-success/15 text-success transition-colors hover:bg-success dark:bg-success/20 dark:text-success dark:hover:bg-success/30"
                           onClick={() => onRestoreArchivedSession(session.sessionId)}
                           title={t('archived.restore', 'Restore session')}
                         >

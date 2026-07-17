@@ -71,7 +71,7 @@ export const ToolDiffViewer: React.FC<ToolDiffViewerProps> = ({
               className={`w-6 flex-shrink-0 select-none text-center ${
                 diffLine.type === 'removed'
                   ? 'bg-destructive text-destructive dark:bg-destructive/30 dark:text-destructive'
-                  : 'bg-success text-success dark:bg-success/30 dark:text-success'
+                  : 'bg-success/15 text-success dark:bg-success/25 dark:text-success'
               }`}
             >
               {diffLine.type === 'removed' ? '-' : '+'}

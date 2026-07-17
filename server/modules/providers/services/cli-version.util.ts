@@ -38,7 +38,29 @@ export type CliCommandRunner = (
   timeoutMs?: number,
 ) => Promise<CliProbeProcessResult>;
 
-export const runProviderCliCommand: CliCommandRunner = (command, args, timeoutMs = 5000) => (
+// `spawn EBADF` is a transient libuv fd race in the packaged GUI app (worst in
+// the seconds right after launch). It must read as "retry shortly", never as
+// "CLI broken" — without this, the account pane showed 认证状态检查失败 for
+// every provider on startup. Mirrors the retry in leocodebox/cli-tools.routes.
+const EBADF_RETRY_LIMIT = 5;
+const EBADF_RETRY_DELAY_MS = 300;
+function isTransientSpawnError(result: CliProbeProcessResult): boolean {
+  const error = result.error;
+  if (!error) return false;
+  const text = error instanceof Error ? `${(error as NodeJS.ErrnoException).code || ''} ${error.message}` : String(error);
+  return /EBADF/i.test(text);
+}
+
+export const runProviderCliCommand: CliCommandRunner = async (command, args, timeoutMs = 5000) => {
+  let result = await runProviderCliCommandOnce(command, args, timeoutMs);
+  for (let attempt = 0; attempt < EBADF_RETRY_LIMIT && isTransientSpawnError(result); attempt += 1) {
+    await new Promise((resolve) => setTimeout(resolve, EBADF_RETRY_DELAY_MS * (attempt + 1)));
+    result = await runProviderCliCommandOnce(command, args, timeoutMs);
+  }
+  return result;
+};
+
+const runProviderCliCommandOnce: CliCommandRunner = (command, args, timeoutMs = 5000) => (
   new Promise((resolve) => {
     let child;
     try {

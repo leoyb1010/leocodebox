@@ -5,11 +5,11 @@ export type ToolStatus = 'running' | 'completed' | 'error' | 'denied';
 const STATUS_CONFIG: Record<ToolStatus, { label: string; className: string }> = {
   running: {
     label: 'Running',
-    className: 'bg-info text-info dark:bg-info/30 dark:text-info',
+    className: 'bg-info/15 text-info dark:bg-info/25 dark:text-info',
   },
   completed: {
     label: 'Completed',
-    className: 'bg-success text-success dark:bg-success/30 dark:text-success',
+    className: 'bg-success/15 text-success dark:bg-success/25 dark:text-success',
   },
   error: {
     label: 'Error',
@@ -17,7 +17,7 @@ const STATUS_CONFIG: Record<ToolStatus, { label: string; className: string }> = 
   },
   denied: {
     label: 'Denied',
-    className: 'bg-warning text-warning dark:bg-warning/30 dark:text-warning',
+    className: 'bg-warning/15 text-warning dark:bg-warning/25 dark:text-warning',
   },
 };
 

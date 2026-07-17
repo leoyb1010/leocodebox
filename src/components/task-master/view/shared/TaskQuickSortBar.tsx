@@ -28,7 +28,7 @@ export default function TaskQuickSortBar({ sortField, sortOrder, onSortChange }:
         className={cn(
           'flex items-center gap-1 px-3 py-1.5 rounded-md text-sm',
           sortField === 'id'
-            ? 'bg-info dark:bg-info text-info dark:text-info'
+            ? 'bg-info dark:bg-info/15 text-info dark:text-info'
             : 'bg-muted dark:bg-muted text-muted-foreground dark:text-muted-foreground hover:bg-muted dark:hover:bg-muted',
         )}
       >
@@ -40,7 +40,7 @@ export default function TaskQuickSortBar({ sortField, sortOrder, onSortChange }:
         className={cn(
           'flex items-center gap-1 px-3 py-1.5 rounded-md text-sm',
           sortField === 'status'
-            ? 'bg-info dark:bg-info text-info dark:text-info'
+            ? 'bg-info dark:bg-info/15 text-info dark:text-info'
             : 'bg-muted dark:bg-muted text-muted-foreground dark:text-muted-foreground hover:bg-muted dark:hover:bg-muted',
         )}
       >
@@ -52,7 +52,7 @@ export default function TaskQuickSortBar({ sortField, sortOrder, onSortChange }:
         className={cn(
           'flex items-center gap-1 px-3 py-1.5 rounded-md text-sm',
           sortField === 'priority'
-            ? 'bg-info dark:bg-info text-info dark:text-info'
+            ? 'bg-info dark:bg-info/15 text-info dark:text-info'
             : 'bg-muted dark:bg-muted text-muted-foreground dark:text-muted-foreground hover:bg-muted dark:hover:bg-muted',
         )}
       >

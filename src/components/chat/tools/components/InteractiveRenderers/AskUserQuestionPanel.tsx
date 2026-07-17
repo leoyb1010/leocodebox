@@ -174,7 +174,7 @@ export const AskUserQuestionPanel: React.FC<PermissionPanelProps> = ({
                 Claude needs your input
               </span>
               {q.header && (
-                <span className="inline-flex items-center rounded-md border border-info bg-info px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-info dark:border-info/50 dark:bg-info/30 dark:text-info">
+                <span className="inline-flex items-center rounded-md border border-info bg-info px-1.5 py-px text-[9px] font-semibold uppercase tracking-wider text-info dark:border-info/50 dark:bg-info/25 dark:text-info">
                   {q.header}
                 </span>
               )}
