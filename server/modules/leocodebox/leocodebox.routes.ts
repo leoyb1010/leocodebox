@@ -12,6 +12,7 @@ import cliToolsRoutes, { CLI_TOOLS, getCliToolStatus } from './cli-tools.routes.
 import { collectDiagnostics } from './diagnostics.service.js';
 import { collectDoctorReport } from './doctor.service.js';
 import feedbackUpdateRoutes from './feedback-update.routes.js';
+import loginSnapshotRoutes from './login-snapshot.routes.js';
 import missionRoutes from './mission.routes.js';
 import providerRoutingRoutes from './provider-routing.routes.js';
 import providerSwitchRoutes from './provider-switch.routes.js';
@@ -23,6 +24,7 @@ router.use('/cli', cliToolsRoutes);
 router.use('/routing', providerRoutingRoutes);
 router.use('/worktrees', worktreeRoutes);
 router.use('/missions', missionRoutes);
+router.use('/login-snapshots', loginSnapshotRoutes);
 router.use(feedbackUpdateRoutes);
 router.use(providerSwitchRoutes);
 
