@@ -549,7 +549,13 @@ async function queryClaudeSDK(command: string, options: ClaudeRuntimeOptions = {
     // cc-switch) — otherwise switching endpoints in Leoapi silently does
     // nothing here. applyActiveSwitchEnv clears the stale inherited keys first,
     // so the active provider fully replaces them (not just the ones it sets).
-    sdkOptions.env = await applyActiveSwitchEnv(sdkOptions.env ?? {}, 'claude');
+    // A routing slot (set by an agent profile / mission card) picks a specific
+    // Leoapi provider for this session; an unbound slot falls back to the active
+    // provider, so plain sessions are unaffected.
+    const routingSlot = typeof (options as { routingSlot?: unknown }).routingSlot === 'string'
+      ? (options as { routingSlot: string }).routingSlot
+      : undefined;
+    sdkOptions.env = await applyActiveSwitchEnv(sdkOptions.env ?? {}, 'claude', routingSlot);
 
     const mcpServers = await loadMcpConfig(options.cwd);
     if (mcpServers) {

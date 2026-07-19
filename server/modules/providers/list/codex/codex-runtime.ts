@@ -335,7 +335,9 @@ export async function queryCodex(command: string, options: CodexRuntimeOptions =
       // OPENAI_API_KEY (e.g. left by cc-switch) then applies the provider's,
       // so switching in Leoapi actually takes effect. See
       // provider-session-env.service.ts.
-      env: await applyActiveSwitchEnv(baseCodexEnv, 'codex'),
+      env: await applyActiveSwitchEnv(baseCodexEnv, 'codex',
+        typeof (options as { routingSlot?: unknown }).routingSlot === 'string'
+          ? (options as { routingSlot: string }).routingSlot : undefined),
     });
 
     const threadOptions: ThreadOptions = {

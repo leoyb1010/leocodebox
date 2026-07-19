@@ -41,14 +41,18 @@ export function buildEffectiveSessionEnv(
  * sessions started by this app. With nothing active, the machine environment
  * remains authoritative so existing local CLI behavior is preserved.
  */
-export async function getActiveSwitchEnvOverlay(target: 'claude' | 'codex'): Promise<Record<string, string>> {
+export async function getActiveSwitchEnvOverlay(target: 'claude' | 'codex', slot?: string): Promise<Record<string, string>> {
   try {
     const store = await readStore();
-    const activeId = store.activeByTarget?.[target];
-    if (!activeId) return {};
-    const provider = store.providers.find((item) => item.id === activeId);
+    // A bound routing slot wins over the single active provider; an unbound
+    // slot (or no slot) falls back to activeByTarget — preserving legacy behavior.
+    const binding = slot ? store.routingSlots?.[target]?.[slot] : undefined;
+    const providerId = binding?.providerId ?? store.activeByTarget?.[target];
+    if (!providerId) return {};
+    const provider = store.providers.find((item) => item.id === providerId);
     if (!provider) return {};
-    return buildEffectiveSessionEnv({}, target, provider);
+    const effective = binding?.model ? { ...provider, model: binding.model } : provider;
+    return buildEffectiveSessionEnv({}, target, effective);
   } catch {
     return {};
   }
@@ -93,8 +97,9 @@ const MANAGED_SWITCH_ENV_KEYS: Record<'claude' | 'codex', readonly string[]> = {
 export async function applyActiveSwitchEnv<T extends Record<string, string | undefined>>(
   childEnv: T,
   target: 'claude' | 'codex',
+  slot?: string,
 ): Promise<T> {
-  const overlay = await getActiveSwitchEnvOverlay(target);
+  const overlay = await getActiveSwitchEnvOverlay(target, slot);
   if (Object.keys(overlay).length === 0) return childEnv;
   const next = { ...childEnv } as T;
   for (const key of MANAGED_SWITCH_ENV_KEYS[target]) delete next[key];

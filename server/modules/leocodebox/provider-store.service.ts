@@ -43,10 +43,18 @@ export type HealthMonitorSettings = {
   /** Targets where a degraded active provider may be auto-switched to a healthy sibling. */
   autoFailoverTargets: string[];
 };
+/**
+ * One routing-slot binding: which provider (and optional model override) a
+ * scenario slot resolves to. Empty/missing binding falls back to activeByTarget.
+ */
+export type RoutingSlotBinding = { providerId: string; model?: string };
+/** routingSlots[target][slotId] → binding. Slots are optional; absent = legacy single-active behavior. */
+export type RoutingSlots = Record<string, Record<string, RoutingSlotBinding>>;
 export type ProviderStore = {
   providers: SwitchProvider[];
   activeByTarget: Record<string, string>;
   healthMonitor: HealthMonitorSettings;
+  routingSlots: RoutingSlots;
 };
 type StatusError = Error & { statusCode?: number };
 
@@ -255,12 +263,37 @@ export function normalizeHealthMonitorSettings(input: unknown): HealthMonitorSet
   };
 }
 
+/** Slot ids preserve case (built-ins like "longContext" are camelCase); strip only unsafe chars. */
+export function sanitizeSlotId(value: unknown): string {
+  return safeText(value, 48).replace(/[^a-zA-Z0-9_-]+/g, '').slice(0, 48);
+}
+
+export function normalizeRoutingSlots(input: unknown): RoutingSlots {
+  if (!input || typeof input !== 'object') return {};
+  const out: RoutingSlots = {};
+  for (const [target, slots] of Object.entries(input as Record<string, unknown>)) {
+    const normalizedTarget = normalizeTarget(target);
+    if (!normalizedTarget || !slots || typeof slots !== 'object') continue;
+    const bySlot: Record<string, RoutingSlotBinding> = {};
+    for (const [slotId, binding] of Object.entries(slots as Record<string, unknown>)) {
+      const slotKey = sanitizeSlotId(slotId);
+      const providerId = binding && typeof binding === 'object' ? safeText((binding as Record<string, unknown>).providerId, 90) : '';
+      if (!slotKey || !providerId) continue;
+      const model = binding && typeof binding === 'object' ? safeText((binding as Record<string, unknown>).model, 200) : '';
+      bySlot[slotKey] = model ? { providerId, model } : { providerId };
+    }
+    if (Object.keys(bySlot).length) out[normalizedTarget] = bySlot;
+  }
+  return out;
+}
+
 export async function readStore(): Promise<ProviderStore> {
   await ensureDir(switchDir());
   const store = await readJsonFile<ProviderStore>(providerStorePath(), {
     providers: [],
     activeByTarget: {},
     healthMonitor: HEALTH_MONITOR_DEFAULTS,
+    routingSlots: {},
   });
   return {
     providers: (Array.isArray(store.providers) ? store.providers : []).map((provider) => ({
@@ -269,6 +302,7 @@ export async function readStore(): Promise<ProviderStore> {
     })),
     activeByTarget: store.activeByTarget && typeof store.activeByTarget === 'object' ? store.activeByTarget : {},
     healthMonitor: normalizeHealthMonitorSettings(store.healthMonitor),
+    routingSlots: normalizeRoutingSlots(store.routingSlots),
   };
 }
 
