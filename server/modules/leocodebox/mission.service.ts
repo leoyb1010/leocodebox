@@ -17,6 +17,7 @@ import {
   type MissionStatus,
 } from '../database/index.js';
 
+import { resolveSlotForSession } from './provider-routing.service.js';
 import { createWorktree, discardWorktree } from './worktree.service.js';
 
 type StatusError = Error & { statusCode?: number };
@@ -75,16 +76,25 @@ export async function startMissionCard(userId: number, cardId: string): Promise<
   const slug = `${card.title || 'mission'}-${randomUUID().slice(0, 6)}`;
   const worktree = await createWorktree(card.projectPath, slug);
 
+  // When the card doesn't pin a routing slot, auto-resolve one from the task
+  // shape (long-context by goal size, etc.). Returns null unless the user has
+  // bound slots, so plain setups stay on the active provider.
+  let slot = card.slot;
+  if (!slot && (provider === 'claude' || provider === 'codex')) {
+    slot = await resolveSlotForSession({ target: provider, estimatedTokens: Math.ceil(card.goal.length / 4) });
+  }
+
   const sessionId = randomUUID();
   sessionsDb.createAppSession(sessionId, provider, card.projectPath);
   sessionsDb.setWorktreeId(sessionId, worktree.id);
-  if (card.slot) sessionsDb.setRoutingSlot(sessionId, card.slot);
+  if (slot) sessionsDb.setRoutingSlot(sessionId, slot);
 
   return missionCardsDb.patch(userId, cardId, {
     status: 'running',
     provider,
     worktreeId: worktree.id,
     sessionId,
+    slot: slot ?? null,
   })!;
 }
 
@@ -127,12 +137,9 @@ export function completeMissionCard(userId: number, cardId: string, costUsd?: nu
 export async function discardMissionCard(userId: number, cardId: string, opts: { force?: boolean } = {}): Promise<MissionCard> {
   const card = missionCardsDb.get(userId, cardId);
   if (!card) throw fail('Unknown mission card.', 404);
-  if (card.worktreeId) {
-    await discardWorktree(card.worktreeId, { force: opts.force }).catch((error) => {
-      // Surface a dirty-worktree refusal to the caller instead of half-transitioning.
-      throw error;
-    });
-  }
+  // Tear the worktree down FIRST: a dirty-worktree refusal throws here and the
+  // card stays in place instead of half-transitioning to discarded.
+  if (card.worktreeId) await discardWorktree(card.worktreeId, { force: opts.force });
   return missionCardsDb.patch(userId, cardId, { status: 'discarded' })!;
 }
 
