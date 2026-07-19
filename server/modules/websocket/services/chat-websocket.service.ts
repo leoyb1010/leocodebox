@@ -3,7 +3,7 @@ import path from 'node:path';
 import type { WebSocket } from 'ws';
 
 import { logger } from '@/modules/logging/index.js';
-import { sessionsDb } from '@/modules/database/index.js';
+import { sessionsDb, worktreesDb } from '@/modules/database/index.js';
 import { chatRunRegistry } from '@/modules/websocket/services/chat-run-registry.service.js';
 import { connectedClients, WS_OPEN_STATE } from '@/modules/websocket/services/websocket-state.service.js';
 import { getGlobalImageAssetsDir, normalizeImageDescriptors } from '@/shared/image-attachments.js';
@@ -195,6 +195,13 @@ async function handleChatSend(
   // id their CLI/SDK understands for resume). Brand-new sessions have no
   // provider id yet, so the runtime starts fresh and announces one, which the
   // gateway writer captures and maps back to the app session id.
+  // L3 fleet: a session bound to a worktree runs in the worktree directory so
+  // parallel sessions on the same project never step on each other. L2 routing:
+  // a stored routing slot picks a specific Leoapi provider for this session.
+  const boundWorktreeId = sessionsDb.getWorktreeId(sessionId);
+  const worktreeCwd = boundWorktreeId ? worktreesDb.get(boundWorktreeId)?.path : undefined;
+  const routingSlot = sessionsDb.getRoutingSlot(sessionId) ?? undefined;
+
   const runtimeOptions: AnyRecord = {
     ...clientOptions,
     // Image attachments are re-validated server-side: only files inside the
@@ -204,8 +211,9 @@ async function handleChatSend(
     abortSignal: run.abortController.signal,
     sessionId: session.provider_session_id ?? undefined,
     resume: Boolean(session.provider_session_id),
-    cwd: session.project_path ?? undefined,
-    projectPath: session.project_path ?? undefined,
+    cwd: worktreeCwd ?? session.project_path ?? undefined,
+    projectPath: worktreeCwd ?? session.project_path ?? undefined,
+    routingSlot,
   };
 
   try {

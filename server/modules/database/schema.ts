@@ -180,6 +180,17 @@ CREATE TABLE IF NOT EXISTS session_runtime_state (
 );
 `;
 
+export const WORKTREES_TABLE_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS worktrees (
+    worktree_id TEXT PRIMARY KEY NOT NULL,
+    project_path TEXT NOT NULL,
+    slug TEXT NOT NULL,
+    branch TEXT NOT NULL,
+    path TEXT NOT NULL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+`;
+
 export const INIT_SCHEMA_SQL = `
 -- Initialize authentication database
 PRAGMA foreign_keys = ON;
@@ -230,4 +241,7 @@ ${USAGE_DAILY_TABLE_SCHEMA_SQL}
 
 ${SESSION_RUNTIME_STATE_TABLE_SCHEMA_SQL}
 CREATE INDEX IF NOT EXISTS idx_agent_profiles_user_id ON agent_profiles(user_id);
+
+${WORKTREES_TABLE_SCHEMA_SQL}
+CREATE INDEX IF NOT EXISTS idx_worktrees_project ON worktrees(project_path);
 `;

@@ -235,6 +235,22 @@ export const sessionsDb = {
     return normalizeSessionRow(row) ?? null;
   },
 
+  /** L3/L2 binding accessors kept out of the wide SESSION_ROW_COLUMNS shape. */
+  getWorktreeId(sessionId: string): string | null {
+    const row = getConnection().prepare('SELECT worktree_id FROM sessions WHERE session_id = ?').get(sessionId) as { worktree_id?: string | null } | undefined;
+    return row?.worktree_id ?? null;
+  },
+  setWorktreeId(sessionId: string, worktreeId: string | null): void {
+    getConnection().prepare('UPDATE sessions SET worktree_id = ? WHERE session_id = ?').run(worktreeId, sessionId);
+  },
+  getRoutingSlot(sessionId: string): string | null {
+    const row = getConnection().prepare('SELECT routing_slot FROM sessions WHERE session_id = ?').get(sessionId) as { routing_slot?: string | null } | undefined;
+    return row?.routing_slot ?? null;
+  },
+  setRoutingSlot(sessionId: string, slot: string | null): void {
+    getConnection().prepare('UPDATE sessions SET routing_slot = ? WHERE session_id = ?').run(slot, sessionId);
+  },
+
   /**
    * Resolves one session row through the provider-native id.
    *

@@ -14,6 +14,7 @@ import {
   USER_NOTIFICATION_PREFERENCES_TABLE_SCHEMA_SQL,
   USAGE_DAILY_TABLE_SCHEMA_SQL,
   SESSION_RUNTIME_STATE_TABLE_SCHEMA_SQL,
+  WORKTREES_TABLE_SCHEMA_SQL,
   VAPID_KEYS_TABLE_SCHEMA_SQL,
 } from '@/modules/database/schema.js';
 
@@ -486,6 +487,15 @@ export const runMigrations = (db: Database) => {
     addProviderSessionIdMapping(db);
     ensureProjectsForSessionPaths(db);
     migrateApiKeysToHashes(db);
+
+    // L3 fleet: worktrees table + session columns binding a session to a
+    // worktree and a routing slot. Added after the sessions rebuild so the
+    // columns land on the final table shape, and idempotent for upgrades.
+    db.exec(WORKTREES_TABLE_SCHEMA_SQL);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_worktrees_project ON worktrees(project_path)');
+    const sessionsColumnsForWorktree = (db.prepare('PRAGMA table_info(sessions)').all() as { name: string }[]).map((c) => c.name);
+    addColumnToTableIfNotExists(db, 'sessions', sessionsColumnsForWorktree, 'worktree_id', 'TEXT');
+    addColumnToTableIfNotExists(db, 'sessions', sessionsColumnsForWorktree, 'routing_slot', 'TEXT');
 
     db.exec('CREATE INDEX IF NOT EXISTS idx_session_ids_lookup ON sessions(session_id)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_provider_session_id ON sessions(provider_session_id)');

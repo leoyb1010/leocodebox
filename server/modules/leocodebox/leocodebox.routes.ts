@@ -14,11 +14,13 @@ import { collectDoctorReport } from './doctor.service.js';
 import feedbackUpdateRoutes from './feedback-update.routes.js';
 import providerRoutingRoutes from './provider-routing.routes.js';
 import providerSwitchRoutes from './provider-switch.routes.js';
+import worktreeRoutes from './worktree.routes.js';
 
 const router = express.Router();
 
 router.use('/cli', cliToolsRoutes);
 router.use('/routing', providerRoutingRoutes);
+router.use('/worktrees', worktreeRoutes);
 router.use(feedbackUpdateRoutes);
 router.use(providerSwitchRoutes);
 
