@@ -24,6 +24,7 @@ const GitPanel = React.lazy(() => import('../../git-panel/view/GitPanel'));
 const PluginTabContent = React.lazy(() => import('../../plugins/view/PluginTabContent'));
 const BrowserUsePanel = React.lazy(() => import('../../browser-use/view/BrowserUsePanel'));
 const ConversationAuditPanel = React.lazy(() => import('../../conversation-audit/view/ConversationAuditPanel'));
+const MissionsView = React.lazy(() => import('../../missions/view/MissionsView'));
 const EditorSidebar = React.lazy(() => import('../../code-editor/view/EditorSidebar'));
 const TaskMasterPanel = React.lazy(() => import('../../task-master/view/TaskMasterPanel'));
 
@@ -231,6 +232,16 @@ function MainContent({
               <ErrorBoundary showDetails>
               <React.Suspense fallback={panelFallback}>
                 <GitPanel selectedProject={selectedProject} isMobile={isMobile} onFileOpen={handleFileOpen} />
+              </React.Suspense>
+              </ErrorBoundary>
+            </div>
+          )}
+
+          {activeTab === 'missions' && (
+            <div className="workspace-tab-panel h-full overflow-hidden" data-active="true">
+              <ErrorBoundary showDetails>
+              <React.Suspense fallback={panelFallback}>
+                <MissionsView selectedProject={selectedProject} />
               </React.Suspense>
               </ErrorBoundary>
             </div>

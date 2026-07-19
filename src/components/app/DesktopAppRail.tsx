@@ -2,6 +2,7 @@ import {
   Activity,
   FolderKanban,
   GitBranch,
+  LayoutGrid,
   MessageSquare,
   Settings,
   SlidersHorizontal,
@@ -21,9 +22,10 @@ type DesktopAppRailProps = {
 };
 
 const primaryItems = [
-  { id: 'projects', labelKey: 'workspaceShell.projects', icon: FolderKanban, tab: 'files' as AppTab },
-  { id: 'chat', labelKey: 'workspaceShell.chat', icon: MessageSquare, tab: 'chat' as AppTab },
-  { id: 'git', labelKey: 'workspaceShell.changes', icon: GitBranch, tab: 'git' as AppTab },
+  { id: 'projects', labelKey: 'workspaceShell.projects', icon: FolderKanban, tab: 'files' as AppTab, fallback: '项目' },
+  { id: 'chat', labelKey: 'workspaceShell.chat', icon: MessageSquare, tab: 'chat' as AppTab, fallback: '对话' },
+  { id: 'missions', labelKey: 'workspaceShell.missions', icon: LayoutGrid, tab: 'missions' as AppTab, fallback: '任务' },
+  { id: 'git', labelKey: 'workspaceShell.changes', icon: GitBranch, tab: 'git' as AppTab, fallback: '变更' },
 ];
 
 export default function DesktopAppRail({
@@ -43,7 +45,7 @@ export default function DesktopAppRail({
       <nav className="flex w-full flex-1 flex-col items-center gap-1 px-2 py-3" aria-label={t('workspaceShell.navigationLabel')}>
         {primaryItems.map((item) => {
           const Icon = item.icon;
-          const label = t(item.labelKey);
+          const label = t(item.labelKey, { defaultValue: item.fallback });
           const isActive = activeTab === item.tab;
           return (
             <Tooltip key={item.id} content={label} position="right">
