@@ -54,6 +54,30 @@ async function fileExists(p: string): Promise<boolean> {
   return fs.stat(p).then((s) => s.isFile()).catch(() => false);
 }
 
+/** Copy 0600 via temp + rename so a live credential is never left half-written. */
+async function atomicCopy600(src: string, dest: string): Promise<void> {
+  await fs.mkdir(path.dirname(dest), { recursive: true });
+  const tmp = `${dest}.tmp-${Date.now().toString(36)}`;
+  await fs.copyFile(src, tmp);
+  await fs.chmod(tmp, 0o600).catch(() => { /* best effort on non-posix */ });
+  await fs.rename(tmp, dest);
+}
+
+const AUTO_BACKUP_PREFIX = 'auto-backup-';
+const MAX_AUTO_BACKUPS = 5;
+
+/** Keep only the newest MAX_AUTO_BACKUPS auto-backups so they don't grow forever. */
+async function pruneAutoBackups(target: string): Promise<void> {
+  const dir = path.join(snapshotsRoot(), target);
+  const entries = (await fs.readdir(dir).catch(() => [] as string[]))
+    .filter((e) => e.startsWith(AUTO_BACKUP_PREFIX) && e.endsWith('.json'))
+    .sort()
+    .reverse();
+  for (const stale of entries.slice(MAX_AUTO_BACKUPS)) {
+    await fs.rm(path.join(dir, stale), { force: true }).catch(() => {});
+  }
+}
+
 export type LoginSnapshot = { target: string; name: string; capturedAt: string; active: boolean };
 
 export async function listSnapshots(target: string): Promise<LoginSnapshot[]> {
@@ -86,9 +110,7 @@ export async function captureSnapshot(target: string, rawName: string): Promise<
   const source = credentialPath(target);
   if (!(await fileExists(source))) throw fail(`${target} is not logged in (no credential file to snapshot).`, 409);
   const dest = snapshotPath(target, name);
-  await fs.mkdir(path.dirname(dest), { recursive: true });
-  await fs.copyFile(source, dest);
-  await fs.chmod(dest, 0o600).catch(() => { /* best effort on non-posix */ });
+  await atomicCopy600(source, dest);
   const stat = await fs.stat(dest);
   return { target, name, capturedAt: stat.mtime.toISOString(), active: true };
 }
@@ -103,17 +125,13 @@ export async function applySnapshot(target: string, rawName: string): Promise<{ 
 
   let backup: string | null = null;
   if (await fileExists(live)) {
-    const backupName = `auto-backup-${Date.now().toString(36)}`;
-    const backupPath = snapshotPath(target, backupName);
-    await fs.mkdir(path.dirname(backupPath), { recursive: true });
-    await fs.copyFile(live, backupPath);
-    await fs.chmod(backupPath, 0o600).catch(() => {});
+    const backupName = `${AUTO_BACKUP_PREFIX}${Date.now().toString(36)}`;
+    await atomicCopy600(live, snapshotPath(target, backupName));
     backup = backupName;
+    await pruneAutoBackups(target);
   }
 
-  await fs.mkdir(path.dirname(live), { recursive: true });
-  await fs.copyFile(snap, live);
-  await fs.chmod(live, 0o600).catch(() => {});
+  await atomicCopy600(snap, live);
   return { applied: true, backup };
 }
 

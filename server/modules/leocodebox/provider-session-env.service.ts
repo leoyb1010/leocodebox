@@ -47,11 +47,14 @@ export async function getActiveSwitchEnvOverlay(target: 'claude' | 'codex', slot
     // A bound routing slot wins over the single active provider; an unbound
     // slot (or no slot) falls back to activeByTarget — preserving legacy behavior.
     const binding = slot ? store.routingSlots?.[target]?.[slot] : undefined;
-    const providerId = binding?.providerId ?? store.activeByTarget?.[target];
-    if (!providerId) return {};
-    const provider = store.providers.find((item) => item.id === providerId);
+    // A slot may dangle (its provider was deleted). Resolve the slot's provider,
+    // but if it no longer exists fall back to the active provider rather than
+    // silently dropping the session to the machine env.
+    const boundProvider = binding?.providerId ? store.providers.find((item) => item.id === binding.providerId) : undefined;
+    const activeId = store.activeByTarget?.[target];
+    const provider = boundProvider ?? (activeId ? store.providers.find((item) => item.id === activeId) : undefined);
     if (!provider) return {};
-    const effective = binding?.model ? { ...provider, model: binding.model } : provider;
+    const effective = boundProvider && binding?.model ? { ...provider, model: binding.model } : provider;
     return buildEffectiveSessionEnv({}, target, effective);
   } catch {
     return {};

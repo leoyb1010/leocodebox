@@ -18,7 +18,6 @@ import {
 
 /** Built-in scenario slots. Users may also bind arbitrary custom slot ids. */
 export const BUILTIN_SLOTS = ['default', 'background', 'longContext', 'think'] as const;
-export type BuiltinSlot = (typeof BUILTIN_SLOTS)[number];
 
 /** Above this estimated first-prompt token count, prefer the longContext slot. */
 export const LONG_CONTEXT_TOKEN_THRESHOLD = 120_000;

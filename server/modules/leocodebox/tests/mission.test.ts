@@ -81,7 +81,21 @@ test('startCard spins a worktree + bound session; complete freezes cost', async 
   });
 });
 
-test('illegal transition is rejected; discard tears down the worktree', async () => {
+test('generic transition cannot create a running card without a worktree/session', async () => {
+  await withRepo(async (repo, userId) => {
+    const card = createMissionCard(userId, { projectPath: repo, title: 'Task X', goal: 'do X' });
+    // backlog → running via the generic path would leave a "running" card with
+    // no worktree/session — it must be rejected (use start).
+    assert.throws(() => transitionMissionCard(userId, card.id, 'running'), /start\/retry\/complete\/discard/);
+    // Same for →discarded (must go through discard, which tears down the worktree).
+    const started = await startMissionCard(userId, card.id);
+    transitionMissionCard(userId, card.id, 'review');
+    assert.throws(() => transitionMissionCard(userId, card.id, 'discarded'), /start\/retry\/complete\/discard/);
+    assert.ok(started.worktreeId);
+  });
+});
+
+test('illegal transition is rejected; discard tears down the worktree and clears bindings', async () => {
   await withRepo(async (repo, userId) => {
     const card = createMissionCard(userId, { projectPath: repo, title: 'Task B', goal: 'do B' });
     // backlog → done is illegal.

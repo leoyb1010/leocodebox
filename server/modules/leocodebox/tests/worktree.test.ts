@@ -80,18 +80,22 @@ test('create → status → clean merge back to main', async () => {
   });
 });
 
-test('conflicting branches are reported by the preview, merge refuses', async () => {
+test('preview lists ONLY conflicted files (not clean files or info messages)', async () => {
   await withRepo(async (repo) => {
     const wt = await createWorktree(repo, 'feature-b');
-    // Diverge both sides on the same file.
+    // README.md conflicts; shared.txt is added only on the worktree side (merges clean).
     await writeFile(path.join(repo, 'README.md'), '# main side\n');
     git(repo, ['commit', '-q', '-am', 'main change']);
     await writeFile(path.join(wt.path, 'README.md'), '# worktree side\n');
-    git(wt.path, ['commit', '-q', '-am', 'worktree change']);
+    await writeFile(path.join(wt.path, 'shared.txt'), 'clean add\n');
+    git(wt.path, ['add', '.']);
+    git(wt.path, ['commit', '-q', '-m', 'worktree change']);
 
     const preview = await previewMerge(wt.id);
     assert.equal(preview.clean, false);
-    assert.ok(preview.conflicts.some((f) => f.includes('README.md')));
+    // Exactly the conflicted file — the cleanly-merged shared.txt and any
+    // "Auto-merging ..." info lines must NOT appear.
+    assert.deepEqual(preview.conflicts, ['README.md']);
 
     const merged = await mergeWorktree(wt.id);
     assert.equal(merged.merged, false);

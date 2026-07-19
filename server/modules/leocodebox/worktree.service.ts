@@ -44,11 +44,13 @@ function runGit(cwd: string, args: string[]): Promise<{ ok: boolean; stdout: str
   });
 }
 
-/** Slug: lowercase, path-safe, bounded. Never contains "/" or "..". */
+/** Slug: lowercase, path-safe AND git-refname-safe. Never contains "/" or a
+ * ".." sequence (both would break `lcb/<slug>` as a branch or escape the dir). */
 export function sanitizeWorktreeSlug(value: unknown): string {
   return String(value ?? '')
     .toLowerCase()
     .replace(/[^a-z0-9._-]+/g, '-')
+    .replace(/\.{2,}/g, '.')      // collapse ".." — invalid in a git refname
     .replace(/^[-.]+|[-.]+$/g, '')
     .slice(0, 60);
 }
@@ -124,10 +126,20 @@ export async function previewMerge(id: string): Promise<{ clean: boolean; confli
   if (!wt) throw fail('Unknown worktree.', 404);
   const baseBranch = await currentBranch(wt.projectPath);
   const res = await runGit(wt.projectPath, ['merge-tree', '--write-tree', '--name-only', baseBranch, wt.branch]);
-  // Exit 0 = clean; exit 1 = conflicts, with conflicting paths on stdout after the tree oid.
   if (res.ok) return { clean: true, conflicts: [] };
-  const lines = res.stdout.split('\n').map((l) => l.trim()).filter(Boolean);
-  return { clean: false, conflicts: lines.slice(1) };
+  // Exit 1 = conflicts. Exit 128 (or anything else) = a hard error (unrelated
+  // histories, bad ref) — surface it rather than pretending everything conflicts.
+  if (res.code !== 1) throw fail(`merge preview failed: ${res.stderr.trim() || res.stdout.trim()}`, 500);
+  // On conflict the output is: <tree-oid> \n <conflicted file>* \n (blank) \n
+  // <informational messages>*. Take only the file section between the OID line
+  // and the first blank line — do NOT strip blanks, they delimit the section.
+  const lines = res.stdout.split('\n');
+  const conflicts: string[] = [];
+  for (const line of lines.slice(1)) {
+    if (line.trim() === '') break;
+    conflicts.push(line.trim());
+  }
+  return { clean: false, conflicts };
 }
 
 export async function mergeWorktree(id: string, options: { squash?: boolean } = {}): Promise<{ merged: boolean; conflicts: string[] }> {

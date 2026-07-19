@@ -570,6 +570,12 @@ router.delete('/switch/providers/:id', async (req, res, next) => {
       for (const [target, activeId] of Object.entries(store.activeByTarget)) {
         if (activeId === removed.id) delete store.activeByTarget[target];
       }
+      // Prune any routing slot bound to the deleted provider so it can't dangle.
+      for (const slots of Object.values(store.routingSlots ?? {})) {
+        for (const [slotId, binding] of Object.entries(slots)) {
+          if (binding.providerId === removed.id) delete slots[slotId];
+        }
+      }
       await writeStore(store);
       res.json({
         success: true,

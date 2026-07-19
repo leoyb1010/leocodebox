@@ -31,6 +31,18 @@ test('editable model prices drive cost estimation', { concurrency: false }, asyn
   });
 });
 
+test('a user override wins even when the model name contains a default-key substring', { concurrency: false }, async () => {
+  await withDatabase(() => {
+    // "custom-opus-v1" contains the built-in default key "opus" AND is arsenal-ish.
+    // The user's explicit override must win over both the default table and the arsenal.
+    setModelPrices({ 'custom-opus': { input: 1, output: 2 } });
+    assert.equal(estimateUsageCostUsd('codex', 'custom-opus-v1', 1_000_000, 1_000_000), 3);
+    // A provider-name-keyed override is honored too (grok is also a default key).
+    setModelPrices({ 'custom-opus': { input: 1, output: 2 }, grok: { input: 0.1, output: 0.2 } });
+    assert.equal(estimateUsageCostUsd('grok', 'grok-4', 1_000_000, 0), 0.1);
+  });
+});
+
 test('usage aggregation groups daily provider/model totals', { concurrency: false }, async () => {
   await withDatabase(() => {
     usageDb.record({ projectPath: '/tmp/demo', provider: 'codex', model: 'gpt-5', inputTokens: 10, outputTokens: 5, costUsd: 0.25 });

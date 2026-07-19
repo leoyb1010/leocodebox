@@ -78,6 +78,23 @@ test('resolveSlotForSession honors explicit > background > longContext > default
   });
 });
 
+test('a slot bound to a since-deleted provider falls back to the active provider', async () => {
+  await withStore(async () => {
+    // Bind longContext to deep, then simulate deep being deleted by hand-editing
+    // the store's providers list while the slot binding remains (a dangling slot).
+    await setRoutingSlot('claude', 'longContext', { providerId: 'claude-deep' });
+    const { readStore, writeStore } = await import('../provider-store.service.js');
+    const store = await readStore();
+    store.providers = store.providers.filter((p) => p.id !== 'claude-deep');
+    await writeStore(store);
+
+    // The dangling slot must NOT drop the session to the machine env — it falls
+    // back to the active provider (fast), never returns an empty overlay.
+    const routed = await getActiveSwitchEnvOverlay('claude', 'longContext');
+    assert.equal(routed.ANTHROPIC_BASE_URL, 'https://fast.example');
+  });
+});
+
 test('setRoutingSlot rejects a provider from a different target; clear removes it', async () => {
   await withStore(async () => {
     await assert.rejects(() => setRoutingSlot('codex', 'default', { providerId: 'claude-fast' }));

@@ -18,6 +18,7 @@ import {
 } from '../database/index.js';
 
 import { resolveSlotForSession } from './provider-routing.service.js';
+import { sanitizeSlotId } from './provider-store.service.js';
 import { createWorktree, discardWorktree } from './worktree.service.js';
 
 type StatusError = Error & { statusCode?: number };
@@ -27,13 +28,22 @@ function fail(message: string, statusCode = 400): StatusError {
   return error;
 }
 
-/** Allowed manual transitions. startCard/retryCard/discardCard wrap the side effects. */
+/** Full state graph. Side-effect edges (→running / →done / →discarded) are only
+ * reachable through startCard / retryCard / completeCard / discardCard, which
+ * do the worktree/session work. canTransition guards those methods. */
 const ALLOWED: Record<MissionStatus, MissionStatus[]> = {
   backlog: ['running', 'discarded'],
-  running: ['review', 'backlog', 'discarded'],
+  running: ['review', 'discarded'],
   review: ['done', 'running', 'discarded'],
   done: ['discarded'],
   discarded: [],
+};
+
+/** The ONLY pure-status edges the generic /transition route may perform.
+ * Everything else must go through a dedicated side-effect method — otherwise a
+ * raw {to:'running'} would create a "running" card with no worktree/session. */
+const MANUAL_TRANSITIONS: Partial<Record<MissionStatus, MissionStatus[]>> = {
+  running: ['review'],
 };
 
 export function canTransition(from: MissionStatus, to: MissionStatus): boolean {
@@ -50,12 +60,13 @@ export function createMissionCard(userId: number, input: {
   if (!title) throw fail('title is required.');
   if (!goal) throw fail('goal is required.');
   const profile = input.profileId ? agentProfilesDb.getProfile(userId, input.profileId) : null;
+  const slot = input.slot ? sanitizeSlotId(input.slot) : '';
   return missionCardsDb.create(userId, {
     projectPath,
     title,
     goal,
     profileId: input.profileId ?? null,
-    slot: input.slot ?? null,
+    slot: slot || null,
     provider: profile?.provider ?? 'claude',
   });
 }
@@ -114,11 +125,14 @@ export function retryMissionCard(userId: number, cardId: string, opts: { slot?: 
   return missionCardsDb.patch(userId, cardId, { status: 'running', sessionId, slot: slot ?? null })!;
 }
 
-/** Plain validated transition (running→review, review→backlog reset, etc.). */
+/** Pure-status transition only (currently running→review). Side-effect edges
+ * are rejected here and must use start/retry/complete/discard. */
 export function transitionMissionCard(userId: number, cardId: string, to: MissionStatus): MissionCard {
   const card = missionCardsDb.get(userId, cardId);
   if (!card) throw fail('Unknown mission card.', 404);
-  if (!canTransition(card.status, to)) throw fail(`Illegal transition ${card.status} → ${to}.`, 409);
+  if (!(MANUAL_TRANSITIONS[card.status]?.includes(to))) {
+    throw fail(`Transition ${card.status} → ${to} is not a manual status change; use start/retry/complete/discard.`, 409);
+  }
   return missionCardsDb.patch(userId, cardId, { status: to })!;
 }
 
@@ -140,7 +154,9 @@ export async function discardMissionCard(userId: number, cardId: string, opts: {
   // Tear the worktree down FIRST: a dirty-worktree refusal throws here and the
   // card stays in place instead of half-transitioning to discarded.
   if (card.worktreeId) await discardWorktree(card.worktreeId, { force: opts.force });
-  return missionCardsDb.patch(userId, cardId, { status: 'discarded' })!;
+  // Clear the now-dead worktree/session bindings so the card can't point at a
+  // torn-down worktree.
+  return missionCardsDb.patch(userId, cardId, { status: 'discarded', worktreeId: null, sessionId: null })!;
 }
 
 export function deleteMissionCard(userId: number, cardId: string): boolean {

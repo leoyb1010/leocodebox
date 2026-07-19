@@ -38,27 +38,34 @@ export function setModelPrices(value: unknown): ModelPriceTable {
   return getModelPrices();
 }
 
-function modelPrice(provider: string, model?: string | null) {
-  // A user price override (getModelPrices) always wins — it's how someone
-  // prices a custom Leoapi endpoint. Then the precise arsenal price for the
-  // exact model, then the coarse substring table, then zero (unknown → tokens
-  // shown without a fabricated cost).
-  const prices = getModelPrices();
-  const haystack = String(model || provider).toLowerCase();
-  const overrideKey = Object.keys(prices).find((candidate) =>
-    candidate !== provider.toLowerCase() && haystack.includes(candidate.toLowerCase()));
-  if (overrideKey && appConfigDb.get('usage_model_prices_per_million')) {
-    // Only treat a substring hit as an override when it came from a user-set
-    // table entry (not just the built-in defaults, which the arsenal supersedes).
-    try {
-      const userTable = JSON.parse(appConfigDb.get('usage_model_prices_per_million') || '{}') as Record<string, unknown>;
-      if (Object.prototype.hasOwnProperty.call(userTable, overrideKey)) return prices[overrideKey];
-    } catch { /* fall through to arsenal */ }
+/** Only the user-set overrides (not merged with defaults). */
+function getUserModelPrices(): ModelPriceTable {
+  try {
+    const parsed = JSON.parse(appConfigDb.get(MODEL_PRICES_KEY) || '{}') as ModelPriceTable;
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
   }
+}
+
+function modelPrice(provider: string, model?: string | null) {
+  const haystack = String(model || provider).toLowerCase();
+  // 1. A user price override always wins — it's how someone prices a custom
+  //    Leoapi endpoint. Match ONLY user-set keys, longest first, so a specific
+  //    key ("custom-opus") beats a coarse one and a built-in default key can
+  //    never mask the user's override.
+  const userTable = getUserModelPrices();
+  const userKey = Object.keys(userTable)
+    .filter((candidate) => haystack.includes(candidate.toLowerCase()))
+    .sort((a, b) => b.length - a.length)[0];
+  if (userKey) return userTable[userKey];
+  // 2. Precise arsenal price for the exact model.
   const arsenal = arsenalPrice(provider, model);
   if (arsenal) return arsenal;
-  const key = Object.keys(prices).find((candidate) => haystack.includes(candidate.toLowerCase()));
-  return (key && prices[key]) || { input: 0, output: 0 };
+  // 3. Coarse built-in default table, then zero (unknown → tokens shown, no
+  //    fabricated cost).
+  const defKey = Object.keys(DEFAULT_PRICES_PER_MILLION).find((candidate) => haystack.includes(candidate.toLowerCase()));
+  return (defKey && DEFAULT_PRICES_PER_MILLION[defKey]) || { input: 0, output: 0 };
 }
 
 export function estimateUsageCostUsd(provider: string, model: string | null | undefined, inputTokens: number, outputTokens: number): number {
