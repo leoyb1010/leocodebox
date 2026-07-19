@@ -18,7 +18,7 @@
 - **最新版本**：<https://github.com/leoyb1010/leocodebox/releases/latest>
 - **当前正式版**：`1.50.0`
 - **直接下载 DMG**：[leocodebox-1.50.0-mac-arm64.dmg](https://github.com/leoyb1010/leocodebox/releases/download/v1.50.0/leocodebox-1.50.0-mac-arm64.dmg)（仅 Apple 芯片）
-- **SHA-256**：`f1cc34456387e9317d8fe34bdb0385a693ae5d586d482bc521d887ad8de683a2`
+- **SHA-256**：`d82cbcddc8f791eb197aec022537a52c4e9ea7d85ab712aac5eb065923171e22`
 
 已 **Developer ID 签名 + Apple 公证**：双击 DMG → 拖入「应用程序」→ 双击运行，无 Gatekeeper 警告，无需 `xattr` 去隔离。
 
