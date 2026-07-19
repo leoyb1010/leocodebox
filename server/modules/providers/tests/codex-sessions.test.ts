@@ -109,3 +109,41 @@ test('Codex synchronizer leaves indexed sessions untitled when no name is availa
     await rm(tempRoot, { recursive: true, force: true });
   }
 });
+
+test('Codex synchronizer skips sub-agent rollout files', { concurrency: false }, async () => {
+  const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'codex-session-sync-subagent-'));
+  const workspacePath = path.join(tempRoot, 'workspace');
+  await mkdir(workspacePath, { recursive: true });
+  const restoreHomeDir = patchHomeDir(tempRoot);
+
+  try {
+    // Codex >=0.144 spawn_agent 线程把自己的 rollout 写进同一个 sessions 树,
+    // 通过 session_meta 的 thread_source/source 标记。两种标记都要被跳过。
+    const sessionsDir = path.join(tempRoot, '.codex', 'sessions', '2026', '07', '07');
+    await mkdir(sessionsDir, { recursive: true });
+    await writeFile(
+      path.join(sessionsDir, 'rollout-codex-subagent-1.jsonl'),
+      `${JSON.stringify({ type: 'session_meta', payload: { id: 'codex-subagent-1', cwd: workspacePath, thread_source: 'subagent' } })}\n`,
+      'utf8',
+    );
+    await writeFile(
+      path.join(sessionsDir, 'rollout-codex-subagent-2.jsonl'),
+      `${JSON.stringify({ type: 'session_meta', payload: { id: 'codex-subagent-2', cwd: workspacePath, source: { subagent: { parent: 'codex-top-1' } } } })}\n`,
+      'utf8',
+    );
+    // 普通用户会话必须照常收录。
+    await writeCodexTranscript(tempRoot, 'codex-top-1', workspacePath, 'hello');
+
+    await withIsolatedDatabase(async () => {
+      const synchronizer = new CodexSessionSynchronizer();
+      await synchronizer.synchronize();
+
+      assert.ok(!sessionsDb.getSessionByProviderSessionId('codex-subagent-1'));
+      assert.ok(!sessionsDb.getSessionByProviderSessionId('codex-subagent-2'));
+      assert.ok(sessionsDb.getSessionByProviderSessionId('codex-top-1') ?? sessionsDb.getSessionById('codex-top-1'));
+    });
+  } finally {
+    restoreHomeDir();
+    await rm(tempRoot, { recursive: true, force: true });
+  }
+});

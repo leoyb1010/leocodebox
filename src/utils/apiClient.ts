@@ -12,6 +12,14 @@ export class ApiError extends Error {
   }
 }
 
+// Only accept a refreshed token that has this app's issued JWT shape (three
+// base64url segments). An attacker-injected/malformed header value must never
+// overwrite the stored auth token. (Absorbed from upstream claudecodeui #971.)
+export function isValidRefreshedToken(token: unknown): token is string {
+  return typeof token === 'string'
+    && /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token);
+}
+
 export function authenticatedFetch(url: string, options: RequestInit = {}): Promise<Response> {
   const token = localStorage.getItem('auth-token');
   const defaultHeaders: Record<string, string> = {};
@@ -23,7 +31,7 @@ export function authenticatedFetch(url: string, options: RequestInit = {}): Prom
     headers: { ...defaultHeaders, ...options.headers },
   }).then((response) => {
     const refreshedToken = response.headers.get('X-Refreshed-Token');
-    if (refreshedToken) localStorage.setItem('auth-token', refreshedToken);
+    if (isValidRefreshedToken(refreshedToken)) localStorage.setItem('auth-token', refreshedToken);
     return response;
   });
 }

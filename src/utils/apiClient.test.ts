@@ -22,17 +22,39 @@ function installLocalStorage() {
 test('apiRequest returns parsed JSON and persists refreshed authentication tokens', async () => {
   const values = installLocalStorage();
   const originalFetch = globalThis.fetch;
+  // Only JWT-shaped tokens (three base64url segments) may be stored — an
+  // injected/malformed header value must never overwrite the auth token.
+  const jwtShaped = 'eyJhbGciOiJIUzI1NiJ9.eyJ1c2VySWQiOjF9.c2lnbmF0dXJl';
   globalThis.fetch = async () => new Response(JSON.stringify({ success: true }), {
     status: 200,
     headers: {
       'content-type': 'application/json',
-      'x-refreshed-token': 'new-token',
+      'x-refreshed-token': jwtShaped,
     },
   });
 
   try {
     assert.deepEqual(await apiRequest('/api/test'), { success: true });
-    assert.equal(values.get('auth-token'), 'new-token');
+    assert.equal(values.get('auth-token'), jwtShaped);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('apiRequest rejects malformed refreshed tokens instead of storing them', async () => {
+  const values = installLocalStorage();
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ success: true }), {
+    status: 200,
+    headers: {
+      'content-type': 'application/json',
+      'x-refreshed-token': 'not-a-jwt',
+    },
+  });
+
+  try {
+    assert.deepEqual(await apiRequest('/api/test'), { success: true });
+    assert.equal(values.get('auth-token'), undefined);
   } finally {
     globalThis.fetch = originalFetch;
   }

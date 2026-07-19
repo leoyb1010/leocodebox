@@ -23,10 +23,30 @@ const translationBackend = {
   },
 };
 
+// First run (no saved preference): follow the system locale when we support
+// it, so non-Chinese users don't land in a language they can't read. An
+// explicit user choice always wins, and unmatched locales keep the zh-CN
+// default. (Absorbed from cc-switch's first-run locale fix.)
+const getSystemLanguage = () => {
+  try {
+    const locale = String(navigator.language || '');
+    if (!locale) return null;
+    const exact = languages.find((language) => language.value.toLowerCase() === locale.toLowerCase());
+    if (exact) return exact.value;
+    const base = locale.split('-')[0].toLowerCase();
+    if (base === 'zh') return locale.toLowerCase().includes('tw') || locale.toLowerCase().includes('hk') ? 'zh-TW' : 'zh-CN';
+    const byBase = languages.find((language) => language.value.split('-')[0].toLowerCase() === base);
+    return byBase ? byBase.value : null;
+  } catch {
+    return null;
+  }
+};
+
 const getSavedLanguage = () => {
   try {
     const saved = localStorage.getItem('userLanguage');
-    return saved && languages.some((language) => language.value === saved) ? saved : 'zh-CN';
+    if (saved && languages.some((language) => language.value === saved)) return saved;
+    return getSystemLanguage() || 'zh-CN';
   } catch {
     return 'zh-CN';
   }
