@@ -1,4 +1,6 @@
 /** Provider model metadata shared by usage reporting and runtime adapters. */
+import { arsenalContextWindow } from '@/shared/model-arsenal.js';
+
 const DEFAULT_CONTEXT_WINDOWS: Record<string, number> = {
   claude: 200_000,
   'claude-3-5': 200_000,
@@ -15,6 +17,8 @@ const DEFAULT_CONTEXT_WINDOWS: Record<string, number> = {
 };
 
 export function getModelContextWindow(provider: string, model?: string | null): number {
+  const fromArsenal = arsenalContextWindow(provider, model);
+  if (fromArsenal) return fromArsenal;
   const key = String(model || provider).toLowerCase();
   const match = Object.entries(DEFAULT_CONTEXT_WINDOWS).find(([name]) => key.includes(name));
   return match?.[1] ?? DEFAULT_CONTEXT_WINDOWS[provider] ?? 200_000;

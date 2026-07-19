@@ -1,8 +1,13 @@
 import express from 'express';
 
+import { listArsenal } from '@/shared/model-arsenal.js';
+
 import { getModelPrices, setModelPrices, usageDb } from './usage.db.js';
 
 const router = express.Router();
+// Model Arsenal: per-model context window / pricing / capabilities, for the
+// Leoapi录入 UI and cost display. Grouped by provider on the client.
+router.get('/arsenal', (_req, res) => res.json({ success: true, models: listArsenal() }));
 router.get('/prices', (_req, res) => res.json({ success: true, prices: getModelPrices() }));
 router.put('/prices', (req, res) => res.json({ success: true, prices: setModelPrices(req.body?.prices) }));
 router.get('/summary', (req, res) => {
