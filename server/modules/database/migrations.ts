@@ -13,6 +13,7 @@ import {
   SESSIONS_TABLE_SCHEMA_SQL,
   USER_NOTIFICATION_PREFERENCES_TABLE_SCHEMA_SQL,
   USAGE_DAILY_TABLE_SCHEMA_SQL,
+  MISSION_CARDS_TABLE_SCHEMA_SQL,
   SESSION_RUNTIME_STATE_TABLE_SCHEMA_SQL,
   WORKTREES_TABLE_SCHEMA_SQL,
   VAPID_KEYS_TABLE_SCHEMA_SQL,
@@ -496,6 +497,11 @@ export const runMigrations = (db: Database) => {
     const sessionsColumnsForWorktree = (db.prepare('PRAGMA table_info(sessions)').all() as { name: string }[]).map((c) => c.name);
     addColumnToTableIfNotExists(db, 'sessions', sessionsColumnsForWorktree, 'worktree_id', 'TEXT');
     addColumnToTableIfNotExists(db, 'sessions', sessionsColumnsForWorktree, 'routing_slot', 'TEXT');
+
+    // L4 mission cards (kanban).
+    db.exec(MISSION_CARDS_TABLE_SCHEMA_SQL);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_mission_cards_user ON mission_cards(user_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_mission_cards_project ON mission_cards(project_path)');
 
     db.exec('CREATE INDEX IF NOT EXISTS idx_session_ids_lookup ON sessions(session_id)');
     db.exec('CREATE INDEX IF NOT EXISTS idx_sessions_provider_session_id ON sessions(provider_session_id)');

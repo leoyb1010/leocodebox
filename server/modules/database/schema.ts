@@ -180,6 +180,26 @@ CREATE TABLE IF NOT EXISTS session_runtime_state (
 );
 `;
 
+export const MISSION_CARDS_TABLE_SCHEMA_SQL = `
+CREATE TABLE IF NOT EXISTS mission_cards (
+    card_id TEXT PRIMARY KEY NOT NULL,
+    user_id INTEGER NOT NULL,
+    project_path TEXT NOT NULL,
+    title TEXT NOT NULL,
+    goal TEXT NOT NULL,
+    profile_id TEXT,
+    slot TEXT,
+    provider TEXT NOT NULL DEFAULT 'claude',
+    worktree_id TEXT,
+    session_id TEXT,
+    status TEXT NOT NULL DEFAULT 'backlog',
+    cost_usd REAL,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+`;
+
 export const WORKTREES_TABLE_SCHEMA_SQL = `
 CREATE TABLE IF NOT EXISTS worktrees (
     worktree_id TEXT PRIMARY KEY NOT NULL,
@@ -244,4 +264,8 @@ CREATE INDEX IF NOT EXISTS idx_agent_profiles_user_id ON agent_profiles(user_id)
 
 ${WORKTREES_TABLE_SCHEMA_SQL}
 CREATE INDEX IF NOT EXISTS idx_worktrees_project ON worktrees(project_path);
+
+${MISSION_CARDS_TABLE_SCHEMA_SQL}
+CREATE INDEX IF NOT EXISTS idx_mission_cards_user ON mission_cards(user_id);
+CREATE INDEX IF NOT EXISTS idx_mission_cards_project ON mission_cards(project_path);
 `;

@@ -16,3 +16,4 @@ export { vapidKeysDb } from '@/modules/database/repositories/vapid-keys.js';
 
 export { sessionRuntimeStateDb } from '@/modules/database/repositories/session-runtime-state.db.js';
 export { worktreesDb, type StoredWorktree } from '@/modules/database/repositories/worktrees.db.js';
+export { missionCardsDb, type MissionCard, type MissionStatus } from '@/modules/database/repositories/mission-cards.db.js';
