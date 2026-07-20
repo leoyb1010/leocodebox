@@ -36,6 +36,6 @@
 
 ## 下载校验
 
-- DMG SHA-256:`__PENDING__`
-- ZIP SHA-256:`__PENDING__`
-- `latest-mac.yml` SHA-256:`__PENDING__`
+- DMG SHA-256:`4c6ee91a30100f8b29963b47ddfb327e87e0e09acdc0428722084dfd0d0f7a52`
+- ZIP SHA-256:`d296792a0a6aac37881a98eb5b6c164bd8b91b5ae4a35129683990d8ca3f2cb3`
+- `latest-mac.yml` SHA-256:`3ded56fcd2d415669a727843bde7b0b83e18778ecd1389aa12dc8c39ec6bd610`
