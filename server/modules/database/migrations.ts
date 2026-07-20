@@ -3,6 +3,7 @@ import { createHash } from 'node:crypto';
 import { Database } from 'better-sqlite3';
 
 import { logger } from '@/modules/logging/index.js';
+import { encryptSecret, isEncrypted } from '@/shared/secret-box.js';
 import {
   AGENT_PROFILES_TABLE_SCHEMA_SQL,
   APP_CONFIG_TABLE_SCHEMA_SQL,
@@ -453,6 +454,28 @@ const migrateApiKeysToHashes = (db: Database): void => {
   }
 };
 
+/**
+ * S-3: user_credentials used to persist external-service tokens (GitHub PAT,
+ * etc.) in plaintext. Encrypt every legacy row at rest so a copied database no
+ * longer leaks usable tokens. Unlike api_keys, these must stay reversible
+ * (they are replayed to the external service), so AES-256-GCM rather than a hash.
+ */
+const migrateUserCredentialsToEncrypted = (db: Database): void => {
+  if (!tableExists(db, 'user_credentials')) return;
+
+  const legacyRows = db
+    .prepare('SELECT id, credential_value FROM user_credentials')
+    .all() as { id: number; credential_value: string }[];
+  const plaintext = legacyRows.filter((row) => !isEncrypted(row.credential_value));
+  if (plaintext.length === 0) return;
+
+  logger.info(`Running migration: Encrypting ${plaintext.length} plaintext credential(s)`);
+  const update = db.prepare('UPDATE user_credentials SET credential_value = ? WHERE id = ?');
+  for (const row of plaintext) {
+    update.run(encryptSecret(row.credential_value), row.id);
+  }
+};
+
 export const runMigrations = (db: Database) => {
   try {
     const usersTableInfo = db.prepare('PRAGMA table_info(users)').all() as { name: string }[];
@@ -488,6 +511,7 @@ export const runMigrations = (db: Database) => {
     addProviderSessionIdMapping(db);
     ensureProjectsForSessionPaths(db);
     migrateApiKeysToHashes(db);
+    migrateUserCredentialsToEncrypted(db);
 
     // L3 fleet: worktrees table + session columns binding a session to a
     // worktree and a routing slot. Added after the sessions rebuild so the

@@ -9,6 +9,7 @@
 import crypto from 'crypto';
 
 import { getConnection } from '@/modules/database/connection.js';
+import { encryptSecret, decryptSecret, isEncrypted } from '@/shared/secret-box.js';
 
 // ---------------------------------------------------------------------------
 // Queries
@@ -43,11 +44,17 @@ export const appConfigDb = {
    * server restarts while being created automatically on first boot.
    */
   getOrCreateJwtSecret(): string {
-    let secret = appConfigDb.get('jwt_secret');
-    if (!secret) {
-      secret = crypto.randomBytes(64).toString('hex');
-      appConfigDb.set('jwt_secret', secret);
+    const stored = appConfigDb.get('jwt_secret');
+    if (stored) {
+      // Upgrade a legacy plaintext secret to ciphertext in place, once.
+      if (!isEncrypted(stored)) {
+        appConfigDb.set('jwt_secret', encryptSecret(stored));
+        return stored;
+      }
+      return decryptSecret(stored);
     }
+    const secret = crypto.randomBytes(64).toString('hex');
+    appConfigDb.set('jwt_secret', encryptSecret(secret));
     return secret;
   },
 };

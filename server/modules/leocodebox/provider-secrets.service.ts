@@ -1,30 +1,20 @@
-import crypto from 'node:crypto';
-import os from 'node:os';
-
-const PREFIX = 'enc:v1:';
-
-function encryptionKey(): Buffer {
-  const secret = process.env.LEOCODEBOX_PROVIDER_KEY_SECRET || `${os.userInfo().username}:${os.homedir()}:leocodebox`;
-  return crypto.createHash('sha256').update(secret).digest();
-}
+/**
+ * Provider-store secret encryption. Delegates to the shared secret box so the
+ * provider store, user credentials, the JWT secret and the browser MCP token
+ * all share one AES-256-GCM implementation and key regime.
+ *
+ * Historically this derived its key from sha256(username:homedir) when the
+ * desktop-provisioned LEOCODEBOX_PROVIDER_KEY_SECRET was absent — a value any
+ * same-machine process could recompute. That fallback now lives in secret-box
+ * as a persisted random key (decrypt still tries the legacy derivation so old
+ * ciphertext upgrades transparently).
+ */
+import { encryptSecret, decryptSecret } from '../../shared/secret-box.js';
 
 export function encryptProviderSecret(value: string): string {
-  if (!value || value.startsWith(PREFIX)) return value;
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', encryptionKey(), iv);
-  const ciphertext = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
-  const tag = cipher.getAuthTag();
-  return `${PREFIX}${iv.toString('base64url')}.${tag.toString('base64url')}.${ciphertext.toString('base64url')}`;
+  return encryptSecret(value);
 }
 
 export function decryptProviderSecret(value: string): string {
-  if (!value || !value.startsWith(PREFIX)) return value;
-  try {
-    const [iv, tag, ciphertext] = value.slice(PREFIX.length).split('.');
-    const decipher = crypto.createDecipheriv('aes-256-gcm', encryptionKey(), Buffer.from(iv, 'base64url'));
-    decipher.setAuthTag(Buffer.from(tag, 'base64url'));
-    return Buffer.concat([decipher.update(Buffer.from(ciphertext, 'base64url')), decipher.final()]).toString('utf8');
-  } catch {
-    return '';
-  }
+  return decryptSecret(value);
 }

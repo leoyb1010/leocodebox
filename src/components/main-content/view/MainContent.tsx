@@ -9,7 +9,8 @@ import { useUiPreferences } from '../../../hooks/useUiPreferences';
 import { useFileOpenResolver } from '../../../hooks/useFileOpenResolver';
 import { apiClient } from '../../../utils/apiClient';
 import { useEditorSidebar } from '../../code-editor/hooks/useEditorSidebar';
-import type { Project } from '../../../types/app';
+import type { LLMProvider, Project } from '../../../types/app';
+import type { OpenMissionSession } from '../../missions/view/MissionsView';
 
 import MainContentHeader from './subcomponents/MainContentHeader';
 import MainContentStateView from './subcomponents/MainContentStateView';
@@ -94,6 +95,25 @@ function MainContent({
   // Resolves bare/partial file references (e.g. links inside chat messages) to
   // real project files before opening them in the in-app editor.
   const resolvedFileOpen = useFileOpenResolver(selectedProject, handleFileOpen);
+
+  // Bridge from the mission board (L4) into the chat session that a card runs
+  // in. On "开工" we also send the card goal as the first prompt so the agent
+  // actually starts working; the "打开会话" button reuses the same jump without
+  // re-sending. Optimistically register the session so it appears in the
+  // sidebar with the correct provider before the next projects refresh.
+  const handleOpenMissionSession = useCallback<OpenMissionSession>(
+    ({ sessionId, goal, provider, sendGoal }) => {
+      if (selectedProject) {
+        onSessionEstablished(sessionId, { provider: provider as LLMProvider, project: selectedProject, summary: goal });
+      }
+      setActiveTab('chat');
+      onNavigateToSession(sessionId);
+      if (sendGoal) {
+        sendMessage({ type: 'chat.send', sessionId, content: goal, options: {} });
+      }
+    },
+    [onSessionEstablished, selectedProject, setActiveTab, onNavigateToSession, sendMessage],
+  );
 
   useEffect(() => {
     // Identify projects by DB `projectId`; the TaskMaster context uses the
@@ -241,7 +261,7 @@ function MainContent({
             <div className="workspace-tab-panel h-full overflow-hidden" data-active="true">
               <ErrorBoundary showDetails>
               <React.Suspense fallback={panelFallback}>
-                <MissionsView selectedProject={selectedProject} />
+                <MissionsView selectedProject={selectedProject} onOpenMissionSession={handleOpenMissionSession} />
               </React.Suspense>
               </ErrorBoundary>
             </div>

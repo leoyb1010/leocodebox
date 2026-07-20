@@ -7,6 +7,7 @@
  */
 
 import { getConnection } from '@/modules/database/connection.js';
+import { encryptSecret, decryptSecret } from '@/shared/secret-box.js';
 import type {
   CreateCredentialResult,
   CredentialPublicRow,
@@ -30,7 +31,7 @@ export const credentialsDb = {
       .prepare(
         'INSERT INTO user_credentials (user_id, credential_name, credential_type, credential_value, description) VALUES (?, ?, ?, ?, ?)'
       )
-      .run(userId, credentialName, credentialType, credentialValue, description);
+      .run(userId, credentialName, credentialType, encryptSecret(credentialValue), description);
     return {
       id: result.lastInsertRowid,
       credentialName,
@@ -77,7 +78,7 @@ export const credentialsDb = {
         'SELECT credential_value FROM user_credentials WHERE user_id = ? AND credential_type = ? AND is_active = 1 ORDER BY created_at DESC LIMIT 1'
       )
       .get(userId, credentialType) as { credential_value: string } | undefined;
-    return row?.credential_value ?? null;
+    return row ? decryptSecret(row.credential_value) : null;
   },
 
   /** Permanently removes a credential. Returns true if a row was deleted. */

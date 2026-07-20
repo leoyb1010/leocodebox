@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { GitBranch, Play, RotateCcw, Check, Trash2, Plus, RefreshCw } from 'lucide-react';
+import { GitBranch, GitMerge, Play, RotateCcw, Check, Trash2, Plus, RefreshCw, MessageSquare } from 'lucide-react';
 
 import { apiClient } from '../../../utils/apiClient';
 import { Button, Input } from '../../../shared/view/ui';
@@ -22,7 +22,20 @@ type MissionCard = {
   updatedAt: string;
 };
 
-type MissionsViewProps = { selectedProject: Project };
+/** Jump from a mission card into its chat session. `sendGoal` sends the card
+ * goal as the first prompt (used by "开工"); the open button reuses it with
+ * `sendGoal: false` to just surface the running session. */
+export type OpenMissionSession = (opts: {
+  sessionId: string;
+  goal: string;
+  provider: string;
+  sendGoal: boolean;
+}) => void;
+
+type MissionsViewProps = {
+  selectedProject: Project;
+  onOpenMissionSession?: OpenMissionSession;
+};
 
 const COLUMNS: { status: MissionStatus; labelKey: string; label: string }[] = [
   { status: 'backlog', labelKey: 'missions.columns.backlog', label: '待办' },
@@ -31,7 +44,7 @@ const COLUMNS: { status: MissionStatus; labelKey: string; label: string }[] = [
   { status: 'done', labelKey: 'missions.columns.done', label: '完成' },
 ];
 
-export default function MissionsView({ selectedProject }: MissionsViewProps) {
+export default function MissionsView({ selectedProject, onOpenMissionSession }: MissionsViewProps) {
   const { t } = useTranslation('chat');
   const projectPath = selectedProject.fullPath || selectedProject.path || '';
   const [cards, setCards] = useState<MissionCard[]>([]);
@@ -78,19 +91,55 @@ export default function MissionsView({ selectedProject }: MissionsViewProps) {
   const discardCard = (card: MissionCard) => {
     const force = card.worktreeId ? window.confirm(t('missions.discardConfirm', { defaultValue: '该任务有未提交改动,确认丢弃并删除 worktree?' })) : true;
     if (!force && card.worktreeId) return;
-    return act(() => apiClient.delete(`/api/leocodebox/missions/${card.id}/discard?force=${force ? 'true' : 'false'}`), card.id);
+    return act(() => apiClient.post(`/api/leocodebox/missions/${card.id}/discard?force=${force ? 'true' : 'false'}`), card.id);
   };
+
+  const openAction = (card: MissionCard) => ({
+    key: 'open',
+    icon: MessageSquare,
+    label: t('missions.actions.open', { defaultValue: '打开会话' }),
+    run: () => { if (card.sessionId) onOpenMissionSession?.({ sessionId: card.sessionId, goal: card.goal, provider: card.provider, sendGoal: false }); },
+  });
 
   const cardActions = (card: MissionCard) => {
     switch (card.status) {
       case 'backlog':
-        return [{ key: 'start', icon: Play, label: t('missions.actions.start', { defaultValue: '开工' }), run: () => act(() => apiClient.post(`/api/leocodebox/missions/${card.id}/start`), card.id) }];
+        return [{
+          key: 'start', icon: Play, label: t('missions.actions.start', { defaultValue: '开工' }),
+          run: () => act(async () => {
+            // Starting a card creates its bound session server-side; jump into
+            // that chat and send the goal as the first prompt so the agent runs.
+            const resp = await apiClient.post<{ card?: MissionCard }>(`/api/leocodebox/missions/${card.id}/start`);
+            if (resp?.card?.sessionId) {
+              onOpenMissionSession?.({ sessionId: resp.card.sessionId, goal: resp.card.goal, provider: resp.card.provider, sendGoal: true });
+            }
+          }, card.id),
+        }];
       case 'running':
-        return [{ key: 'review', icon: Check, label: t('missions.actions.toReview', { defaultValue: '送审' }), run: () => act(() => apiClient.post(`/api/leocodebox/missions/${card.id}/transition`, { to: 'review' }), card.id) }];
+        return [
+          { key: 'review', icon: Check, label: t('missions.actions.toReview', { defaultValue: '送审' }), run: () => act(() => apiClient.post(`/api/leocodebox/missions/${card.id}/transition`, { to: 'review' }), card.id) },
+          openAction(card),
+        ];
       case 'review':
         return [
+          ...(card.worktreeId ? [{
+            key: 'merge', icon: GitMerge, label: t('missions.actions.merge', { defaultValue: '合并完成' }),
+            run: () => act(async () => {
+              // The board's L4 close: merge the card's worktree back into its
+              // base branch, then mark the card done. The server previews first
+              // and refuses on conflicts, so this never force-merges.
+              const resp = await apiClient.post<{ merged?: boolean; conflicts?: string[] }>(`/api/leocodebox/worktrees/${card.worktreeId}/merge`);
+              if (resp?.merged) {
+                await apiClient.post(`/api/leocodebox/missions/${card.id}/complete`);
+              } else {
+                const files = (resp?.conflicts ?? []).join(', ');
+                throw new Error(t('missions.mergeConflict', { defaultValue: '合并存在冲突,请先在会话中解决:{{files}}', files }));
+              }
+            }, card.id),
+          }] : []),
           { key: 'done', icon: Check, label: t('missions.actions.complete', { defaultValue: '完成' }), run: () => act(() => apiClient.post(`/api/leocodebox/missions/${card.id}/complete`), card.id) },
           { key: 'retry', icon: RotateCcw, label: t('missions.actions.retry', { defaultValue: '重试' }), run: () => act(() => apiClient.post(`/api/leocodebox/missions/${card.id}/retry`), card.id) },
+          openAction(card),
         ];
       default:
         return [];

@@ -9,6 +9,7 @@ import spawn from 'cross-spawn';
 
 import { appConfigDb } from '@/modules/database/index.js';
 import { providerMcpService } from '@/modules/providers/index.js';
+import { encryptSecret, decryptSecret, isEncrypted } from '@/shared/secret-box.js';
 import { getModuleDir } from '@/utils/runtime-paths.js';
 
 const require = createRequire(import.meta.url);
@@ -129,13 +130,18 @@ function writeSettings(settings: BrowserUseSettings): BrowserUseSettings {
 }
 
 async function getOrCreateMcpToken(): Promise<string> {
-  const existing = appConfigDb.get(BROWSER_USE_MCP_TOKEN_KEY);
-  if (existing) {
-    await syncMcpTokenFile(existing);
-    return existing;
+  const stored = appConfigDb.get(BROWSER_USE_MCP_TOKEN_KEY);
+  if (stored) {
+    // The token is stored encrypted at rest; the 0600 file mirror stays
+    // plaintext because the spawned MCP process reads it directly. Upgrade a
+    // legacy plaintext row to ciphertext in place, once.
+    const token = isEncrypted(stored) ? decryptSecret(stored) : stored;
+    if (!isEncrypted(stored)) appConfigDb.set(BROWSER_USE_MCP_TOKEN_KEY, encryptSecret(token));
+    await syncMcpTokenFile(token);
+    return token;
   }
   const token = randomBytes(32).toString('hex');
-  appConfigDb.set(BROWSER_USE_MCP_TOKEN_KEY, token);
+  appConfigDb.set(BROWSER_USE_MCP_TOKEN_KEY, encryptSecret(token));
   await syncMcpTokenFile(token);
   return token;
 }
