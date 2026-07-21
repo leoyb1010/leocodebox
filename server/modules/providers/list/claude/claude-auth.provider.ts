@@ -135,12 +135,14 @@ export class ClaudeProviderAuth implements IProviderAuth {
       return { authenticated: true, email: 'Configured via settings.json', method: 'api_key' };
     }
 
+    // Only a POSITIVE CLI result is authoritative. In the GUI-launched app the
+    // spawned CLI's runtime env differs from the user's shell (and on macOS the
+    // CLI may report `authMethod: none` even when a login exists), so a negative
+    // `claude auth status` must NOT override a completed `claude /login` — fall
+    // through to the on-disk OAuth token, which is the durable source of truth.
     const cliStatus = await this.checkCliAuthStatus();
-    if (cliStatus) {
-      return {
-        ...cliStatus,
-        error: cliStatus.authenticated ? undefined : missingCredentialsError,
-      };
+    if (cliStatus?.authenticated) {
+      return cliStatus;
     }
 
     try {
