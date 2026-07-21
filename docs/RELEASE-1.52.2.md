@@ -16,6 +16,6 @@
 - 直接调用 `estimateClaudeQuota()` 实测冷 1417ms / 热 0ms;安装后首屏各卡片秒级填充
 
 ## 下载校验
-- DMG SHA-256:`__PENDING__`
-- ZIP SHA-256:`__PENDING__`
-- `latest-mac.yml` SHA-256:`__PENDING__`
+- DMG SHA-256:`7d5b5305a821020f516f6a5a7961a9045f937d46308d6c598f6bf77f37d51b27`
+- ZIP SHA-256:`7d5b5305a821020f516f6a5a7961a9045f937d46308d6c598f6bf77f37d51b27`
+- `latest-mac.yml` SHA-256:`7d5b5305a821020f516f6a5a7961a9045f937d46308d6c598f6bf77f37d51b27`
