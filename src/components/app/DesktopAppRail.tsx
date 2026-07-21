@@ -2,6 +2,7 @@ import {
   Activity,
   FolderKanban,
   GitBranch,
+  LayoutDashboard,
   LayoutGrid,
   MessageSquare,
   Settings,
@@ -22,6 +23,7 @@ type DesktopAppRailProps = {
 };
 
 const primaryItems = [
+  { id: 'dashboard', labelKey: 'workspaceShell.dashboard', icon: LayoutDashboard, tab: 'dashboard' as AppTab, fallback: '首页' },
   { id: 'projects', labelKey: 'workspaceShell.projects', icon: FolderKanban, tab: 'files' as AppTab, fallback: '项目' },
   { id: 'chat', labelKey: 'workspaceShell.chat', icon: MessageSquare, tab: 'chat' as AppTab, fallback: '对话' },
   { id: 'missions', labelKey: 'workspaceShell.missions', icon: LayoutGrid, tab: 'missions' as AppTab, fallback: '任务' },

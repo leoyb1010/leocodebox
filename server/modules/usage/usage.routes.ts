@@ -2,6 +2,7 @@ import express from 'express';
 
 import { listArsenal } from '@/shared/model-arsenal.js';
 
+import { estimateClaudeQuota, getClaudePlan, setClaudePlan } from './claude-quota.service.js';
 import { getModelPrices, setModelPrices, usageDb } from './usage.db.js';
 
 const router = express.Router();
@@ -19,4 +20,16 @@ router.get('/summary', (req, res) => {
     provider: read(req.query.provider),
   }) });
 });
+
+// Claude subscription quota estimate — a LOCAL estimate from session logs,
+// not an official account query. See claude-quota.service.ts.
+router.get('/claude-quota', async (_req, res, next) => {
+  try {
+    res.json({ success: true, quota: await estimateClaudeQuota() });
+  } catch (error) {
+    next(error);
+  }
+});
+router.get('/claude-quota/plan', (_req, res) => res.json({ success: true, plan: getClaudePlan() }));
+router.put('/claude-quota/plan', (req, res) => res.json({ success: true, plan: setClaudePlan(req.body?.plan) }));
 export default router;

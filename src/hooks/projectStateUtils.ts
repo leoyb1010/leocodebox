@@ -308,7 +308,7 @@ export const removeSessionFromProject = (project: Project, sessionIdToDelete: st
   return updatedProject;
 };
 
-const VALID_TABS: Set<string> = new Set(['chat', 'files', 'shell', 'git', 'tasks', 'browser', 'missions']);
+const VALID_TABS: Set<string> = new Set(['dashboard', 'chat', 'files', 'shell', 'git', 'tasks', 'browser', 'missions']);
 
 export const isValidTab = (tab: string): tab is AppTab => {
   return VALID_TABS.has(tab) || tab.startsWith('plugin:');
@@ -323,7 +323,9 @@ export const readPersistedTab = (): AppTab => {
   } catch {
     // localStorage unavailable
   }
-  return 'chat';
+  // Dashboard is the landing page for fresh installs; anyone with a persisted
+  // tab keeps their habit (see the Settings "启动页" option).
+  return 'dashboard';
 };
 
 const LAST_SESSION_KEY = 'last-session-id';

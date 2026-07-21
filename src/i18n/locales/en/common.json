@@ -313,7 +313,8 @@
     "healthOk": "Environment ready",
     "healthWarn": "{{count}} to review",
     "healthFail": "{{count}} not working",
-    "healthChecking": "Checking…"
+    "healthChecking": "Checking…",
+    "dashboard": "Home"
   },
   "errorBoundary": {
     "regionTitle": "This area could not be loaded",

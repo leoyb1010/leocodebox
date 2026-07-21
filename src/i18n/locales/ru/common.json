@@ -275,7 +275,8 @@
     "tasksRunning": "{{count}} tasks running",
     "agentIdle": "Agent idle",
     "localOnly": "Local only",
-    "autoSave": "Auto-save"
+    "autoSave": "Auto-save",
+    "dashboard": "Главная"
   },
   "errorBoundary": {
     "regionTitle": "This area could not be loaded",

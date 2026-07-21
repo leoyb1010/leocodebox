@@ -9,7 +9,7 @@ import { useUiPreferences } from '../../../hooks/useUiPreferences';
 import { useFileOpenResolver } from '../../../hooks/useFileOpenResolver';
 import { apiClient } from '../../../utils/apiClient';
 import { useEditorSidebar } from '../../code-editor/hooks/useEditorSidebar';
-import type { LLMProvider, Project } from '../../../types/app';
+import type { AppTab, LLMProvider, Project } from '../../../types/app';
 import type { OpenMissionSession } from '../../missions/view/MissionsView';
 
 import MainContentHeader from './subcomponents/MainContentHeader';
@@ -26,6 +26,7 @@ const PluginTabContent = React.lazy(() => import('../../plugins/view/PluginTabCo
 const BrowserUsePanel = React.lazy(() => import('../../browser-use/view/BrowserUsePanel'));
 const ConversationAuditPanel = React.lazy(() => import('../../conversation-audit/view/ConversationAuditPanel'));
 const MissionsView = React.lazy(() => import('../../missions/view/MissionsView'));
+const DashboardView = React.lazy(() => import('../../dashboard/DashboardView'));
 const EditorSidebar = React.lazy(() => import('../../code-editor/view/EditorSidebar'));
 const TaskMasterPanel = React.lazy(() => import('../../task-master/view/TaskMasterPanel'));
 
@@ -195,6 +196,23 @@ function MainContent({
 
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <div className={`flex min-h-0 min-w-[200px] flex-col overflow-hidden ${editorExpanded ? 'hidden' : ''} flex-1`}>
+          {activeTab === 'dashboard' && (
+            <div className="workspace-tab-panel h-full overflow-hidden" data-active="true">
+              <ErrorBoundary showDetails>
+              <React.Suspense fallback={panelFallback}>
+                <DashboardView
+                  onNavigateToSession={(sessionId) => {
+                    setActiveTab('chat');
+                    onNavigateToSession(sessionId);
+                  }}
+                  onShowTab={(tab) => setActiveTab(tab as AppTab)}
+                  onNewChat={() => setActiveTab('chat')}
+                />
+              </React.Suspense>
+              </ErrorBoundary>
+            </div>
+          )}
+
           <div className={`workspace-tab-panel h-full ${activeTab === 'chat' ? 'block' : 'hidden'}`} data-active={activeTab === 'chat'}>
             <ErrorBoundary showDetails>
               <React.Suspense fallback={panelFallback}>

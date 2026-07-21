@@ -265,6 +265,16 @@
     --elevation-1: 0 1px 2px hsl(220 20% 2% / 0.05);
     --elevation-2: 0 4px 12px hsl(220 20% 2% / 0.08);
     --elevation-3: 0 12px 30px hsl(220 20% 2% / 0.12);
+
+    /* Dashboard / upgraded motion language. Three curves + three durations so
+       every animation across the app speaks the same language. Reuses the
+       existing --motion-* values where they already fit. */
+    --ease-standard: var(--motion-ease-out);                 /* 0.2,0,0,1 — regular in/out */
+    --ease-emphasized: cubic-bezier(0.05, 0.7, 0.1, 1);      /* card entrance, overlays */
+    --ease-out-expo: var(--motion-spring);                   /* 0.16,1,0.3,1 — stagger, number tween */
+    --dur-fast: var(--motion-fast);                          /* 120ms hover/press */
+    --dur-base: var(--motion-base);                          /* 200ms regular transitions */
+    --dur-slow: var(--motion-slow);                          /* 320ms entrance/page transition */
     --z-popover: 40;
     --z-sheet: 50;
     --z-dialog: 60;
@@ -334,6 +344,70 @@
       transition-duration: 0.01ms !important;
       scroll-behavior: auto !important;
     }
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Dashboard entrance & interaction motion.
+ * Only transform + opacity are animated so these stay on the compositor and
+ * never jank. Everything collapses to instant under reduced-motion (handled
+ * globally above).
+ * ------------------------------------------------------------------------- */
+@keyframes dash-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dash-live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@layer utilities {
+  /* Staggered card entrance: apply .dash-enter to each card and set
+     --dash-delay per sibling (0ms / 40ms / 80ms …). */
+  .dash-enter {
+    animation: dash-rise var(--dur-slow) var(--ease-emphasized) both;
+    animation-delay: var(--dash-delay, 0ms);
+    will-change: opacity, transform;
+  }
+
+  /* Interactive card: lifts + deepens shadow on hover. Composes with the base
+     Card via an extra className. */
+  .dash-card-interactive {
+    transition: transform var(--dur-fast) var(--ease-standard),
+      box-shadow var(--dur-fast) var(--ease-standard),
+      border-color var(--dur-fast) var(--ease-standard);
+  }
+  .dash-card-interactive:hover {
+    transform: translateY(-1px);
+    box-shadow: var(--elevation-2);
+  }
+
+  /* Live indicator dot on the running-sessions card. */
+  .dash-live-dot {
+    animation: dash-live-pulse 2s var(--ease-standard) infinite;
+  }
+
+  /* Status dot colour transitions when an agent logs in/out. */
+  .dash-status-dot {
+    transition: background-color var(--dur-base) var(--ease-standard);
+  }
+
+  /* Progress/quota bar fill animates when the value changes. */
+  .dash-bar-fill {
+    transition: width var(--dur-base) var(--ease-out-expo);
   }
 }
 

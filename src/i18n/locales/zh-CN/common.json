@@ -313,7 +313,8 @@
     "healthOk": "环境就绪",
     "healthWarn": "{{count}} 项注意",
     "healthFail": "{{count}} 项异常",
-    "healthChecking": "体检中…"
+    "healthChecking": "体检中…",
+    "dashboard": "首页"
   },
   "errorBoundary": {
     "regionTitle": "此区域暂时无法加载",

@@ -305,7 +305,8 @@
     "tasksRunning": "{{count}} tasks running",
     "agentIdle": "Agent idle",
     "localOnly": "Local only",
-    "autoSave": "Auto-save"
+    "autoSave": "Auto-save",
+    "dashboard": "홈"
   },
   "errorBoundary": {
     "regionTitle": "This area could not be loaded",
