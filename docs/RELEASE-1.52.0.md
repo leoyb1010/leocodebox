@@ -25,6 +25,6 @@
 - **修复一处发布阻断**:随包的 better-sqlite3/node-pty/bcrypt 原生模块此前被按 plain-node ABI 重建(会导致打包后 Electron 加载 DB 失败),已 electron-rebuild 回 Electron 43 ABI,server 测试 299 全绿、原生模块可正常加载
 
 ## 下载校验
-- DMG SHA-256:`__PENDING__`
-- ZIP SHA-256:`__PENDING__`
-- `latest-mac.yml` SHA-256:`__PENDING__`
+- DMG SHA-256:`23116b806d8fbaf6ea25c92104f321679066cfe3705b8840c87242691d346d9b`
+- ZIP SHA-256:`0e00619ca1c0ceeba0de8db597e42e0dd61b9141dc50427c28b53a20ab092a43`
+- `latest-mac.yml` SHA-256:`eee4463f716048a286cf7892cf3afab64768f4c80b5acfa8a46623940eb0e97e`
