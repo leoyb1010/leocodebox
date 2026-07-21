@@ -20,6 +20,6 @@
 - 修复后用本机 token 实测 6 个驾驶舱端点均返回正确数据(见发布记录)
 
 ## 下载校验
-- DMG SHA-256:`__PENDING__`
-- ZIP SHA-256:`__PENDING__`
-- `latest-mac.yml` SHA-256:`__PENDING__`
+- DMG SHA-256:`4edc7b1b76b9b94358495508a12499d0299e7a5c81db647221cc7a762d33bf13`
+- ZIP SHA-256:`2f90594b92bfe3f3cd92e03117a9091abe13d360d1525729dbedec00b9973ad4`
+- `latest-mac.yml` SHA-256:`0796c24ce862ac72e299f91a36426b58a6b7646be6462fda8113b217f61124b0`
