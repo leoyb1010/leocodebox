@@ -14,6 +14,6 @@
 - 原生模块 ABI 复核:better-sqlite3 在 Electron 运行时正常加载
 
 ## 下载校验
-- DMG SHA-256:`__PENDING__`
-- ZIP SHA-256:`__PENDING__`
-- `latest-mac.yml` SHA-256:`__PENDING__`
+- DMG SHA-256:`b9bf10f828a0cd89b7e2dc44dc2aad416ecb5212808f300334394a0242af6376`
+- ZIP SHA-256:`7c0c0514200cc5719ea75f77f0df985024091847225dab54b967181c38e277a4`
+- `latest-mac.yml` SHA-256:`6b1286dacb91ba3cdcfd4733d2c151ddf6a5ec29f603932b4b54b98c54e537ac`
