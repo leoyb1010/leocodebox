@@ -78,7 +78,7 @@ function addUsage(win: WindowAggregate, usage: Record<string, unknown>, tsMs: nu
   if (win.oldestMs === null || tsMs < win.oldestMs) win.oldestMs = tsMs;
 }
 
-async function collectJsonlFiles(rootDir: string, maxDepth = 3): Promise<string[]> {
+async function collectJsonlFiles(rootDir: string, sinceMs: number, maxDepth = 3): Promise<string[]> {
   const results: string[] = [];
   async function walk(dir: string, depth: number): Promise<void> {
     if (depth > maxDepth) return;
@@ -93,12 +93,31 @@ async function collectJsonlFiles(rootDir: string, maxDepth = 3): Promise<string[
       if (entry.isDirectory()) {
         await walk(full, depth + 1);
       } else if (entry.isFile() && entry.name.endsWith('.jsonl')) {
-        results.push(full);
+        // Only files touched within the widest window can hold in-range entries.
+        // The projects dir accumulates tens of thousands of old logs (2GB+); a
+        // stat is far cheaper than streaming every one, so prune by mtime here.
+        try {
+          const st = await fsp.stat(full);
+          if (st.mtimeMs >= sinceMs) results.push(full);
+        } catch {
+          // Unreadable — skip.
+        }
       }
     }
   }
   await walk(rootDir, 0);
   return results;
+}
+
+async function mapWithConcurrency<T>(items: T[], limit: number, fn: (item: T) => Promise<void>): Promise<void> {
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor++;
+      await fn(items[index]);
+    }
+  });
+  await Promise.all(workers);
 }
 
 async function aggregateFile(filePath: string, five: WindowAggregate, week: WindowAggregate, nowMs: number): Promise<void> {
@@ -173,19 +192,29 @@ function buildWindow(agg: WindowAggregate, nowMs: number, windowMs: number): Cla
  * Reset for a rolling window is estimated as (oldest contributing turn +
  * window length); with no usage it equals now.
  */
+// Scanning tens of thousands of session logs is expensive, and the dashboard
+// polls this every 30s. Serve a recent result from a short-lived cache so only
+// the first call after each window pays for the scan.
+let quotaCache: { at: number; result: ClaudeQuotaEstimateResult } | null = null;
+const QUOTA_CACHE_TTL_MS = 60_000; // longer than the dashboard's 30s poll so polls hit cache
+
 export async function estimateClaudeQuota(): Promise<ClaudeQuotaEstimateResult> {
+  if (quotaCache && Date.now() - quotaCache.at < QUOTA_CACHE_TTL_MS) {
+    return quotaCache.result;
+  }
+
   const plan = getClaudePlan();
   const projectsDir = path.join(os.homedir(), '.claude', 'projects');
   const nowMs = Date.now();
 
   const five = newWindow();
   const week = newWindow();
-  const files = await collectJsonlFiles(projectsDir);
-  for (const file of files) {
-    await aggregateFile(file, five, week, nowMs);
-  }
+  // Only files modified within the 7d window can contribute; pruning by mtime
+  // turns a 2GB full read into a few recent files. Read them concurrently.
+  const files = await collectJsonlFiles(projectsDir, nowMs - SEVEN_DAYS_MS);
+  await mapWithConcurrency(files, 16, (file) => aggregateFile(file, five, week, nowMs));
 
-  return {
+  const result: ClaudeQuotaEstimateResult = {
     plan,
     planLabel: PLAN_LABEL[plan],
     source: 'local-measurement',
@@ -193,4 +222,6 @@ export async function estimateClaudeQuota(): Promise<ClaudeQuotaEstimateResult> 
     weekly: buildWindow(week, nowMs, SEVEN_DAYS_MS),
     filesScanned: files.length,
   };
+  quotaCache = { at: Date.now(), result };
+  return result;
 }
