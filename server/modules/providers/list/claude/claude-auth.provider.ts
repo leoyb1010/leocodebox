@@ -80,18 +80,11 @@ export class ClaudeProviderAuth implements IProviderAuth {
       };
     }
 
-    if (!install.runnable) {
-      return {
-        installed: true,
-        provider: 'claude',
-        authenticated: false,
-        email: null,
-        method: null,
-        version: null,
-        error: `Claude Code CLI was found but could not run: ${install.error}`,
-      };
-    }
-
+    // A failed `--version` probe (notably `spawn EBADF`, a persistent fd issue
+    // when the app is GUI-launched without a controlling terminal) must NOT mask
+    // the login state — credentials live in files we read without spawning. So
+    // proceed to the auth check even when the version probe couldn't run; the
+    // version stays null and cli/status is the source of truth for runnability.
     const credentials = await this.checkCredentials();
 
     return {

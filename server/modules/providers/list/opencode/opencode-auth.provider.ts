@@ -59,17 +59,8 @@ export class OpenCodeProviderAuth implements IProviderAuth {
         error: 'OpenCode CLI is not installed',
       };
     }
-    if (!install.runnable) {
-      return {
-        installed: true,
-        provider: 'opencode',
-        authenticated: false,
-        email: null,
-        method: null,
-        version: null,
-        error: `OpenCode CLI was found but could not run: ${install.error}`,
-      };
-    }
+    // Don't let a failed `--version` probe (e.g. `spawn EBADF` in the GUI-launched
+    // app) mask the login state — proceed to the file-based auth check below.
     const credentials = await this.checkCredentials();
 
     return {

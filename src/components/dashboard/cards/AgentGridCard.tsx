@@ -47,7 +47,7 @@ export default function AgentGridCard({ cliTools, providerAuth, loading, error, 
   const handleInstall = async (id: string) => {
     setInstalling(id);
     try {
-      await apiClient.post(`/api/leocodebox/cli-tools/${id}/install`);
+      await apiClient.post(`/api/leocodebox/cli/${id}/install`);
       onRefresh();
     } catch {
       // Error surfaces on next poll; keep the card usable.

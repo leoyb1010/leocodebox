@@ -74,7 +74,7 @@ export function useDashboardData(): DashboardData {
 
   const loadCliTools = useCallback(async () => {
     try {
-      const payload = await apiClient.get<CliToolsStatusPayload>('/api/leocodebox/cli-tools/status');
+      const payload = await apiClient.get<CliToolsStatusPayload>('/api/leocodebox/cli/status');
       if (!mountedRef.current) return;
       setCliTools({ data: Array.isArray(payload.tools) ? payload.tools : [], loading: false, error: null });
     } catch (error) {
@@ -131,7 +131,7 @@ export function useDashboardData(): DashboardData {
 
   const loadMissions = useCallback(async () => {
     try {
-      const payload = await apiClient.get<{ success?: boolean; cards?: MissionCard[] }>('/api/missions');
+      const payload = await apiClient.get<{ success?: boolean; cards?: MissionCard[] }>('/api/leocodebox/missions');
       if (!mountedRef.current) return;
       setMissions({ data: Array.isArray(payload.cards) ? payload.cards : [], loading: false, error: null });
     } catch (error) {

@@ -29,9 +29,8 @@ export class GrokProviderAuth implements IProviderAuth {
     if (!install.installed) {
       return { installed: false, provider: 'grok', authenticated: false, email: null, method: null, version: null, error: 'Grok Build CLI is not installed' };
     }
-    if (!install.runnable) {
-      return { installed: true, provider: 'grok', authenticated: false, email: null, method: null, version: null, error: `Grok Build CLI was found but could not run: ${install.error}` };
-    }
+    // Don't let a failed `--version` probe (e.g. `spawn EBADF` in the GUI-launched
+    // app) mask the login state — proceed to the ~/.grok/auth.json check below.
 
     const authed = await this.hasCredentials();
     return {

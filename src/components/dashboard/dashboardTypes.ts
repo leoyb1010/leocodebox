@@ -42,12 +42,12 @@ export type UsageSummaryRow = {
 };
 
 export type MissionCard = {
-  card_id: string;
+  id: string;
   title: string;
   goal?: string;
   provider?: string;
   status: 'backlog' | 'running' | 'review' | 'done' | 'discarded';
-  cost_usd?: number | null;
+  costUsd?: number | null;
 };
 
 export type RunningSession = {

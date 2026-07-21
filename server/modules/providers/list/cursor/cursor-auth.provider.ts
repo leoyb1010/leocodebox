@@ -57,17 +57,8 @@ export class CursorProviderAuth implements IProviderAuth {
       };
     }
 
-    if (!install.runnable) {
-      return {
-        installed: true,
-        provider: 'cursor',
-        authenticated: false,
-        email: null,
-        method: null,
-        version: null,
-        error: `Cursor CLI was found but could not run: ${install.error}`,
-      };
-    }
+    // Don't let a failed `--version` probe (e.g. `spawn EBADF` in the GUI-launched
+    // app) mask the login state — proceed to the auth check below.
 
     const login = await this.checkCursorLogin();
     return {

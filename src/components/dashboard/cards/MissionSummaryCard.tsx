@@ -73,7 +73,7 @@ export default function MissionSummaryCard({ missions, loading, error, onOpenMis
           {running.length > 0 && (
             <div className="mt-3 space-y-1.5 border-t border-border pt-3">
               {running.map((card) => (
-                <div key={card.card_id} className="flex items-center gap-2 text-[12px]">
+                <div key={card.id} className="flex items-center gap-2 text-[12px]">
                   <span className="h-1.5 w-1.5 flex-shrink-0 rounded-full bg-success" />
                   <span className="truncate text-foreground">{card.title}</span>
                 </div>
