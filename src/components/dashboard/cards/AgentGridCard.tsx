@@ -87,7 +87,11 @@ export default function AgentGridCard({ cliTools, providerAuth, loading, error, 
             return (
               <div
                 key={agent.id}
-                className={`rounded-lg p-3 transition-colors ${installed ? 'bg-secondary/60' : 'border border-dashed border-border bg-transparent'}`}
+                className={`rounded-lg p-3 transition-all ${
+                  installed
+                    ? 'border border-transparent bg-secondary/60 hover:border-primary/25 hover:bg-secondary/90 hover:shadow-elevation-1'
+                    : 'border border-dashed border-border bg-transparent hover:border-border'
+                }`}
               >
                 <div className="mb-1 flex items-center gap-2">
                   <StatusDot tone={tone} />

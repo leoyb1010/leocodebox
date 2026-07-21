@@ -10,6 +10,8 @@ import { DashCard, DashCardTitle, DashEmpty, DashSkeleton } from './dashShared';
 
 type RunningSessionsCardProps = {
   onOpenSession?: (sessionId: string) => void;
+  /** Called whenever the live running count changes (for the hero metric). */
+  onCountChange?: (count: number) => void;
   delay?: number;
 };
 
@@ -44,7 +46,7 @@ const PROVIDER_LABEL: Record<string, string> = {
 };
 
 /** Live list of in-flight agent runs, kept fresh via polling + WS nudges. */
-export default function RunningSessionsCard({ onOpenSession, delay = 0 }: RunningSessionsCardProps) {
+export default function RunningSessionsCard({ onOpenSession, onCountChange, delay = 0 }: RunningSessionsCardProps) {
   const { t } = useTranslation();
   const { subscribe } = useWebSocket();
   const [sessions, setSessions] = useState<RunningSession[] | null>(null);
@@ -59,6 +61,11 @@ export default function RunningSessionsCard({ onOpenSession, delay = 0 }: Runnin
       setSessions((prev) => prev ?? []);
     }
   }, []);
+
+  // Report the live count upward so the hero metric stays in sync.
+  useEffect(() => {
+    onCountChange?.(sessions?.length ?? 0);
+  }, [sessions, onCountChange]);
 
   useEffect(() => {
     void load();
@@ -83,14 +90,16 @@ export default function RunningSessionsCard({ onOpenSession, delay = 0 }: Runnin
     return unsubscribe;
   }, [subscribe, load]);
 
+  const runningCount = sessions?.length ?? 0;
+
   return (
     <DashCard delay={delay} className="p-4">
       <DashCardTitle
         title={t('dashboard.runningTitle', { defaultValue: '运行中会话' })}
         action={
-          <span className="inline-flex items-center gap-1.5 text-[12px] text-success">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-success/10 px-2 py-0.5 text-[12px] font-medium text-success">
             <span className="dash-live-dot inline-block h-1.5 w-1.5 rounded-full bg-success" />
-            Live
+            {runningCount > 0 ? t('dashboard.liveCount', { count: runningCount, defaultValue: `${runningCount} 运行中` }) : 'Live'}
           </span>
         }
       />
@@ -112,17 +121,20 @@ export default function RunningSessionsCard({ onOpenSession, delay = 0 }: Runnin
                 key={session.sessionId}
                 type="button"
                 onClick={() => onOpenSession?.(session.sessionId)}
-                className="block w-full rounded-lg bg-secondary/60 p-3 text-left transition-colors hover:bg-secondary"
+                className="block w-full rounded-lg border border-transparent bg-secondary/60 p-3 text-left transition-all hover:border-primary/30 hover:bg-secondary hover:shadow-elevation-1"
               >
                 <div className="mb-0.5 flex items-center justify-between gap-2">
-                  <span className="truncate text-[13px] font-medium text-foreground">
-                    {PROVIDER_LABEL[session.provider] ?? session.provider}
+                  <span className="flex min-w-0 items-center gap-1.5">
+                    <span className="dash-live-dot inline-block h-1.5 w-1.5 flex-shrink-0 rounded-full bg-success" />
+                    <span className="truncate text-[13px] font-medium text-foreground">
+                      {PROVIDER_LABEL[session.provider] ?? session.provider}
+                    </span>
                   </span>
                   <span className="font-mono text-[12px] tabular-nums text-muted-foreground">
                     {formatDuration(elapsed)}
                   </span>
                 </div>
-                <div className="truncate text-[12px] text-muted-foreground">
+                <div className="truncate pl-3 text-[12px] text-muted-foreground">
                   {session.statusText || t('dashboard.runningBusy', { defaultValue: '处理中…' })}
                 </div>
               </button>

@@ -8,6 +8,7 @@ import type {
   CliToolsStatusPayload,
   MissionCard,
   ProviderAuthStatus,
+  RunningSession,
   UsageSummaryRow,
 } from '../components/dashboard/dashboardTypes';
 
@@ -26,6 +27,13 @@ function idleSlice<T>(): Slice<T> {
   return { data: null, loading: true, error: null };
 }
 
+export type ProjectSummary = {
+  projectId: string;
+  displayName: string;
+  isStarred?: boolean;
+  providerCounts?: Record<string, number>;
+};
+
 export type DashboardData = {
   cliTools: Slice<CliToolStatus[]>;
   providerAuth: Slice<Record<string, ProviderAuthStatus>>;
@@ -33,6 +41,8 @@ export type DashboardData = {
   missions: Slice<MissionCard[]>;
   authUser: Slice<{ username: string }>;
   quota: Slice<ClaudeQuotaEstimate>;
+  projects: Slice<ProjectSummary[]>;
+  running: Slice<RunningSession[]>;
   refresh: () => void;
   /** True only while every slice is still on its very first load. */
   initialLoading: boolean;
@@ -63,6 +73,8 @@ export function useDashboardData(): DashboardData {
   const [missions, setMissions] = useState<Slice<MissionCard[]>>(idleSlice);
   const [authUser, setAuthUser] = useState<Slice<{ username: string }>>(idleSlice);
   const [quota, setQuota] = useState<Slice<ClaudeQuotaEstimate>>(idleSlice);
+  const [projects, setProjects] = useState<Slice<ProjectSummary[]>>(idleSlice);
+  const [running, setRunning] = useState<Slice<RunningSession[]>>(idleSlice);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -165,6 +177,28 @@ export function useDashboardData(): DashboardData {
     }
   }, []);
 
+  const loadProjects = useCallback(async () => {
+    try {
+      const payload = await apiClient.get<ProjectSummary[]>('/api/projects');
+      if (!mountedRef.current) return;
+      setProjects({ data: Array.isArray(payload) ? payload : [], loading: false, error: null });
+    } catch (error) {
+      if (!mountedRef.current) return;
+      setProjects((prev) => ({ ...prev, loading: false, error: toErrorMessage(error) }));
+    }
+  }, []);
+
+  const loadRunning = useCallback(async () => {
+    try {
+      const payload = await apiClient.get<{ data?: { sessions?: RunningSession[] } }>('/api/providers/sessions/running');
+      if (!mountedRef.current) return;
+      setRunning({ data: Array.isArray(payload.data?.sessions) ? payload.data.sessions : [], loading: false, error: null });
+    } catch (error) {
+      if (!mountedRef.current) return;
+      setRunning((prev) => ({ ...prev, loading: false, error: toErrorMessage(error) }));
+    }
+  }, []);
+
   const loadAll = useCallback(() => {
     void loadCliTools();
     void loadProviderAuth();
@@ -172,7 +206,9 @@ export function useDashboardData(): DashboardData {
     void loadMissions();
     void loadAuthUser();
     void loadQuota();
-  }, [loadCliTools, loadProviderAuth, loadUsage, loadMissions, loadAuthUser, loadQuota]);
+    void loadProjects();
+    void loadRunning();
+  }, [loadCliTools, loadProviderAuth, loadUsage, loadMissions, loadAuthUser, loadQuota, loadProjects, loadRunning]);
 
   useEffect(() => {
     loadAll();
@@ -192,6 +228,8 @@ export function useDashboardData(): DashboardData {
     missions,
     authUser,
     quota,
+    projects,
+    running,
     refresh: loadAll,
     initialLoading,
   };

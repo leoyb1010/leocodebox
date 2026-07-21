@@ -2,17 +2,12 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ClaudeWindowUsage, ClaudeQuotaEstimate } from '../dashboardTypes';
+import { formatCny, formatTokensCn } from '../format';
 
 type ClaudeQuotaRingsProps = {
   quota: ClaudeQuotaEstimate | null;
   loading: boolean;
 };
-
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
-  return String(Math.round(n));
-}
 
 function formatReset(iso: string, locale: string): string {
   const d = new Date(iso);
@@ -20,7 +15,7 @@ function formatReset(iso: string, locale: string): string {
   const sameDay = d.toDateString() === new Date().toDateString();
   return sameDay
     ? d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })
-    : d.toLocaleDateString(locale, { month: 'numeric', day: 'numeric' });
+    : `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
 /** Composition bar: input / output / cache-creation as proportions of total. */
@@ -51,9 +46,9 @@ function WindowRow({ label, win, locale, t }: { label: string; win: ClaudeWindow
         </span>
       </div>
       <div className="mb-1.5 flex items-baseline gap-2">
-        <span className="text-[16px] font-medium tabular-nums text-foreground">{formatTokens(win.countedTokens)}</span>
+        <span className="text-[16px] font-medium tabular-nums text-foreground">{formatTokensCn(win.countedTokens)}</span>
         <span className="text-[11px] text-muted-foreground">
-          {t('dashboard.windowMeta', { turns: win.turns, cost: win.costUsd.toFixed(2), defaultValue: `${win.turns} 轮 · ≈$${win.costUsd.toFixed(2)}` })}
+          {t('dashboard.windowMeta', { turns: win.turns, cost: formatCny(win.costUsd), defaultValue: `${win.turns} 轮 · ≈${formatCny(win.costUsd)}` })}
         </span>
       </div>
       <CompositionBar win={win} />
@@ -113,7 +108,7 @@ export default function ClaudeQuotaRings({ quota, loading }: ClaudeQuotaRingsPro
         />
       </div>
       <div className="mt-2 text-[11px] leading-relaxed text-muted-foreground/70">
-        {t('dashboard.windowNote', { defaultValue: '计入限额的 input+output tokens；不含缓存读取与其他设备。' })}
+        {t('dashboard.windowNote', { defaultValue: '计入限额的输入+输出 token；不含缓存读取与其他设备。' })}
       </div>
     </div>
   );

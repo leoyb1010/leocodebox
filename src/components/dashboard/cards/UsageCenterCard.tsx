@@ -3,9 +3,10 @@ import { useTranslation } from 'react-i18next';
 
 import { useAnimatedNumber } from '../../../hooks/useAnimatedNumber';
 import type { ClaudeQuotaEstimate, UsageSummaryRow } from '../dashboardTypes';
+import { formatCny, formatTokensCn, usdToCny } from '../format';
 
-import { DashCard, DashCardTitle, DashEmpty, DashError, DashSkeleton } from './dashShared';
 import ClaudeQuotaRings from './ClaudeQuotaRings';
+import { DashCard, DashCardTitle, DashEmpty, DashError, DashSkeleton } from './dashShared';
 
 type UsageCenterCardProps = {
   usage: UsageSummaryRow[] | null;
@@ -18,12 +19,6 @@ type UsageCenterCardProps = {
 };
 
 const MODEL_COLORS = ['bg-success', 'bg-primary', 'bg-info', 'bg-muted-foreground/50', 'bg-warning', 'bg-destructive'];
-
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
-  return String(Math.round(n));
-}
 
 function todayIso(): string {
   const d = new Date();
@@ -42,7 +37,7 @@ const PROVIDER_LABEL: Record<string, string> = {
 
 function shortModelName(model: string | null, provider: string): string {
   if (!model) return PROVIDER_LABEL[provider] ?? provider;
-  return model.length > 18 ? `${model.slice(0, 17)}…` : model;
+  return model.length > 16 ? `${model.slice(0, 15)}…` : model;
 }
 
 export default function UsageCenterCard({ usage, quota, quotaLoading, loading, error, onRefresh, delay = 0 }: UsageCenterCardProps) {
@@ -88,16 +83,16 @@ export default function UsageCenterCard({ usage, quota, quotaLoading, loading, e
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
       days.push({ day: key, cost: byDay.get(key) ?? 0 });
     }
-    const maxDayCost = Math.max(1, ...days.map((d) => d.cost));
+    const maxDayCost = Math.max(0.0001, ...days.map((d) => d.cost));
 
     return { totalSessions, totalTokens, totalCost, models, maxModelCost, clis, days, maxDayCost };
   }, [usage, today]);
 
   const animatedSessions = useAnimatedNumber(summary.totalSessions);
-  const animatedCost = useAnimatedNumber(summary.totalCost);
+  const animatedCostCny = useAnimatedNumber(usdToCny(summary.totalCost));
 
   return (
-    <DashCard delay={delay} className="p-4">
+    <DashCard delay={delay} className="dash-card-glow p-4">
       <DashCardTitle
         title={t('dashboard.usageTitle', { defaultValue: '用量中心' })}
         action={<span className="text-[12px] text-muted-foreground">{t('dashboard.today', { defaultValue: '今天' })}</span>}
@@ -111,21 +106,21 @@ export default function UsageCenterCard({ usage, quota, quotaLoading, loading, e
         <div className="space-y-4">
           {/* Today overview — numbers tween toward their targets. */}
           <div className="grid grid-cols-3 gap-2">
-            <div className="rounded-lg bg-secondary/60 px-2.5 py-2">
+            <div className="dash-stat rounded-lg px-2.5 py-2">
               <div className="text-[11px] text-muted-foreground">{t('dashboard.sessions', { defaultValue: '会话' })}</div>
               <div className="text-[18px] font-medium tabular-nums text-foreground">{Math.round(animatedSessions)}</div>
             </div>
-            <div className="rounded-lg bg-secondary/60 px-2.5 py-2">
+            <div className="dash-stat rounded-lg px-2.5 py-2">
               <div className="text-[11px] text-muted-foreground">Tokens</div>
-              <div className="text-[18px] font-medium tabular-nums text-foreground">{formatTokens(summary.totalTokens)}</div>
+              <div className="text-[18px] font-medium tabular-nums text-foreground">{formatTokensCn(summary.totalTokens)}</div>
             </div>
-            <div className="rounded-lg bg-secondary/60 px-2.5 py-2">
+            <div className="dash-stat rounded-lg px-2.5 py-2">
               <div className="text-[11px] text-muted-foreground">{t('dashboard.cost', { defaultValue: '成本' })}</div>
-              <div className="text-[18px] font-medium tabular-nums text-foreground">${animatedCost.toFixed(2)}</div>
+              <div className="text-[18px] font-medium tabular-nums text-foreground">¥{animatedCostCny.toFixed(2)}</div>
             </div>
           </div>
 
-          {/* Claude local quota estimate (Task 5). */}
+          {/* Claude window consumption (measured locally). */}
           <ClaudeQuotaRings quota={quota} loading={quotaLoading} />
 
           {/* Per-model breakdown. */}
@@ -138,7 +133,7 @@ export default function UsageCenterCard({ usage, quota, quotaLoading, loading, e
                     <div className="mb-1 flex items-center justify-between text-[12px]">
                       <span className="truncate text-foreground">{model.label}</span>
                       <span className="flex-shrink-0 tabular-nums text-muted-foreground">
-                        {formatTokens(model.tokens)} · ${model.cost.toFixed(2)}
+                        {formatTokensCn(model.tokens)} · {formatCny(model.cost)}
                       </span>
                     </div>
                     <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
@@ -161,7 +156,7 @@ export default function UsageCenterCard({ usage, quota, quotaLoading, loading, e
                 {summary.clis.map((cli) => (
                   <div key={cli.label} className="flex items-center justify-between text-[12px]">
                     <span className="text-foreground">{cli.label}</span>
-                    <span className="tabular-nums text-muted-foreground">{formatTokens(cli.tokens)} tok · ${cli.cost.toFixed(1)}</span>
+                    <span className="tabular-nums text-muted-foreground">{formatTokensCn(cli.tokens)} · {formatCny(cli.cost, { decimals: 1 })}</span>
                   </div>
                 ))}
               </div>
@@ -183,15 +178,16 @@ export default function UsageCenterCard({ usage, quota, quotaLoading, loading, e
                     width="30"
                     height={height}
                     rx="3"
-                    className={isToday ? 'fill-success' : index % 2 === 0 ? 'fill-primary/40' : 'fill-primary/60'}
+                    className={`dash-bar-grow ${isToday ? 'fill-success' : index % 2 === 0 ? 'fill-primary/40' : 'fill-primary/60'}`}
+                    style={{ transformOrigin: `${index * 40 + 19}px 46px` }}
                   >
-                    <title>{`${d.day}: $${d.cost.toFixed(2)}`}</title>
+                    <title>{`${d.day}: ${formatCny(d.cost)}`}</title>
                   </rect>
                 );
               })}
             </svg>
             <div className="mt-1 flex justify-between text-[11px] text-muted-foreground/70">
-              <span>{summary.days[0]?.day.slice(5)}</span>
+              <span>{summary.days[0]?.day.slice(5).replace('-', '/')}</span>
               <span>{t('dashboard.today', { defaultValue: '今天' })}</span>
             </div>
           </div>

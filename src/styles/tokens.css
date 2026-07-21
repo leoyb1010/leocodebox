@@ -409,5 +409,107 @@
   .dash-bar-fill {
     transition: width var(--dur-base) var(--ease-out-expo);
   }
+
+  /* ---- Rich dashboard visual treatments ------------------------------ */
+
+  /* Stat tile: subtle inset surface that deepens on the parent card hover. */
+  .dash-stat {
+    background: hsl(var(--secondary) / 0.6);
+    border: 0.5px solid hsl(var(--border) / 0.5);
+    transition: background var(--dur-fast) var(--ease-standard),
+      border-color var(--dur-fast) var(--ease-standard),
+      transform var(--dur-fast) var(--ease-standard);
+  }
+  .dash-stat:hover {
+    background: hsl(var(--secondary) / 0.9);
+    transform: translateY(-1px);
+  }
+
+  /* Featured card: a soft primary-tinted top glow drawn with a gradient line.
+     Purely decorative, no motion, so it costs nothing. */
+  .dash-card-glow {
+    position: relative;
+    overflow: hidden;
+  }
+  .dash-card-glow::before {
+    content: '';
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 2px;
+    background: linear-gradient(90deg,
+      hsl(var(--primary) / 0) 0%,
+      hsl(var(--primary) / 0.55) 50%,
+      hsl(var(--primary) / 0) 100%);
+    pointer-events: none;
+  }
+
+  /* Hero panel: layered gradient wash over the card surface. */
+  .dash-hero {
+    position: relative;
+    overflow: hidden;
+  }
+  .dash-hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(120% 160% at 0% 0%, hsl(var(--primary) / 0.10) 0%, transparent 55%),
+      radial-gradient(120% 160% at 100% 0%, hsl(var(--info) / 0.07) 0%, transparent 50%);
+    pointer-events: none;
+  }
+  .dash-hero > * {
+    position: relative;
+  }
+
+  /* Status dot with a soft glow ring for the "ok/online" reading. */
+  .dash-dot-glow {
+    box-shadow: 0 0 0 3px hsl(var(--success) / 0.18);
+  }
+
+  /* Trend bars grow upward on entrance. */
+  @keyframes dash-bar-grow {
+    from {
+      transform: scaleY(0);
+    }
+    to {
+      transform: scaleY(1);
+    }
+  }
+  .dash-bar-grow {
+    animation: dash-bar-grow var(--dur-slow) var(--ease-out-expo) both;
+  }
+
+  /* Animated count tick for hero metrics: subtle pop when value changes. */
+  @keyframes dash-pop {
+    0% {
+      transform: scale(1);
+    }
+    40% {
+      transform: scale(1.06);
+    }
+    100% {
+      transform: scale(1);
+    }
+  }
+  .dash-pop {
+    animation: dash-pop var(--dur-base) var(--ease-standard);
+  }
+
+  /* Section divider label with flanking rules. */
+  .dash-section-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: hsl(var(--muted-foreground));
+    font-size: 11px;
+    letter-spacing: 0.02em;
+  }
+  .dash-section-label::before,
+  .dash-section-label::after {
+    content: '';
+    flex: 1;
+    height: 0.5px;
+    background: hsl(var(--border) / 0.6);
+  }
 }
 
