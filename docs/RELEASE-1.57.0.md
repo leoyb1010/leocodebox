@@ -23,6 +23,8 @@
 - 下一片:流式事件 + 交互式运行卡(选根目录 + 提问 + 转写),再加写/执行工具(带确认),最终把内核注册为第 6 家 provider;并在过程里持续 UI 化繁为简。
 
 ## 下载校验
-- DMG SHA-256:`PENDING`
-- ZIP SHA-256:`PENDING`
-- `latest-mac.yml` SHA-256:`PENDING`
+- DMG SHA-256:`f27738aca8e5a52b1f78012abc0d5787317d6f09a55cf08d7c16f3bc77f3c7be`
+- ZIP SHA-256:`7cc57c067dc7aa5e0678dd561e7140565a969bf2829d418ed927119706964cf8`
+- `latest-mac.yml` SHA-256:`514d6012e781482b91ae6dd12530b7ddf5220e7e2d20f88057cc144e1b132d19`
+
+> 注:本版 DMG 未做窗口背景美化(本机 Finder 自动化权限被系统重置,-1743),纯功能包,不影响安装/签名/公证/热更新。
