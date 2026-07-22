@@ -20,6 +20,8 @@
 - 下一片:流式事件(边跑边显)、写/执行工具(带确认)、把内核注册为第 6 家 provider。
 
 ## 下载校验
-- DMG SHA-256:`PENDING`
-- ZIP SHA-256:`PENDING`
-- `latest-mac.yml` SHA-256:`PENDING`
+- DMG SHA-256:`2aa6b195dadd636511bce9dccdd2b3a1b4c5133ca51318d1a5a9ee8ca0228f5b`
+- ZIP SHA-256:`707c5f39445a94f4affff589f3feca416d796f00ba646b75d13f61be21baf8c5`
+- `latest-mac.yml` SHA-256:`a7ccadc72da180573683980b956b5ef6e79103c69d1292f20d7cf29a78018e98`
+
+> 注:本版 DMG 未做窗口背景美化(本机 Finder 自动化权限被系统重置,-1743),纯功能包,不影响安装/签名/公证/热更新。
