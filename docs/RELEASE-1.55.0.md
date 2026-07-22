@@ -22,6 +22,8 @@
 - 下一步:pi 自有内核接入(第 6 家 provider,RPC);随后 compaction 降本、shadow-call 拦截、pi Skills、sidecars/combos 能力回填、实时模型发现,并在各支柱「过程里」持续做 UI/动效化繁为简。
 
 ## 下载校验
-- DMG SHA-256:`PENDING`
-- ZIP SHA-256:`PENDING`
-- `latest-mac.yml` SHA-256:`PENDING`
+- DMG SHA-256:`3e3e78a79c450205c0e71b6bd979f5aaef0824145b5fe1de9f41fcd6c55c561a`
+- ZIP SHA-256:`3b14305dea2b942176cb0a584ffddffbf575629309c8ea45dc014414f6fefad8`
+- `latest-mac.yml` SHA-256:`bce46fd4139e16e348ff8a28d1f501bd0de47ff31f45733ccbfa61c8cdeddf8a`
+
+> 注:本版 DMG 未做窗口背景美化(本机 Finder 自动化权限被系统重置,-1743),纯功能包,不影响安装/签名/公证/热更新。
