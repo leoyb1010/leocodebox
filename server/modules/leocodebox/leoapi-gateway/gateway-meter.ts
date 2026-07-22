@@ -68,9 +68,16 @@ export function recordGatewayRequest(input: {
 }
 
 export function gatewayMeterSnapshot() {
+  // Derived, honest signals over the retained window (no extra state): how many
+  // distinct nodes actually served, and how many upstream attempts returned a
+  // non-2xx (each such attempt is a failover trigger unless it was the last
+  // node). This is what makes pillar-2 routing/failover visible at a glance.
+  const activeNodes = new Set(recent.map((rec) => rec.provider)).size;
+  const retries = recent.reduce((n, rec) => (rec.ok ? n : n + 1), 0);
   return {
     today: { ...today.totals, day: today.day },
     sinceStart: { ...sinceStart },
+    routing: { activeNodes, retries, window: recent.length },
     recent: recent.slice(0, 12),
   };
 }

@@ -66,7 +66,11 @@ export async function getActiveSwitchEnvOverlay(target: 'claude' | 'codex', slot
     if (target === 'claude' && effective.baseUrl && isGatewayEnabled()) {
       const gwUrl = gatewayBaseUrl();
       if (gwUrl) {
-        const token = `${GATEWAY_TOKEN_PREFIX}${provider.id}`;
+        // Token carries the TARGET (+ slot) rather than a fixed node id, so the
+        // gateway resolves the current node per request: switching the active
+        // node / slot binding takes effect on the next request (mid-session
+        // routing), and a retryable upstream error fails over to a sibling.
+        const token = `${GATEWAY_TOKEN_PREFIX}${target}${slot ? `:${slot}` : ''}`;
         env.ANTHROPIC_BASE_URL = gwUrl;
         env.ANTHROPIC_AUTH_TOKEN = token;
         env.ANTHROPIC_API_KEY = token;

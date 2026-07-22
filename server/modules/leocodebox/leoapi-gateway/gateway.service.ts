@@ -6,24 +6,60 @@
  */
 import type { IncomingHttpHeaders } from 'node:http';
 
-import { readStore } from '../provider-store.service.js';
+import { normalizeTarget, readStore, type ProviderStore, type SwitchProvider } from '../provider-store.service.js';
 
 import { GATEWAY_TOKEN_PREFIX } from './gateway-config.js';
 import { recordGatewayRequest } from './gateway-meter.js';
 
 export type ResolvedUpstream = { providerId: string; providerName: string; baseUrl: string; apiKey: string };
 
-/** Parse `lgw:<providerId>` from the incoming auth headers and resolve the node. */
-export async function resolveUpstreamFromHeaders(headers: IncomingHttpHeaders): Promise<ResolvedUpstream | null> {
+/** Extract the raw gateway token (after `lgw:`) from the incoming auth headers. */
+export function parseGatewayToken(headers: IncomingHttpHeaders): string | null {
   const raw = String(headers['x-api-key'] || '')
     || String(headers['authorization'] || '').replace(/^Bearer\s+/i, '');
   if (!raw.startsWith(GATEWAY_TOKEN_PREFIX)) return null;
-  const providerId = raw.slice(GATEWAY_TOKEN_PREFIX.length).trim();
-  if (!providerId) return null;
-  const store = await readStore();
-  const provider = store.providers.find((item) => item.id === providerId);
-  if (!provider || !provider.baseUrl) return null;
+  const rest = raw.slice(GATEWAY_TOKEN_PREFIX.length).trim();
+  return rest || null;
+}
+
+function toUpstream(provider: SwitchProvider | undefined): ResolvedUpstream | null {
+  if (!provider?.baseUrl) return null;
   return { providerId: provider.id, providerName: provider.name || provider.id, baseUrl: provider.baseUrl.replace(/\/+$/, ''), apiKey: provider.apiKey };
+}
+
+/**
+ * Resolve an ORDERED chain of upstreams for a gateway token — primary first,
+ * then same-target siblings as failover candidates. The token is resolved at
+ * REQUEST time (not spawn), so switching the active node / slot binding takes
+ * effect on the next request (mid-session routing). Pure over the store, so
+ * routing + failover ordering are unit-testable.
+ *
+ * Token forms:
+ *   lgw:<target>          → active node for the target, then siblings
+ *   lgw:<target>:<slot>   → the slot's bound node (fallback active), then siblings
+ *   lgw:<providerId>      → that exact node only (legacy / pinned, no failover)
+ */
+export function selectUpstreamChain(store: ProviderStore, token: string): ResolvedUpstream[] {
+  const [head, slot] = token.split(':');
+  const target = normalizeTarget(head);
+  if (target) {
+    const binding = slot ? store.routingSlots?.[target]?.[slot] : undefined;
+    const primaryId = binding?.providerId || store.activeByTarget?.[target];
+    const primary = primaryId ? store.providers.find((p) => p.id === primaryId) : undefined;
+    const siblings = store.providers.filter((p) => p.target === target && p.id !== primary?.id);
+    const ordered: (SwitchProvider | undefined)[] = [primary, ...siblings];
+    return ordered.map(toUpstream).filter((u): u is ResolvedUpstream => u !== null);
+  }
+  const pinned = store.providers.find((p) => p.id === token);
+  const up = toUpstream(pinned);
+  return up ? [up] : [];
+}
+
+/** Resolve the request-time upstream chain (primary + failover siblings). */
+export async function resolveUpstreamChain(headers: IncomingHttpHeaders): Promise<ResolvedUpstream[]> {
+  const token = parseGatewayToken(headers);
+  if (!token) return [];
+  return selectUpstreamChain(await readStore(), token);
 }
 
 // Headers we must not copy through (hop-by-hop, or ones we set ourselves).

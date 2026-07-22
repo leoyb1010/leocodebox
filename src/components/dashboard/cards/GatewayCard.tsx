@@ -10,7 +10,8 @@ import { DashCard, DashCardTitle, StatusDot } from './dashShared';
 
 type MeterTotals = { requests: number; inputTokens: number; outputTokens: number; costUsd: number; day?: string };
 type MeterRecord = { at: number; provider: string; model: string | null; inputTokens: number; outputTokens: number; costUsd: number; ok: boolean };
-type GatewayStatus = { enabled: boolean; baseUrl: string | null; meter: { today: MeterTotals; recent: MeterRecord[] } };
+type MeterRouting = { activeNodes: number; retries: number; window: number };
+type GatewayStatus = { enabled: boolean; baseUrl: string | null; meter: { today: MeterTotals; routing?: MeterRouting; recent: MeterRecord[] } };
 
 const REFRESH_MS = 15_000;
 
@@ -57,7 +58,11 @@ export default function GatewayCard({ delay = 0 }: { delay?: number }) {
 
   const enabled = status?.enabled ?? false;
   const today = status?.meter.today;
+  const routing = status?.meter.routing;
   const recent = status?.meter.recent ?? [];
+  // Only surface routing when it actually happened: >1 node served, or a
+  // failover fired. Otherwise the card stays calm (single node, no noise).
+  const showRouting = !!routing && (routing.activeNodes > 1 || routing.retries > 0);
 
   return (
     <DashCard delay={delay} className={`relative overflow-hidden p-4 transition-shadow ${enabled ? 'shadow-elevation-1' : ''}`}>
@@ -95,6 +100,18 @@ export default function GatewayCard({ delay = 0 }: { delay?: number }) {
           <div className="mb-3 flex items-center gap-1.5 text-[11px] text-success">
             <StatusDot tone="ok" pulse />
             {t('dashboard.gatewayLive', { defaultValue: '实时计量中 · 仅经网关的请求' })}
+            {showRouting && routing && (
+              <span className="ml-auto flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                <span className="rounded-md bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
+                  {t('dashboard.gatewayNodes', { defaultValue: '{{n}} 节点分流', n: routing.activeNodes })}
+                </span>
+                {routing.retries > 0 && (
+                  <span className="rounded-md bg-warning/10 px-1.5 py-0.5 font-medium text-warning">
+                    {t('dashboard.gatewayFailover', { defaultValue: '{{n}} 次容错', n: routing.retries })}
+                  </span>
+                )}
+              </span>
+            )}
           </div>
           <div className="grid grid-cols-3 gap-2">
             {[
