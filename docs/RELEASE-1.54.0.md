@@ -23,6 +23,8 @@
 - 下一步:请求级槽位路由 + mid-session 故障转移;再接 pi 自有内核(第 6 家 provider);另有 compaction 降本、shadow-call 拦截、sidecars 能力回填等已排期。
 
 ## 下载校验
-- DMG SHA-256:`__PENDING__`
-- ZIP SHA-256:`__PENDING__`
-- `latest-mac.yml` SHA-256:`__PENDING__`
+- DMG SHA-256:`4e2c14a46cf4fc7efa949552d0140361d8ec58d25b68dbf014ee1c17f1029e52`
+- ZIP SHA-256:`9cf7c758cce75f4e2a3ada7ef1a3c2b1d6ccb037f29bca71676fff6f55d468a0`
+- `latest-mac.yml` SHA-256:`685d4e9761285f38d9a0a48dbc7e5e13f0174f0ae930ba78bcc973aab9f7103f`
+
+> 注:本版 DMG 未做窗口背景美化(本机 Finder 自动化权限被系统重置,-1743),纯功能包,不影响安装/签名/公证。
