@@ -27,6 +27,8 @@
 - 装机后以**真实过期凭据**实测端点返回 `authenticated: true`。
 
 ## 下载校验
-- DMG SHA-256:`PENDING`
-- ZIP SHA-256:`PENDING`
-- `latest-mac.yml` SHA-256:`PENDING`
+- DMG SHA-256:`fb7e13cc32efecb9963c5c7625a8f38c845635c83354a1b090a233b7c393af4e`
+- ZIP SHA-256:`31304b849eb88116ea846a444d246119edd9e1865d8f5ca6847fc7f87dcdd045`
+- `latest-mac.yml` SHA-256:`061580622f9c3e88214abbeb2fba7912efc3a62cdaab0c91291f60740ddf821c`
+
+> 注:本版 DMG 未做窗口背景美化(本机 Finder 自动化权限被系统重置,-1743),纯功能包,不影响安装/签名/公证/热更新。
