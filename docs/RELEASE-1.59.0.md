@@ -22,6 +22,8 @@
 - 内核流式事件(边跑边显)、注册为第 6 家 provider;opencodex shadow-call 观测、pi Skills 等增补。
 
 ## 下载校验
-- DMG SHA-256:`PENDING`
-- ZIP SHA-256:`PENDING`
-- `latest-mac.yml` SHA-256:`PENDING`
+- DMG SHA-256:`0e41203e264f817026ecef64372a194dec56d57d2e03148b7196a0001a54f3da`
+- ZIP SHA-256:`daf90a3a4f6e1c111c34d03847e48f9180bfa8bc53c4c667ed8fdae14bd2c465`
+- `latest-mac.yml` SHA-256:`90cd3e06a27ad5738633e4e715b6bcce4a7931b16b81d7537fd8fd1ea7d00f59`
+
+> 注:本版 DMG 未做窗口背景美化(本机 Finder 自动化权限被系统重置,-1743),纯功能包,不影响安装/签名/公证/热更新。
