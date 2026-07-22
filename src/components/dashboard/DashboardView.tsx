@@ -5,6 +5,7 @@ import { useDashboardData } from '../../hooks/useDashboardData';
 import AgentGridCard from './cards/AgentGridCard';
 import DashboardHero from './cards/DashboardHero';
 import GatewayCard from './cards/GatewayCard';
+import KernelCard from './cards/KernelCard';
 import MissionSummaryCard from './cards/MissionSummaryCard';
 import ProjectsOverviewCard from './cards/ProjectsOverviewCard';
 import QuickActionsBar from './cards/QuickActionsBar';
@@ -111,6 +112,7 @@ export default function DashboardView({ onNavigateToSession, onShowTab, onNewCha
               delay={200}
             />
             <GatewayCard delay={240} />
+            <KernelCard delay={280} />
           </div>
         </div>
 
