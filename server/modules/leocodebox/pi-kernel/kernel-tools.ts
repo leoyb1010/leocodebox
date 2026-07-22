@@ -7,6 +7,7 @@
  * to a root — resolved, symlink-followed, and re-checked for containment — so a
  * model cannot escape the root via `..` or a symlink.
  */
+import { spawn } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
@@ -14,6 +15,30 @@ import type { ToolExecutor, ToolResult, ToolSpec } from './kernel.js';
 
 const MAX_FILE_BYTES = 64 * 1024;
 const MAX_DIR_ENTRIES = 500;
+const MAX_WRITE_BYTES = 256 * 1024;
+const SHELL_TIMEOUT_MS = 30_000;
+const SHELL_MAX_OUTPUT = 32 * 1024;
+
+/** Kernel tool capabilities for one run. Both OFF by default — a run only ever
+ *  gets write/exec when the caller explicitly opts in (per-run, not global). */
+export type KernelCapabilities = { allowWrite?: boolean; allowExec?: boolean };
+
+/**
+ * The most catastrophic shell patterns — a thin guard against an obviously
+ * destructive command, NOT a security sandbox. run_shell runs with the user's
+ * own privileges; it is opt-in per run and defaults off precisely because it is
+ * not sandboxed. This list only blocks the few patterns that are almost never
+ * intended from an agent.
+ */
+const SHELL_DENYLIST: RegExp[] = [
+  /\brm\s+-[a-z]*[rf]/i, // rm -rf / rm -f
+  /\bsudo\b/i,
+  /\bmkfs\b/i,
+  /\bdd\b[^|]*\bof=\/dev\//i,
+  /:\s*\(\s*\)\s*\{/, // fork bomb :(){
+  />\s*\/dev\/(sd|disk|nvme)/i,
+  /\bshutdown\b|\breboot\b|\bhalt\b/i,
+];
 
 export const READ_ONLY_TOOL_SPECS: ToolSpec[] = [
   {
@@ -81,13 +106,92 @@ async function listDirTool(root: string, input: Record<string, unknown>): Promis
   }
 }
 
-/** Build the read-only tool executor bound to a task root. */
-export function createReadOnlyTools(root: string): { specs: ToolSpec[]; execute: ToolExecutor } {
+export const WRITE_TOOL_SPEC: ToolSpec = {
+  name: 'write_file',
+  description: 'Create or overwrite a UTF-8 text file, relative to the task root. Parent folders inside the root are created as needed.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      path: { type: 'string', description: 'File path relative to the task root.' },
+      content: { type: 'string', description: 'Full new file contents.' },
+    },
+    required: ['path', 'content'],
+  },
+};
+
+export const EXEC_TOOL_SPEC: ToolSpec = {
+  name: 'run_shell',
+  description: 'Run a shell command with the task root as working directory. Times out; output is capped. Use for build/test/inspection.',
+  input_schema: { type: 'object', properties: { command: { type: 'string', description: 'The shell command to run.' } }, required: ['command'] },
+};
+
+async function writeFileTool(root: string, input: Record<string, unknown>): Promise<ToolResult> {
+  try {
+    const content = typeof input.content === 'string' ? input.content : '';
+    if (Buffer.byteLength(content, 'utf8') > MAX_WRITE_BYTES) {
+      return { content: `refused: content exceeds ${MAX_WRITE_BYTES} bytes`, isError: true };
+    }
+    const target = await resolveWithin(root, input.path);
+    await fs.mkdir(path.dirname(target), { recursive: true });
+    await fs.writeFile(target, content, 'utf8');
+    return { content: `wrote ${Buffer.byteLength(content, 'utf8')} bytes to ${input.path}` };
+  } catch (error) {
+    return { content: error instanceof Error ? error.message : 'write_file failed', isError: true };
+  }
+}
+
+async function runShellTool(root: string, input: Record<string, unknown>): Promise<ToolResult> {
+  const command = typeof input.command === 'string' ? input.command.trim() : '';
+  if (!command) return { content: 'run_shell needs a command', isError: true };
+  if (SHELL_DENYLIST.some((pattern) => pattern.test(command))) {
+    return { content: 'refused: command matches a blocked destructive pattern', isError: true };
+  }
+  return new Promise<ToolResult>((resolve) => {
+    const child = spawn('sh', ['-c', command], { cwd: root, timeout: SHELL_TIMEOUT_MS });
+    let out = '';
+    let killed = false;
+    const append = (chunk: Buffer) => { if (out.length < SHELL_MAX_OUTPUT) out += chunk.toString('utf8'); };
+    child.stdout.on('data', append);
+    child.stderr.on('data', append);
+    child.on('error', (error) => resolve({ content: `run_shell failed: ${error.message}`, isError: true }));
+    child.on('close', (code, signal) => {
+      if (signal === 'SIGTERM') killed = true;
+      const capped = out.length >= SHELL_MAX_OUTPUT ? `${out.slice(0, SHELL_MAX_OUTPUT)}\n[output truncated]` : out;
+      const note = killed ? `\n[timed out after ${SHELL_TIMEOUT_MS}ms]` : '';
+      resolve({ content: `exit ${code ?? 'null'}${note}\n${capped}`.trim(), isError: killed || (code ?? 1) !== 0 });
+    });
+  });
+}
+
+/**
+ * Build the kernel tool executor bound to a task root. Read-only tools are
+ * always present; write_file / run_shell are added AND enabled only when the
+ * caller opts in for this run — the executor re-checks the flag as defense in
+ * depth, so a model can't invoke a capability the run didn't grant.
+ */
+export function createKernelTools(root: string, caps: KernelCapabilities = {}): { specs: ToolSpec[]; execute: ToolExecutor } {
   const resolvedRoot = path.resolve(root);
+  const allowWrite = Boolean(caps.allowWrite);
+  const allowExec = Boolean(caps.allowExec);
+  const specs: ToolSpec[] = [...READ_ONLY_TOOL_SPECS];
+  if (allowWrite) specs.push(WRITE_TOOL_SPEC);
+  if (allowExec) specs.push(EXEC_TOOL_SPEC);
+
   const execute: ToolExecutor = async (name, input) => {
     if (name === 'read_file') return readFileTool(resolvedRoot, input);
     if (name === 'list_dir') return listDirTool(resolvedRoot, input);
+    if (name === 'write_file') {
+      return allowWrite ? writeFileTool(resolvedRoot, input) : { content: 'write_file is not enabled for this run', isError: true };
+    }
+    if (name === 'run_shell') {
+      return allowExec ? runShellTool(resolvedRoot, input) : { content: 'run_shell is not enabled for this run', isError: true };
+    }
     return { content: `unknown tool: ${name}`, isError: true };
   };
-  return { specs: READ_ONLY_TOOL_SPECS, execute };
+  return { specs, execute };
+}
+
+/** Read-only tool set — the safe default (no write, no exec). */
+export function createReadOnlyTools(root: string): { specs: ToolSpec[]; execute: ToolExecutor } {
+  return createKernelTools(root, {});
 }

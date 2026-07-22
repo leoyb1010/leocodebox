@@ -26,6 +26,8 @@ export default function KernelCard({ delay = 0 }: { delay?: number }) {
   const { t } = useTranslation();
   const [root, setRoot] = useState('');
   const [prompt, setPrompt] = useState('');
+  const [allowWrite, setAllowWrite] = useState(false);
+  const [allowExec, setAllowExec] = useState(false);
   const [running, setRunning] = useState(false);
   const [result, setResult] = useState<KernelResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -38,14 +40,14 @@ export default function KernelCard({ delay = 0 }: { delay?: number }) {
     setError(null);
     setResult(null);
     try {
-      const data = await apiClient.post<KernelResult>('/api/leocodebox/kernel/run', { prompt: trimmedPrompt, root: trimmedRoot });
+      const data = await apiClient.post<KernelResult>('/api/leocodebox/kernel/run', { prompt: trimmedPrompt, root: trimmedRoot, allowWrite, allowExec });
       setResult(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : '内核运行失败');
     } finally {
       setRunning(false);
     }
-  }, [prompt, root, running]);
+  }, [prompt, root, allowWrite, allowExec, running]);
 
   const toolCalls = (result?.events ?? []).filter((event) => event.type === 'tool_call');
   const canRun = Boolean(prompt.trim() && root.trim()) && !running;
@@ -78,16 +80,32 @@ export default function KernelCard({ delay = 0 }: { delay?: number }) {
           rows={2}
           className="w-full resize-none rounded-md border border-border bg-background px-2.5 py-1.5 text-[12px] text-foreground outline-none transition-colors focus:border-primary"
         />
-        <button
-          type="button"
-          disabled={!canRun}
-          onClick={() => void run()}
-          className="inline-flex items-center justify-center gap-1.5 self-end rounded-md bg-primary px-3 py-1.5 text-[12px] font-medium text-primary-foreground transition-transform hover:scale-[1.02] disabled:opacity-40 disabled:hover:scale-100"
-        >
-          {running
-            ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />{t('dashboard.kernelRunning', { defaultValue: '运行中' })}</>
-            : <>{t('dashboard.kernelRun', { defaultValue: '运行' })}<CornerDownLeft className="h-3.5 w-3.5" /></>}
-        </button>
+        <div className="flex items-center gap-3">
+          {/* Opt-in capabilities — both default OFF; read-only otherwise. */}
+          <label className="flex cursor-pointer items-center gap-1 text-[11px] text-muted-foreground">
+            <input type="checkbox" checked={allowWrite} onChange={(event) => setAllowWrite(event.target.checked)} className="h-3 w-3 accent-primary" />
+            {t('dashboard.kernelAllowWrite', { defaultValue: '允许写文件' })}
+          </label>
+          <label className="flex cursor-pointer items-center gap-1 text-[11px] text-muted-foreground">
+            <input type="checkbox" checked={allowExec} onChange={(event) => setAllowExec(event.target.checked)} className="h-3 w-3 accent-primary" />
+            {t('dashboard.kernelAllowExec', { defaultValue: '允许执行命令' })}
+          </label>
+          <button
+            type="button"
+            disabled={!canRun}
+            onClick={() => void run()}
+            className="ml-auto inline-flex items-center justify-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-[12px] font-medium text-primary-foreground transition-transform hover:scale-[1.02] disabled:opacity-40 disabled:hover:scale-100"
+          >
+            {running
+              ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />{t('dashboard.kernelRunning', { defaultValue: '运行中' })}</>
+              : <>{t('dashboard.kernelRun', { defaultValue: '运行' })}<CornerDownLeft className="h-3.5 w-3.5" /></>}
+          </button>
+        </div>
+        {(allowWrite || allowExec) && (
+          <p className="text-[10px] leading-relaxed text-warning">
+            {t('dashboard.kernelCapWarn', { defaultValue: '已开启写/执行:内核会在根目录内修改文件或运行命令(有沙箱/超时,仍请在可回滚的目录使用)。' })}
+          </p>
+        )}
       </div>
 
       {error && (

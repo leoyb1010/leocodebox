@@ -10,20 +10,24 @@ import path from 'node:path';
 import express from 'express';
 
 import { createAnthropicCallModel, resolveActiveClaudeModel } from './kernel-client.js';
-import { createReadOnlyTools } from './kernel-tools.js';
+import { createKernelTools, type KernelCapabilities } from './kernel-tools.js';
 import { runKernelTask } from './kernel.js';
 
 const router = express.Router();
 
 const MAX_PROMPT = 8000;
 
-function systemPrompt(root: string): string {
+function systemPrompt(root: string, caps: KernelCapabilities): string {
+  const tools = ['read_file(读取根目录内文本文件)', 'list_dir(列目录)'];
+  if (caps.allowWrite) tools.push('write_file(在根目录内创建/覆盖文件)');
+  if (caps.allowExec) tools.push('run_shell(在根目录内执行命令,有超时与输出上限)');
   return [
-    '你是 leocodebox 的自有内核(只读代码助手)。',
+    caps.allowWrite || caps.allowExec ? '你是 leocodebox 的自有内核(代码助手)。' : '你是 leocodebox 的自有内核(只读代码助手)。',
     `工作根目录是:${root}`,
-    '你有两个工具:read_file(读取根目录内的 UTF-8 文本文件)、list_dir(列目录)。',
+    `你有这些工具:${tools.join('、')}。`,
     '只能访问根目录内的路径。请先用工具查证,再用简洁的中文作答;不要臆测未读到的内容。',
-  ].join('\n');
+    caps.allowWrite || caps.allowExec ? '涉及修改文件或执行命令时,先说明你要做什么,再动手,保持最小改动。' : '',
+  ].filter(Boolean).join('\n');
 }
 
 router.post('/run', async (req, res) => {
@@ -51,12 +55,13 @@ router.post('/run', async (req, res) => {
     return;
   }
 
-  const { specs, execute } = createReadOnlyTools(root);
+  const caps: KernelCapabilities = { allowWrite: req.body?.allowWrite === true, allowExec: req.body?.allowExec === true };
+  const { specs, execute } = createKernelTools(root, caps);
   const callModel = createAnthropicCallModel({
     baseUrl: active.baseUrl,
     apiKey: active.apiKey,
     model: active.model,
-    system: systemPrompt(root),
+    system: systemPrompt(root, caps),
     tools: specs,
   });
 
@@ -68,6 +73,7 @@ router.post('/run', async (req, res) => {
       provider: active.providerName,
       model: active.model,
       root,
+      capabilities: caps,
       finalText: run.finalText,
       steps: run.steps,
       aborted: run.aborted,

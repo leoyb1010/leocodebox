@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 
 import { createAnthropicCallModel, parseModelResponse } from './kernel-client.js';
-import { createReadOnlyTools } from './kernel-tools.js';
+import { createKernelTools, createReadOnlyTools } from './kernel-tools.js';
 import { runKernelTask, type CallModel, type ModelTurn } from './kernel.js';
 
 test('kernel runs a tool then finishes on end_turn, feeding the result back', async () => {
@@ -74,6 +76,54 @@ test('read-only tools read inside the root and refuse to escape it', async () =>
 
   const unknown = await execute('mystery', {});
   assert.equal(unknown.isError, true);
+});
+
+test('write/exec tools are gated: absent from specs and refused unless opted in', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'kernel-'));
+  try {
+    const readonly = createKernelTools(root, {});
+    assert.deepEqual(readonly.specs.map((s) => s.name), ['read_file', 'list_dir']);
+    // Even if the model somehow calls them, the executor refuses when not granted.
+    assert.equal((await readonly.execute('write_file', { path: 'x.txt', content: 'hi' })).isError, true);
+    assert.equal((await readonly.execute('run_shell', { command: 'echo hi' })).isError, true);
+
+    const full = createKernelTools(root, { allowWrite: true, allowExec: true });
+    assert.deepEqual(full.specs.map((s) => s.name), ['read_file', 'list_dir', 'write_file', 'run_shell']);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('write_file writes inside the root, refuses to escape it', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'kernel-'));
+  try {
+    const { execute } = createKernelTools(root, { allowWrite: true });
+    const ok = await execute('write_file', { path: 'sub/note.txt', content: 'hello kernel' });
+    assert.equal(ok.isError, undefined);
+    assert.equal(readFileSync(path.join(root, 'sub/note.txt'), 'utf8'), 'hello kernel');
+
+    const escape = await execute('write_file', { path: '../escape.txt', content: 'nope' });
+    assert.equal(escape.isError, true);
+    assert.match(escape.content, /escapes the task root/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('run_shell executes in the root and blocks destructive patterns', async () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'kernel-'));
+  try {
+    const { execute } = createKernelTools(root, { allowExec: true });
+    const echo = await execute('run_shell', { command: 'echo hi-from-kernel' });
+    assert.equal(echo.isError, false);
+    assert.match(echo.content, /hi-from-kernel/);
+
+    const danger = await execute('run_shell', { command: 'rm -rf /tmp/whatever' });
+    assert.equal(danger.isError, true);
+    assert.match(danger.content, /blocked destructive pattern/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test('parseModelResponse maps text + tool_use blocks and stop_reason', () => {
