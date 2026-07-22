@@ -163,6 +163,22 @@ export class ClaudeProviderAuth implements IProviderAuth {
           };
         }
 
+        // An EXPIRED access token is not a logout. Newer Claude Code keeps the
+        // live credential outside this file (macOS Keychain) and stops
+        // refreshing `.credentials.json`, so a stale `expiresAt` here says
+        // nothing about the real session — and whenever a refreshToken is
+        // present the CLI renews the access token silently on next use.
+        // Treating that as "logged out" is what made a freshly completed
+        // `claude /login` still show 未登录 in the app.
+        const refreshToken = readOptionalString(oauth?.refreshToken);
+        if (refreshToken) {
+          return {
+            authenticated: true,
+            email,
+            method: 'credentials_file',
+          };
+        }
+
         return {
           authenticated: false,
           email: null,
