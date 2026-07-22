@@ -11,7 +11,14 @@ import { DashCard, DashCardTitle, StatusDot } from './dashShared';
 type MeterTotals = { requests: number; inputTokens: number; outputTokens: number; costUsd: number; day?: string };
 type MeterRecord = { at: number; provider: string; model: string | null; inputTokens: number; outputTokens: number; costUsd: number; ok: boolean };
 type MeterRouting = { activeNodes: number; retries: number; window: number };
-type GatewayStatus = { enabled: boolean; baseUrl: string | null; meter: { today: MeterTotals; routing?: MeterRouting; recent: MeterRecord[] } };
+type CompactionMeter = { requests: number; touchedBlocks: number; savedChars: number };
+type GatewayStatus = {
+  enabled: boolean;
+  compaction?: boolean;
+  baseUrl: string | null;
+  meter: { today: MeterTotals; routing?: MeterRouting; recent: MeterRecord[] };
+  compactionMeter?: CompactionMeter;
+};
 
 const REFRESH_MS = 15_000;
 
@@ -56,9 +63,26 @@ export default function GatewayCard({ delay = 0 }: { delay?: number }) {
     }
   }, [status, busy, load]);
 
+  const toggleCompaction = useCallback(async () => {
+    if (!status || busy) return;
+    setBusy(true);
+    const next = !status.compaction;
+    setStatus({ ...status, compaction: next }); // optimistic
+    try {
+      await apiClient.put('/api/leocodebox/gateway/compaction', { enabled: next });
+      await load();
+    } catch {
+      if (mounted.current) setStatus((prev) => (prev ? { ...prev, compaction: !next } : prev));
+    } finally {
+      if (mounted.current) setBusy(false);
+    }
+  }, [status, busy, load]);
+
   const enabled = status?.enabled ?? false;
+  const compaction = status?.compaction ?? false;
   const today = status?.meter.today;
   const routing = status?.meter.routing;
+  const savedChars = status?.compactionMeter?.savedChars ?? 0;
   const recent = status?.meter.recent ?? [];
   // Only surface routing when it actually happened: >1 node served, or a
   // failover fired. Otherwise the card stays calm (single node, no noise).
@@ -124,6 +148,27 @@ export default function GatewayCard({ delay = 0 }: { delay?: number }) {
                 <div className="text-[11px] text-muted-foreground">{tile.label}</div>
               </div>
             ))}
+          </div>
+          <div className="mt-3 flex items-center gap-2 border-t border-border pt-2 text-[11px]">
+            <span className={compaction ? 'text-foreground/80' : 'text-muted-foreground'}>
+              {t('dashboard.gatewayCompaction', { defaultValue: '上下文瘦身 · 降本' })}
+            </span>
+            {compaction && savedChars > 0 && (
+              <span className="rounded-md bg-success/10 px-1.5 py-0.5 font-medium text-success">
+                {t('dashboard.gatewaySaved', { defaultValue: '已省 ~{{n}} 字符', n: formatCountCn(savedChars) })}
+              </span>
+            )}
+            <button
+              type="button"
+              role="switch"
+              aria-checked={compaction}
+              aria-label={t('dashboard.gatewayCompaction', { defaultValue: '上下文瘦身 · 降本' })}
+              disabled={busy || !status}
+              onClick={() => void toggleCompaction()}
+              className={`relative ml-auto inline-flex h-4 w-7 flex-shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${compaction ? 'bg-primary' : 'bg-muted'}`}
+            >
+              <span className={`inline-block h-3 w-3 transform rounded-full bg-background shadow transition-transform ${compaction ? 'translate-x-3.5' : 'translate-x-0.5'}`} />
+            </button>
           </div>
           {recent.length > 0 && (
             <div className="mt-3 space-y-1 border-t border-border pt-2">

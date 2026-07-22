@@ -9,7 +9,8 @@
  */
 import express from 'express';
 
-import { isGatewayEnabled } from './gateway-config.js';
+import { isCompactionEnabled, isGatewayEnabled } from './gateway-config.js';
+import { compactRequestBody, recordCompaction } from './gateway-compaction.js';
 import { buildUpstreamHeaders, gatewayInternals, meterFromResponse, resolveUpstreamChain, type ResolvedUpstream } from './gateway.service.js';
 
 const router = express.Router();
@@ -82,6 +83,17 @@ router.all(/.*/, async (req, res) => {
   } catch {
     res.status(400).json({ error: { type: 'invalid_request_error', message: 'Could not read request body.' } });
     return;
+  }
+
+  // Opt-in context compaction: only for a Messages POST, only when on. The
+  // helper fails open (returns null) on any shape it can't confidently rewrite,
+  // so a non-Messages or malformed body forwards untouched.
+  if (isCompactionEnabled() && req.method === 'POST' && /\/v1\/messages\/?$/.test(req.url.split('?')[0])) {
+    const compacted = compactRequestBody(body);
+    if (compacted) {
+      body = compacted.body;
+      recordCompaction(compacted.stats);
+    }
   }
 
   // Try the primary node, then fail over to same-target siblings on a retryable

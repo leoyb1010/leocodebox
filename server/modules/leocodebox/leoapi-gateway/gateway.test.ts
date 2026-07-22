@@ -5,6 +5,7 @@ import type { ProviderStore } from '../provider-store.service.js';
 
 import { buildUpstreamHeaders, parseAnthropicUsage, parseGatewayToken, selectUpstreamChain } from './gateway.service.js';
 import { __resetGatewayMeter, gatewayMeterSnapshot, recordGatewayRequest } from './gateway-meter.js';
+import { __resetCompaction, compactionSnapshot, compactMessages, compactRequestBody, recordCompaction } from './gateway-compaction.js';
 
 function fakeStore(): ProviderStore {
   return {
@@ -117,4 +118,67 @@ test('routing signal counts distinct nodes and failover attempts', () => {
   assert.equal(snap.routing.activeNodes, 2);
   assert.equal(snap.routing.retries, 1);
   assert.equal(snap.routing.window, 2);
+});
+
+const BIG = 'x'.repeat(5000);
+
+/** A 26-turn body: [0]=first, [1..5]=middle, [6..25]=recent. Oversized tool_result
+ *  at a middle index and a recent index; a middle text block that must survive. */
+function longMessagesBody() {
+  const messages: Array<{ role: string; content: unknown }> = [];
+  messages.push({ role: 'user', content: 'first turn: the task' }); // 0 (kept)
+  messages.push({ role: 'assistant', content: 'thinking' }); // 1
+  messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: 't2', content: BIG }] }); // 2 middle → trim
+  messages.push({ role: 'user', content: [{ type: 'text', text: BIG }] }); // 3 middle text → keep
+  messages.push({ role: 'assistant', content: 'ok' }); // 4
+  messages.push({ role: 'user', content: 'more' }); // 5
+  for (let i = 6; i < 26; i += 1) {
+    if (i === 24) messages.push({ role: 'user', content: [{ type: 'tool_result', tool_use_id: 't24', content: BIG }] }); // recent → keep
+    else messages.push({ role: i % 2 ? 'assistant' : 'user', content: `turn ${i}` });
+  }
+  return { system: 'SYSTEM PROMPT', model: 'claude-sonnet-4-5', messages };
+}
+
+test('compaction trims only old oversized tool_result, keeping system/first/recent/text', () => {
+  const input = longMessagesBody();
+  const before = JSON.stringify(input);
+  const { body, stats } = compactMessages(input);
+  assert.equal(stats.touchedBlocks, 1);
+  assert.equal(stats.savedChars, 3000); // 5000 - 2000 kept
+  const msgs = body.messages as Array<{ role: string; content: unknown }>;
+  // system + first turn untouched.
+  assert.equal(body.system, 'SYSTEM PROMPT');
+  assert.deepEqual(msgs[0], input.messages[0]);
+  // middle tool_result trimmed (shorter than original, carries the marker).
+  const trimmed = (msgs[2].content as Array<{ content: string }>)[0].content;
+  assert.ok(trimmed.length < 5000 && trimmed.includes('leocodebox 已裁剪'));
+  // middle TEXT block never trimmed.
+  assert.equal((msgs[3].content as Array<{ text: string }>)[0].text.length, 5000);
+  // recent tool_result (index 24) never trimmed.
+  assert.equal((msgs[24].content as Array<{ content: string }>)[0].content.length, 5000);
+  // input object was not mutated.
+  assert.equal(JSON.stringify(input), before);
+});
+
+test('compaction is a no-op below the length threshold', () => {
+  const input = { system: 's', messages: [{ role: 'user', content: [{ type: 'tool_result', tool_use_id: 't', content: BIG }] }] };
+  const { body, stats } = compactMessages(input);
+  assert.equal(stats.touchedBlocks, 0);
+  assert.equal(body, input); // same reference → truly untouched
+});
+
+test('compactRequestBody trims a long JSON body and fails open on anything else', () => {
+  const long = compactRequestBody(Buffer.from(JSON.stringify(longMessagesBody())));
+  assert.ok(long);
+  assert.equal(long.stats.touchedBlocks, 1);
+  assert.ok(JSON.parse(long.body.toString()).messages[2].content[0].content.includes('已裁剪'));
+  assert.equal(compactRequestBody(Buffer.from('not json')), null); // malformed → use original
+  assert.equal(compactRequestBody(Buffer.from(JSON.stringify({ messages: [] }))), null); // nothing to trim
+});
+
+test('compaction snapshot accumulates savings', () => {
+  __resetCompaction();
+  recordCompaction({ touchedBlocks: 2, savedChars: 1200 });
+  recordCompaction({ touchedBlocks: 1, savedChars: 300 });
+  assert.deepEqual(compactionSnapshot(), { requests: 2, touchedBlocks: 3, savedChars: 1500 });
 });
