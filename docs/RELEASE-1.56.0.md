@@ -26,6 +26,8 @@
 - pi 自有内核(第 6 家 provider,RPC)为独立较大支柱,单独排期;其余:shadow-call 拦截观测、pi Skills、sidecars/combos 能力回填,并在各支柱「过程里」持续 UI 化繁为简。
 
 ## 下载校验
-- DMG SHA-256:`PENDING`
-- ZIP SHA-256:`PENDING`
-- `latest-mac.yml` SHA-256:`PENDING`
+- DMG SHA-256:`c498c15c489e4a330370474438e16c8c889dca12c46a010a21a40985874928be`
+- ZIP SHA-256:`04aa5565901f28115480cad2b0749ab0d47b13ed53ca4dde5f93a3f335fca6ef`
+- `latest-mac.yml` SHA-256:`a4790a686170c1e0e596afbd6fd826ce559c00b9ad0ec70a2986cbf144946ac9`
+
+> 注:本版 DMG 未做窗口背景美化(本机 Finder 自动化权限被系统重置,-1743),纯功能包,不影响安装/签名/公证/热更新。
