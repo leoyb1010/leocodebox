@@ -4,6 +4,7 @@ import { useDashboardData } from '../../hooks/useDashboardData';
 
 import AgentGridCard from './cards/AgentGridCard';
 import DashboardHero from './cards/DashboardHero';
+import GatewayCard from './cards/GatewayCard';
 import MissionSummaryCard from './cards/MissionSummaryCard';
 import ProjectsOverviewCard from './cards/ProjectsOverviewCard';
 import QuickActionsBar from './cards/QuickActionsBar';
@@ -98,8 +99,8 @@ export default function DashboardView({ onNavigateToSession, onShowTab, onNewCha
             />
           </div>
 
-          {/* Right: usage centre (spans 3). */}
-          <div className="lg:col-span-3">
+          {/* Right: usage centre + Leoapi gateway (spans 3). */}
+          <div className="flex flex-col gap-3 lg:col-span-3">
             <UsageCenterCard
               usage={data.usage.data}
               quota={data.quota.data}
@@ -109,6 +110,7 @@ export default function DashboardView({ onNavigateToSession, onShowTab, onNewCha
               onRefresh={data.refresh}
               delay={200}
             />
+            <GatewayCard delay={240} />
           </div>
         </div>
 

@@ -40,6 +40,8 @@ import { browserUseService } from './modules/browser-use/browser-use.service.js'
 import { startServerLifecycle } from './runtime/server-lifecycle.js';
 import { attachWebSocketRuntime } from './runtime/websocket-runtime.js';
 import { validateApiKey, authenticateToken, IS_LOCAL_ONLY_AUTH } from './middleware/auth.js';
+import { GATEWAY_MOUNT } from './modules/leocodebox/leoapi-gateway/gateway-config.js';
+import gatewayProxyRoutes from './modules/leocodebox/leoapi-gateway/gateway.routes.js';
 import { createCorsMiddleware } from './middleware/cors-policy.js';
 
 const __dirname = getModuleDir(import.meta.url);
@@ -69,6 +71,12 @@ const server = http.createServer(app);
 attachWebSocketRuntime(server, app);
 
 app.use(createCorsMiddleware());
+
+// Leoapi gateway proxy (opt-in, default off): mounted BEFORE the JSON body
+// parser so the agent CLI's request body streams through untouched, and
+// OUTSIDE /api so it isn't gated by the app's local-auth (the CLI authenticates
+// with an opaque per-node gateway token instead). Loopback-only, self-guarded.
+app.use(GATEWAY_MOUNT, gatewayProxyRoutes);
 
 app.use(express.json({
     limit: '50mb',

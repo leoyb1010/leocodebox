@@ -1,4 +1,5 @@
 import { readStore } from './provider-store.service.js';
+import { GATEWAY_TOKEN_PREFIX, gatewayBaseUrl, isGatewayEnabled } from './leoapi-gateway/gateway-config.js';
 
 const CLAUDE_OWNED_ENV_KEYS = [
   'ANTHROPIC_BASE_URL',
@@ -55,7 +56,23 @@ export async function getActiveSwitchEnvOverlay(target: 'claude' | 'codex', slot
     const provider = boundProvider ?? (activeId ? store.providers.find((item) => item.id === activeId) : undefined);
     if (!provider) return {};
     const effective = boundProvider && binding?.model ? { ...provider, model: binding.model } : provider;
-    return buildEffectiveSessionEnv({}, target, effective);
+    const env = buildEffectiveSessionEnv({}, target, effective);
+
+    // Leoapi gateway (opt-in): when on, point the claude CLI at the loopback
+    // metering gateway with an opaque token that resolves back to THIS node, so
+    // the real key never enters the CLI env and every request is metered. The
+    // node's real baseUrl stays in the store for the gateway to forward to. Off
+    // by default → this block is skipped and behavior is exactly as before.
+    if (target === 'claude' && effective.baseUrl && isGatewayEnabled()) {
+      const gwUrl = gatewayBaseUrl();
+      if (gwUrl) {
+        const token = `${GATEWAY_TOKEN_PREFIX}${provider.id}`;
+        env.ANTHROPIC_BASE_URL = gwUrl;
+        env.ANTHROPIC_AUTH_TOKEN = token;
+        env.ANTHROPIC_API_KEY = token;
+      }
+    }
+    return env;
   } catch {
     return {};
   }
